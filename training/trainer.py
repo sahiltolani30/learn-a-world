@@ -27,12 +27,29 @@ def seed_buffer(
     num_steps: int,
     random_start: bool = True,
 ) -> None:
-    """Fills the replay buffer with initial self-play transitions using random actions."""
+    """
+    Fills the replay buffer with initial self-play transitions.
+    For Crafter, uses a structured exploration distribution (movement + interaction)
+    to discover diverse biomes, resources, and night cycles instead of idle loops.
+    """
     print(f"--> Seeding replay buffer with {num_steps} transitions...")
     obs, info = env.reset(options={"random_start": random_start})
 
+    is_crafter = getattr(env.action_space, "n", 0) == 17
+
     for step in range(num_steps):
-        action = env.action_space.sample()
+        if is_crafter:
+            # Crafter exploration distribution: 60% movement across biomes, 25% interact/Do, 15% other
+            p = np.random.random()
+            if p < 0.60:
+                action = int(np.random.randint(1, 5))  # Move Left, Right, Up, Down
+            elif p < 0.85:
+                action = 5  # "Do" (harvest wood/stone, drink, eat, attack)
+            else:
+                action = int(env.action_space.sample())
+        else:
+            action = int(env.action_space.sample())
+
         next_obs, reward, terminated, truncated, info = env.step(action)
         buffer.add(obs, action, next_obs, reward, terminated)
 
