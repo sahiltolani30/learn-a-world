@@ -1,0 +1,46 @@
+# Experiment Configuration: Phase 3 Flagship Crafter World Model
+project: "learn-a-world"
+experiment_name: "crafter_jepa_v1"
+seed: 42
+
+# Environment
+env:
+  name: "Crafter-v0"
+  render_size: 64
+  max_steps: 1000
+
+# Model Architecture
+model:
+  latent_dim: 128
+  num_actions: 17
+  action_emb_dim: 32
+  predictor_hidden_dim: 256
+  predictor_layers: 2
+  ema_decay: 0.99
+  var_weight: 1.0
+  target_std: 1.0
+
+# Training Parameters
+training:
+  seed_steps: 2000          # initial self-play exploration transitions
+  train_steps: 1000         # gradient optimization steps
+  batch_size: 64
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  max_grad_norm: 1.0
+  buffer_capacity: 100000
+  chunk_size: 1000
+  log_interval: 100
+  eval_interval: 250
+  checkpoint_interval: 500
+  checkpoint_name: "jepa_crafter.pt"
+
+# Planning & Curiosity (Phase 3)
+planning:
+  horizon: 5
+  num_candidates: 64
+  elite_ratio: 0.15
+
+curiosity:
+  eta: 0.3
+  max_bonus: 1.0

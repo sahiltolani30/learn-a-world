@@ -88,20 +88,25 @@ class CuriosityModule:
     def select_curious_action(
         self,
         obs: np.ndarray,
-        num_actions: int = 4,
+        num_actions: Optional[int] = None,
     ) -> int:
         """
         Selects the candidate action whose predicted outcome is most novel
         relative to recent memory, with an anti-self-loop movement penalty
         and anti-backtracking momentum.
         """
+        n_act = (
+            num_actions
+            if num_actions is not None
+            else getattr(self.model, "num_actions", 4)
+        )
         self.model.eval()
         x_t = self._preprocess_obs(obs)
         z_t = self.model.encode(x_t, use_target=False)
         self.record_visited(z_t)
 
-        actions = torch.arange(num_actions, device=self.device)
-        z_batch = z_t.repeat(num_actions, 1)
+        actions = torch.arange(n_act, device=self.device)
+        z_batch = z_t.repeat(n_act, 1)
         pred_z = self.model.predictor(z_batch, actions)
 
         movement = torch.norm(pred_z - z_batch, p=2, dim=-1)
@@ -110,12 +115,16 @@ class CuriosityModule:
             mem = torch.stack(self.visited_memory, dim=0)
             dists = torch.cdist(pred_z, mem, p=2).min(dim=1).values
         else:
-            dists = torch.zeros(num_actions, device=self.device)
+            dists = torch.zeros(n_act, device=self.device)
 
         scores = dists + 0.5 * movement
 
-        # Anti-backtracking penalty to prevent 2-cycle oscillation
-        if self.last_action is not None and self.last_action in self.REVERSE_ACTIONS:
+        # Anti-backtracking penalty to prevent 2-cycle oscillation (for 4-dir movement)
+        if (
+            self.last_action is not None
+            and self.last_action in self.REVERSE_ACTIONS
+            and self.REVERSE_ACTIONS[self.last_action] < n_act
+        ):
             scores[self.REVERSE_ACTIONS[self.last_action]] -= 1.0
 
         best_action = int(torch.argmax(scores).item())

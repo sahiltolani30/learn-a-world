@@ -68,19 +68,19 @@ class LatentMPCPlanner:
     def plan(
         self,
         obs: np.ndarray,
-        goal_obs: np.ndarray,
+        goal_obs: Optional[np.ndarray] = None,
         goal_z: Optional[torch.Tensor] = None,
     ) -> int:
         """
-        Plans the optimal immediate action to reach the goal.
+        Plans the optimal immediate action to reach the goal, or explores if no goal specified.
         Args:
             obs: Current observation image [64, 64, 3]
-            goal_obs: Goal observation image [64, 64, 3]
+            goal_obs: Optional goal observation image [64, 64, 3]
             goal_z: Optional pre-encoded goal latent representation
         Returns:
             best_action: Integer action in [0, num_actions - 1]
         """
-        # Encode current state and goal
+        # Encode current state
         x_t = self._preprocess_obs(obs)
         z_0 = self.model.encode(x_t, use_target=True)  # [1, D]
 
@@ -89,11 +89,13 @@ class LatentMPCPlanner:
             self.recent_latents.pop(0)
         self.recent_latents.append(z_0.squeeze(0))
 
-        if goal_z is None:
+        if goal_z is not None:
+            z_goal = goal_z
+        elif goal_obs is not None:
             x_g = self._preprocess_obs(goal_obs)
             z_goal = self.model.encode(x_g, use_target=True)  # [1, D]
         else:
-            z_goal = goal_z
+            z_goal = None
 
         num_elites = max(2, int(self.num_candidates * self.elite_ratio))
 
@@ -118,18 +120,23 @@ class LatentMPCPlanner:
 
             # Roll out all candidate sequences in parallel
             z_current = z_0.repeat(self.num_candidates, 1)  # [N, D]
-            min_distances = torch.full((self.num_candidates,), float("inf"), device=self.device)
 
-            for h in range(self.horizon):
-                step_actions = candidates[:, h]  # [N]
-                z_current = self.model.predictor(z_current, step_actions)  # [N, D]
-
-                # Distance to goal at this horizon step
-                dists = torch.norm(z_current - z_goal, p=2, dim=-1)  # [N]
-                min_distances = torch.minimum(min_distances, dists)
-
-            # Base score: negative goal distance
-            scores = -min_distances
+            if z_goal is not None:
+                min_distances = torch.full((self.num_candidates,), float("inf"), device=self.device)
+                for h in range(self.horizon):
+                    step_actions = candidates[:, h]  # [N]
+                    z_current = self.model.predictor(z_current, step_actions)  # [N, D]
+                    dists = torch.norm(z_current - z_goal, p=2, dim=-1)  # [N]
+                    min_distances = torch.minimum(min_distances, dists)
+                scores = -min_distances
+            else:
+                # Open-ended exploration: maximize imagined state dispersion from current state
+                disp = torch.zeros((self.num_candidates,), device=self.device)
+                for h in range(self.horizon):
+                    step_actions = candidates[:, h]
+                    z_current = self.model.predictor(z_current, step_actions)
+                    disp = disp + torch.norm(z_current - z_0, p=2, dim=-1)
+                scores = disp
 
             # Novelty bonus to prevent staying stuck in recent wall loops
             if len(self.recent_latents) > 1 and self.novelty_weight > 0:
