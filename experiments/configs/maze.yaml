@@ -1,0 +1,43 @@
+# Experiment Configuration: Phase 1 & 2 Custom Grid Maze
+project: "learn-a-world"
+experiment_name: "maze_jepa_v1"
+seed: 42
+
+# Environment
+env:
+  name: "GridMaze-v0"
+  render_size: 64
+  max_steps: 100
+  slippery_active: false  # set to true in Phase 4 for adaptation
+  slip_probability: 0.5
+
+# Model Architecture
+model:
+  latent_dim: 128
+  num_actions: 4
+  action_emb_dim: 32
+  predictor_hidden_dim: 256
+  predictor_layers: 2
+  ema_decay: 0.99
+  var_weight: 1.0
+  target_std: 1.0
+
+# Training Parameters
+training:
+  seed_steps: 2000          # initial random exploration steps
+  train_steps: 1000         # total gradient steps
+  batch_size: 64
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  max_grad_norm: 1.0
+  buffer_capacity: 100000
+  log_interval: 100
+  eval_interval: 200
+  checkpoint_interval: 500
+  checkpoint_name: "jepa_maze.pt"
+
+# Planning (Phase 2)
+planning:
+  horizon: 5
+  num_candidates: 64
+  elite_ratio: 0.1
