@@ -56,3 +56,19 @@ def test_crafter_gymnasium_wrapper():
     assert isinstance(reward, float)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)
+
+def test_utils_device_and_config():
+    from experiments.utils import get_device, get_output_dir, load_config, set_seed
+    device = get_device()
+    assert device.type in ["mps", "cuda", "cpu"]
+    
+    cfg = load_config("experiments/configs/default.yaml")
+    assert cfg["project"] == "learn-a-world"
+    assert "model" in cfg
+    
+    out_dir = get_output_dir("./test_out")
+    assert out_dir.exists()
+    import shutil
+    shutil.rmtree(out_dir)
+    
+    set_seed(123)
