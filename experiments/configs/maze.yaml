@@ -24,20 +24,20 @@ model:
 
 # Training Parameters
 training:
-  seed_steps: 2000          # initial random exploration steps
-  train_steps: 1000         # total gradient steps
+  seed_steps: 4000          # initial random exploration steps
+  train_steps: 2500         # total gradient steps
   batch_size: 64
   learning_rate: 0.0003
   weight_decay: 0.00001
   max_grad_norm: 1.0
   buffer_capacity: 100000
-  log_interval: 100
-  eval_interval: 200
+  log_interval: 200
+  eval_interval: 500
   checkpoint_interval: 500
   checkpoint_name: "jepa_maze.pt"
 
 # Planning (Phase 2)
 planning:
-  horizon: 5
-  num_candidates: 64
-  elite_ratio: 0.1
+  horizon: 7
+  num_candidates: 128
+  elite_ratio: 0.15

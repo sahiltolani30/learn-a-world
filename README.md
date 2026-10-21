@@ -28,9 +28,9 @@ Comparison evaluated across 20 test episodes on `GridMaze-v0`:
 
 | Agent Method | Success Rate (%) | Avg Steps to Goal | Env Interaction Budget | Takeaway |
 | :--- | :---: | :---: | :---: | :--- |
-| **Random Agent** | 40.0% | 20.9 | 0 steps | Wanders randomly; high step count |
-| **World Model + MPC** | **53.3%** | 14.7 | 2,000 steps | Latent CEM planning cuts steps by 30% |
-| **WM + MPC + Curiosity** | **53.3%** | **13.9** | 2,861 steps | **Fastest goal reach** via curiosity exploration |
+| **Random Agent** | 26.7% | 20.7 | 0 steps | Wanders randomly; high step count |
+| **World Model + MPC** | **73.3%** | **9.1** | 4,000 steps | Latent CEM planning cuts steps by >55% |
+| **WM + MPC + Curiosity** | **66.7%** | **10.3** | 4,474 steps | **High success & fast paths** via self-play fine-tuning |
 | **PPO Baseline** | 0.0% | 100.0 | 5,000 steps | Fails on sparse reward without world model |
 
 *All 14 gate tests across Phases 0, 1, and 2 passing with 100% parity (`pytest -v tests/`).*

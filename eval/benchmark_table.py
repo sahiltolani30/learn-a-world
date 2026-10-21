@@ -89,12 +89,12 @@ def run_phase2_benchmarks(
     results["World Model + MPC"] = {
         "success_rate": wm_res["success_rate"],
         "avg_steps": wm_res["avg_steps"],
-        "budget": 2000,  # 2000 seed transitions used in training
+        "budget": cfg["training"].get("seed_steps", 4000),
     }
     print(f"      WM+MPC Success: {wm_res['success_rate']:.1f}% | Steps: {wm_res['avg_steps']:.1f}")
 
     # 3. WM + MPC + Curiosity Self-Play Exploration
-    print("\n[3/4] Evaluating WM + MPC + Curiosity...")
+    print("\n[3/4] Evaluating WM + MPC + Curiosity (Self-Play Exploration & Fine-Tuning)...")
     curiosity = CuriosityModule(model=model, eta=0.3, device=device)
     curiosity_buffer = ReplayBuffer(capacity=10000, obs_shape=(64, 64, 3), device=device)
     self_play_agent = SelfPlayAgent(
@@ -103,18 +103,32 @@ def run_phase2_benchmarks(
         buffer=curiosity_buffer,
         planner=planner,
         curiosity=curiosity,
-        epsilon=0.1,
+        epsilon=0.15,
         device=device,
     )
     # Run 10 curiosity self-play exploration episodes
     for _ in range(10):
         self_play_agent.run_episode(max_steps=100)
 
+    # Self-play model adaptation: fine-tune world model on newly explored transitions
+    if len(curiosity_buffer) >= 64:
+        print(f"      Fine-tuning world model on {len(curiosity_buffer)} curiosity transitions...")
+        opt_ft = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        model.train()
+        for _ in range(200):
+            b_obs, b_act, b_next, _, _ = curiosity_buffer.sample(64, device=device)
+            opt_ft.zero_grad()
+            l_ft, _ = model(b_obs, b_act, b_next)
+            l_ft.backward()
+            opt_ft.step()
+            model.update_target_encoder()
+        model.eval()
+
     curiosity_res = evaluate_agent(env, planner=planner, num_episodes=eval_episodes)
     results["WM + MPC + Curiosity"] = {
         "success_rate": curiosity_res["success_rate"],
         "avg_steps": curiosity_res["avg_steps"],
-        "budget": 2000 + len(curiosity_buffer),
+        "budget": cfg["training"].get("seed_steps", 4000) + len(curiosity_buffer),
     }
     print(f"      Curiosity Success: {curiosity_res['success_rate']:.1f}% | Steps: {curiosity_res['avg_steps']:.1f}")
 

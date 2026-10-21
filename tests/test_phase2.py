@@ -124,20 +124,26 @@ def test_curiosity_exploration_coverage(trained_jepa_model):
         curiosity.reset_memory()
         obs, info = env.reset(seed=seed)
         visited.add(tuple(info["agent_pos"]))
-        for _ in range(50):
+        for s in range(50):
             action = curiosity.select_curious_action(obs)
             obs, r, term, trunc, info = env.step(action)
             visited.add(tuple(info["agent_pos"]))
+            if term or trunc:
+                obs, info = env.reset(seed=seed + s + 1)
+                visited.add(tuple(info["agent_pos"]))
         return len(visited)
 
     def run_random_walk(seed):
         visited = set()
         obs, info = env.reset(seed=seed)
         visited.add(tuple(info["agent_pos"]))
-        for _ in range(50):
+        for s in range(50):
             action = env.action_space.sample()
             obs, r, term, trunc, info = env.step(action)
             visited.add(tuple(info["agent_pos"]))
+            if term or trunc:
+                obs, info = env.reset(seed=seed + s + 1)
+                visited.add(tuple(info["agent_pos"]))
         return len(visited)
 
     curiosity_coverages = [run_curious_walk(seed=s) for s in [42, 101, 202]]
