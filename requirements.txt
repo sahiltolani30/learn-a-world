@@ -1,0 +1,19 @@
+# Core ML & RL
+torch>=2.2.0
+gymnasium>=0.29.1
+crafter>=1.8.0
+stable-baselines3>=2.2.0
+
+# Scientific & Utilities
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0
+matplotlib>=3.8.0
+pillow>=10.0.0
+tqdm>=4.66.0
+
+# Model Hosting & Demo
+huggingface_hub>=0.20.0
+gradio>=4.20.0
+
+# Testing & Linting
+pytest>=8.0.0

@@ -1,0 +1,36 @@
+# Default Experiment Configuration for Learn-a-World
+project: "learn-a-world"
+seed: 42
+
+# Environment
+env:
+  name: "GridMaze-v0"  # Phase 1: GridMaze-v0, Phase 3: PushT / Crafter
+  render_size: 64
+  max_steps: 100
+
+# Architecture
+model:
+  latent_dim: 128
+  action_dim: 4
+  encoder:
+    type: "cnn"
+    channels: [32, 64, 128]
+  predictor:
+    type: "mlp"
+    hidden_dims: [256, 256]
+  ema_decay: 0.99
+
+# Training
+training:
+  batch_size: 64
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  buffer_capacity: 300000
+  checkpoint_interval: 500
+
+# Planning
+planning:
+  horizon: 5
+  num_candidates: 64
+  cem_iterations: 3
+  elite_ratio: 0.1
