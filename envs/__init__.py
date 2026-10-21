@@ -1,9 +1,11 @@
 """Environments module for Learn-a-World."""
 
 import gymnasium as gym
+from envs.adaptation_wrapper import DynamicsPerturbationWrapper
 from envs.crafter_wrapper import CrafterEnv
 from envs.grid_maze import GridMazeEnv
 from envs.push_t import PushTEnv
+
 
 # Register environments
 gym.register(
@@ -24,6 +26,7 @@ gym.register(
     max_episode_steps=100,
 )
 
-__all__ = ["CrafterEnv", "GridMazeEnv", "PushTEnv"]
+__all__ = ["CrafterEnv", "GridMazeEnv", "PushTEnv", "DynamicsPerturbationWrapper"]
+
 
 

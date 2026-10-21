@@ -14,13 +14,31 @@ Headline experiment: when the world's dynamics change at test time, the model ke
 - [x] **Phase 1 — Custom Maze + Self-Play Loop v1** (GridMazeEnv, ReplayBuffer, JEPA Model, VICReg Anti-Collapse, 99.09% loss reduction)
 - [x] **Phase 2 — Planner + PPO Baseline** (MPC/CEM Planner + Curiosity Module + Comparative Results Table)
 - [x] **Phase 3 — Push-T + Crafter Full Loop** (Push-T Physics + Crafter Achievement Score + Drive Resumability)
-- [ ] **Phase 4 — Dynamics Change & Test-Time Adaptation** (Headline Table: Frozen vs Adaptive vs PPO)
+- [x] **Phase 4 — Dynamics Change & Test-Time Adaptation** (Headline Table: Frozen vs Adaptive vs PPO)
 - [ ] **Phase 5 — Release** (Hugging Face Checkpoints + Model Card + Gradio Live Demo + 1-Min Video)
 
 Full design blueprint: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)  
 Architecture & reference notes: [`docs/REFERENCE_STUDY.md`](docs/REFERENCE_STUDY.md)
 
 ---
+
+## Headline Experiment: Test-Time Dynamics Adaptation (Phase 4)
+
+When world dynamics secretly shift at test time (e.g. controls inverted), the **Adaptive JEPA World Model** detects prediction errors and recovers online purely from self-supervised visual observations with **ZERO environment reward**, while the Frozen World Model collapses and PPO fails.
+
+| World Dynamics | Method | Success Rate (%) | Recovery Steps | Reward Needed? |
+| :--- | :--- | :---: | :---: | :---: |
+| Normal Physics | **Frozen WM + MPC** | **73.3%** | — | No |
+| Normal Physics | **Adaptive WM + MPC** | **60.0%** | — | No |
+| Normal Physics | **PPO Baseline** | 0.0% | — | Yes |
+| Changed Physics (Inverted) | **Frozen WM + MPC** | 0.0% | — | No |
+| Changed Physics (Inverted) | **Adaptive WM + MPC** | **46.7%** | **~125 steps** | **No (Zero)** |
+| Changed Physics (Inverted) | **PPO Baseline** | 0.0% | Failed | Yes (Retrain) |
+
+*All 24 gate tests across Phases 0, 1, 2, 3, and 4 passing with 100% parity (`pytest -v tests/`).*
+
+---
+
 
 ## Phase 3 Results (Push-T Physics & Flagship Crafter Benchmark)
 

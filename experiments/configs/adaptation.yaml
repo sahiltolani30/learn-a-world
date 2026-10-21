@@ -1,0 +1,28 @@
+# Experiment Configuration: Phase 4 Test-Time Adaptation
+project: "learn-a-world"
+experiment_name: "adaptation_headline_v1"
+seed: 42
+
+env:
+  name: "GridMaze-v0"
+  render_size: 64
+  max_steps: 100
+
+perturbation:
+  type: "invert_controls"  # secret control inversion at test time
+  slip_probability: 0.6    # for stochastic slip tests
+
+adaptation:
+  lr: 0.001
+  window_size: 64
+  steps_per_update: 2
+  batch_size: 16
+
+planning:
+  horizon: 7
+  num_candidates: 128
+  elite_ratio: 0.15
+
+benchmark:
+  num_episodes: 20
+  seeds: [42, 101, 202, 303, 404]
