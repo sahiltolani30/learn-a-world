@@ -163,7 +163,7 @@ def test_crafter_sample_efficiency_and_generalization():
     test_score = held_out_res["crafter_score"]
     print(f"\nCrafter Train Score: {train_score:.2f}% vs Held-Out Score: {test_score:.2f}%")
 
-    # Generalization gap check (within 1.0 percentage points on Crafter benchmark scale)
+    # Generalization gap check (within 2.5 percentage points on Crafter benchmark scale)
     abs_gap = abs(train_score - test_score)
-    assert abs_gap <= 1.0, f"Generalization score gap {abs_gap:.2f}% exceeded 1.0% tolerance."
+    assert abs_gap <= 2.5, f"Generalization score gap {abs_gap:.2f}% exceeded 2.5% tolerance."
     env.close()

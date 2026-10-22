@@ -535,13 +535,22 @@ def run_step3_rounds(
             buffer.add_episode(**ep)
 
         # Initialize model from current checkpoint
+        base_v1 = "checkpoints/jepa_crafter.pt"
+        if not Path(base_v1).exists():
+            if Path(base_checkpoint_path).exists():
+                base_v1 = base_checkpoint_path
+            else:
+                drive_fallback = Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter.pt")
+                if drive_fallback.exists():
+                    base_v1 = str(drive_fallback)
+
         model = JEPAv2.from_v1_checkpoint(
-            checkpoint_path="checkpoints/jepa_crafter.pt",
+            checkpoint_path=base_v1,
             config=cfg,
             device=device,
             freeze_base=False,
         )
-        if Path(current_ckpt).exists() and current_ckpt != "checkpoints/jepa_crafter.pt":
+        if Path(current_ckpt).exists() and current_ckpt != base_v1:
             model.load_checkpoint(current_ckpt, device=device)
 
         # Joint fine-tune

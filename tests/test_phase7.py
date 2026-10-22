@@ -205,8 +205,16 @@ def test_phase3_mini_round_smoke(tmp_path: Path):
     ckpt_dir = tmp_path / "checkpoints"
     out_dir = tmp_path / "results"
 
+    base_ckpt = "checkpoints/jepa_crafter.pt"
+    if not Path(base_ckpt).exists():
+        drive_ckpt = Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter.pt")
+        if drive_ckpt.exists():
+            base_ckpt = str(drive_ckpt)
+        else:
+            pytest.skip("checkpoints/jepa_crafter.pt not found")
+
     res = run_step3_rounds(
-        base_checkpoint_path="checkpoints/jepa_crafter.pt",
+        base_checkpoint_path=base_ckpt,
         config_path="experiments/configs/crafter_v2.yaml",
         rounds=1,
         transitions_per_round=20,
