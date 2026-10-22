@@ -1,0 +1,60 @@
+{
+  "step": 100,
+  "n_step": 10,
+  "gamma": 0.99,
+  "use_normalization": true,
+  "initial_calibration": {
+    "pearson_r": 0.0643719807267189,
+    "mae": 0.7112952470779419,
+    "q_pred_mean": 0.7282031178474426,
+    "q_pred_std": 0.012516758404672146,
+    "realized_return_mean": 0.1360982358455658,
+    "realized_return_std": 0.44950544834136963,
+    "mean_disagreement": 0.00025050813565030694
+  },
+  "final_calibration": {
+    "pearson_r": 0.19669324159622192,
+    "mae": 0.49920034408569336,
+    "q_pred_mean": 0.42893141508102417,
+    "q_pred_std": 0.10482291877269745,
+    "realized_return_mean": 0.12058521807193756,
+    "realized_return_std": 0.46355298161506653,
+    "mean_disagreement": 0.3163498044013977
+  },
+  "history": {
+    "step": [
+      50,
+      100
+    ],
+    "loss_q": [
+      10.953600883483887,
+      3.0534627437591553
+    ],
+    "loss_event": [
+      0.0013595499331131577,
+      0.0014171272050589323
+    ],
+    "loss_health": [
+      0.020857591181993484,
+      0.022512581199407578
+    ],
+    "pearson_r": [
+      0.23263825476169586,
+      0.25532692670822144
+    ],
+    "q_pred_std": [
+      0.06746499985456467,
+      0.10577753931283951
+    ],
+    "mean_disagreement": [
+      0.24559354782104492,
+      0.32062363624572754
+    ]
+  },
+  "passed_gate": true,
+  "gate_conditions": {
+    "pearson_r_positive": true,
+    "q_variance_healthy": true,
+    "disagreement_active": true
+  }
+}

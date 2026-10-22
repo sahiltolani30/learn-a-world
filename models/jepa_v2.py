@@ -157,6 +157,11 @@ class JEPAv2(nn.Module):
         ensemble = self.q_target_ensemble if use_target else self.q_ensemble
         return ensemble.q_mean(z, action)
 
+    def q_min(self, z: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
+        """Clipped Double-Q minimum return across ensemble heads."""
+        ensemble = self.q_target_ensemble if use_target else self.q_ensemble
+        return ensemble.q_min(z, action)
+
     def q_std(self, z: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
         """Epistemic uncertainty (std dev) across ensemble heads."""
         ensemble = self.q_target_ensemble if use_target else self.q_ensemble

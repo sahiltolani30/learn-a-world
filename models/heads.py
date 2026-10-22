@@ -8,6 +8,7 @@ Implements:
 """
 
 from typing import Optional, Union
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -202,6 +203,52 @@ def two_hot_decode(
     bins = torch.linspace(v_min, v_max, num_bins, device=logits.device)
     return (probs * bins).sum(dim=-1)
 
+class ReturnNormalizer:
+    """
+    DreamerV3-style percentile return normalizer.
+    Tracks running 5th and 95th percentiles of returns using EMA.
+    Normalizes targets into [0, v_max] so two-hot discrete bins have maximum resolution.
+    """
+
+    def __init__(
+        self,
+        low_percentile: float = 5.0,
+        high_percentile: float = 95.0,
+        decay: float = 0.99,
+        target_max: float = 12.0,
+    ):
+        self.low_percentile = low_percentile
+        self.high_percentile = high_percentile
+        self.decay = decay
+        self.target_max = target_max
+        self.low = 0.0
+        self.high = 1.0
+        self.initialized = False
+
+    def update(self, returns: torch.Tensor) -> None:
+        with torch.no_grad():
+            r_flat = returns.detach().float().cpu().numpy().flatten()
+            if len(r_flat) == 0:
+                return
+            p_low = float(np.percentile(r_flat, self.low_percentile))
+            p_high = float(np.percentile(r_flat, self.high_percentile))
+            if not self.initialized:
+                self.low = p_low
+                self.high = max(p_high, p_low + 1.0)
+                self.initialized = True
+            else:
+                self.low = self.decay * self.low + (1.0 - self.decay) * p_low
+                self.high = self.decay * self.high + (1.0 - self.decay) * p_high
+
+    def normalize(self, returns: torch.Tensor) -> torch.Tensor:
+        scale = max(self.high - self.low, 1.0)
+        norm = (returns - self.low) / scale * (self.target_max * 0.8)
+        return norm.clamp(0.0, self.target_max)
+
+    def denormalize(self, norm_values: torch.Tensor) -> torch.Tensor:
+        scale = max(self.high - self.low, 1.0)
+        return norm_values / (self.target_max * 0.8) * scale + self.low
+
 class QEnsemble(nn.Module):
     """
     K-head Q-Value Ensemble with Two-Hot discrete regression over [v_min, v_max].
@@ -269,6 +316,11 @@ class QEnsemble(nn.Module):
         """Mean Q-value across ensemble heads. Shape: [...]"""
         q_vals = self.q_values(z, action)
         return q_vals.mean(dim=0)
+
+    def q_min(self, z: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        """Clipped Double-Q minimum return across ensemble heads. Shape: [...]"""
+        q_vals = self.q_values(z, action)
+        return q_vals.min(dim=0).values
 
     def q_std(self, z: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """Epistemic uncertainty (standard deviation) across ensemble heads. Shape: [...]"""
