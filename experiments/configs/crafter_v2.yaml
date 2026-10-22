@@ -1,0 +1,73 @@
+# Experiment Configuration: Learn-a-World v2 Flagship Crafter Architecture
+project: "learn-a-world"
+experiment_name: "crafter_jepa_v2"
+seed: 42
+
+# Environment
+env:
+  name: "Crafter-v0"
+  render_size: 64
+  max_steps: 1000
+
+# Base JEPA Model Architecture
+model:
+  latent_dim: 128
+  num_actions: 17
+  action_emb_dim: 32
+  predictor_hidden_dim: 256
+  predictor_layers: 2
+  ema_decay: 0.99
+  var_weight: 1.0
+  target_std: 1.0
+
+# Task Heads Architecture (Phase 1 & 2)
+heads:
+  hidden_dim: 256
+  action_emb_dim: 32
+  q_bins: 51
+  q_max: 12.0
+  q_ensemble: 3
+
+# Loss Weights & Dynamics Targets
+loss:
+  event_weight: 1.0
+  health_weight: 0.5
+  q_weight: 1.0
+  prior_weight: 0.5
+  focal_gamma: 2.0
+  n_step: 5
+  gamma: 0.99
+  unroll_steps: 4
+  target_ema: 0.995
+
+# Planner v2 Settings
+planner_v2:
+  horizon: 10
+  num_candidates: 256
+  cem_iterations: 3
+  elite_ratio: 0.15
+  uncertainty_weight: 0.5
+  novelty_weight: 0.02
+  prior_mix: 0.5
+
+# Training Parameters v2
+training_v2:
+  seq_len: 16
+  batch_seqs: 32
+  lr_heads: 0.0003
+  lr_joint: 0.0001
+  total_steps: 10000
+  val_interval: 500
+  log_interval: 100
+  checkpoint_interval: 1000
+  checkpoint_name: "jepa_crafter_v2.pt"
+
+# Legacy planning & curiosity retained for baseline compatibility
+planning:
+  horizon: 8
+  num_candidates: 256
+  elite_ratio: 0.15
+
+curiosity:
+  eta: 0.3
+  max_bonus: 1.0

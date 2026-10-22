@@ -1,0 +1,119 @@
+{
+  "macro_tier1_pr_auc": 0.0737,
+  "health_mae": 0.1422,
+  "per_achievement": {
+    "collect_coal": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "collect_diamond": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "collect_drink": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "collect_iron": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "collect_sapling": {
+      "pr_auc": 0.1028,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 537
+    },
+    "collect_stone": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "collect_wood": {
+      "pr_auc": 0.0468,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 44
+    },
+    "defeat_skeleton": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "defeat_zombie": {
+      "pr_auc": 0.1119,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 43
+    },
+    "eat_cow": {
+      "pr_auc": 0.0053,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 51
+    },
+    "eat_plant": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_iron_pickaxe": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_iron_sword": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_stone_pickaxe": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_stone_sword": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_wood_pickaxe": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "make_wood_sword": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "place_furnace": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "place_plant": {
+      "pr_auc": 0.9777,
+      "recall_at_0.5": 1.0,
+      "positive_samples": 200
+    },
+    "place_stone": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "place_table": {
+      "pr_auc": 0.0,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 0
+    },
+    "wake_up": {
+      "pr_auc": 0.0716,
+      "recall_at_0.5": 0.0,
+      "positive_samples": 87
+    }
+  },
+  "representation_problem": true,
+  "training_steps": 500,
+  "final_loss": 0.009724459610879421
+}
