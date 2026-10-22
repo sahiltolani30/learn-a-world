@@ -179,7 +179,14 @@ class JEPAv2(nn.Module):
         device: Optional[Union[str, torch.device]] = None,
         freeze_base: bool = True,
     ) -> "JEPAv2":
-        """Factory method: loads trained v1 checkpoint and initializes v2 task heads."""
+        """Factory method: loads a v1 OR v2 checkpoint and returns a JEPAv2 model.
+
+        Auto-detects format:
+          - v1 checkpoint: contains key ``model_state``  → builds JEPAv2 from scratch and
+            copies the base encoder weights, leaving task heads freshly initialized.
+          - v2 checkpoint: contains key ``base_model_state`` → builds a fresh JEPAv2 then
+            calls ``load_checkpoint()`` to restore all saved weights.
+        """
         ckpt_path = Path(checkpoint_path)
         if not ckpt_path.exists():
             raise FileNotFoundError(f"Checkpoint not found at: {ckpt_path}")
@@ -201,6 +208,49 @@ class JEPAv2(nn.Module):
         q_bins = h_cfg.get("q_bins", 51)
         q_max = h_cfg.get("q_max", 12.0)
 
+        # ------------------------------------------------------------------
+        # V2 CHECKPOINT fast-path: all weights already in v2 format → just
+        # build a fresh shell and call load_checkpoint to restore everything.
+        # ------------------------------------------------------------------
+        if "base_model_state" in ckpt:
+            print(f"[from_v1_checkpoint] Detected v2 checkpoint at {ckpt_path}; loading all weights.")
+            # Peek into base_model_state to recover architecture dims
+            base_state = ckpt["base_model_state"]
+            if "predictor.net.0.weight" in base_state:
+                predictor_hidden_dim = base_state["predictor.net.0.weight"].shape[0]
+            if "predictor.action_emb.weight" in base_state:
+                action_emb_dim = base_state["predictor.action_emb.weight"].shape[1]
+                num_actions = base_state["predictor.action_emb.weight"].shape[0]
+            if "encoder.fc.weight" in base_state:
+                latent_dim = base_state["encoder.fc.weight"].shape[0]
+
+            base_model = JEPAWorldModel(
+                in_channels=3,
+                latent_dim=latent_dim,
+                num_actions=num_actions,
+                action_emb_dim=action_emb_dim,
+                predictor_hidden_dim=predictor_hidden_dim,
+                predictor_layers=predictor_layers,
+                ema_decay=ema_decay,
+            )
+            v2_model = cls(
+                base_model=base_model,
+                hidden_dim=hidden_dim,
+                action_emb_dim=action_emb_dim,
+                q_heads=q_heads,
+                q_bins=q_bins,
+                q_max=q_max,
+                freeze_base=False,  # will be frozen below if requested
+            ).to(dev)
+            v2_model.load_checkpoint(str(ckpt_path), device=device)
+            if freeze_base:
+                for p in v2_model.base_model.parameters():
+                    p.requires_grad = False
+            return v2_model
+
+        # ------------------------------------------------------------------
+        # V1 CHECKPOINT: key is ``model_state`` (old format)
+        # ------------------------------------------------------------------
         # Auto-detect architectural dimensions if present in checkpoint state_dict
         model_state = ckpt.get("model_state", {})
         if "predictor.net.0.weight" in model_state:
