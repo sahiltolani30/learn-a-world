@@ -1,11 +1,11 @@
 {
-  "macro_tier1_pr_auc": 0.0737,
-  "health_mae": 0.1422,
+  "macro_tier1_pr_auc": 0.5606,
+  "health_mae": 0.1149,
   "per_achievement": {
     "collect_coal": {
-      "pr_auc": 0.0,
+      "pr_auc": 0.019,
       "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "positive_samples": 2
     },
     "collect_diamond": {
       "pr_auc": 0.0,
@@ -13,9 +13,9 @@
       "positive_samples": 0
     },
     "collect_drink": {
-      "pr_auc": 0.0,
-      "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "pr_auc": 0.9124,
+      "recall_at_0.5": 0.6822,
+      "positive_samples": 450
     },
     "collect_iron": {
       "pr_auc": 0.0,
@@ -23,19 +23,19 @@
       "positive_samples": 0
     },
     "collect_sapling": {
-      "pr_auc": 0.1028,
+      "pr_auc": 0.1309,
       "recall_at_0.5": 0.0,
-      "positive_samples": 537
+      "positive_samples": 437
     },
     "collect_stone": {
-      "pr_auc": 0.0,
+      "pr_auc": 0.2959,
       "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "positive_samples": 8
     },
     "collect_wood": {
-      "pr_auc": 0.0468,
+      "pr_auc": 0.2056,
       "recall_at_0.5": 0.0,
-      "positive_samples": 44
+      "positive_samples": 95
     },
     "defeat_skeleton": {
       "pr_auc": 0.0,
@@ -43,14 +43,14 @@
       "positive_samples": 0
     },
     "defeat_zombie": {
-      "pr_auc": 0.1119,
+      "pr_auc": 0.012,
       "recall_at_0.5": 0.0,
-      "positive_samples": 43
+      "positive_samples": 15
     },
     "eat_cow": {
-      "pr_auc": 0.0053,
+      "pr_auc": 0.001,
       "recall_at_0.5": 0.0,
-      "positive_samples": 51
+      "positive_samples": 4
     },
     "eat_plant": {
       "pr_auc": 0.0,
@@ -78,9 +78,9 @@
       "positive_samples": 0
     },
     "make_wood_pickaxe": {
-      "pr_auc": 0.0,
-      "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "pr_auc": 0.8742,
+      "recall_at_0.5": 0.8182,
+      "positive_samples": 11
     },
     "make_wood_sword": {
       "pr_auc": 0.0,
@@ -93,27 +93,27 @@
       "positive_samples": 0
     },
     "place_plant": {
-      "pr_auc": 0.9777,
-      "recall_at_0.5": 1.0,
-      "positive_samples": 200
+      "pr_auc": 0.977,
+      "recall_at_0.5": 0.9016,
+      "positive_samples": 122
     },
     "place_stone": {
-      "pr_auc": 0.0,
+      "pr_auc": 1.0,
       "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "positive_samples": 2
     },
     "place_table": {
-      "pr_auc": 0.0,
-      "recall_at_0.5": 0.0,
-      "positive_samples": 0
+      "pr_auc": 0.4476,
+      "recall_at_0.5": 0.4118,
+      "positive_samples": 17
     },
     "wake_up": {
-      "pr_auc": 0.0716,
-      "recall_at_0.5": 0.0,
-      "positive_samples": 87
+      "pr_auc": 0.9934,
+      "recall_at_0.5": 0.3939,
+      "positive_samples": 66
     }
   },
-  "representation_problem": true,
-  "training_steps": 500,
-  "final_loss": 0.009724459610879421
+  "representation_problem": false,
+  "training_steps": 5000,
+  "final_loss": 2.298035144805908
 }

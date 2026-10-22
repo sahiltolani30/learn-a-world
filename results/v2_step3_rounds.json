@@ -1,0 +1,40 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "transitions_collected": 30000,
+      "total_dataset_transitions": 30000,
+      "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v2_r1.pt",
+      "crafter_score": 2.0485,
+      "unlocked_count": 8,
+      "mean_survival_steps": 174.1,
+      "mean_reward": 2.34,
+      "debug_decomposition": {
+        "mean_reward_sum": 4.0878,
+        "mean_terminal_value": 0.6537,
+        "mean_uncertainty_penalty": 0.0001,
+        "mean_best_score": 4.8431,
+        "reward_sum_variance": 3.244907
+      }
+    },
+    {
+      "round": 2,
+      "transitions_collected": 30000,
+      "total_dataset_transitions": 60000,
+      "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v2_r2.pt",
+      "crafter_score": 2.014,
+      "unlocked_count": 7,
+      "mean_survival_steps": 180.34,
+      "mean_reward": 2.6,
+      "debug_decomposition": {
+        "mean_reward_sum": 3.7452,
+        "mean_terminal_value": 0.6544,
+        "mean_uncertainty_penalty": 0.0001,
+        "mean_best_score": 4.5619,
+        "reward_sum_variance": 2.528798
+      }
+    }
+  ],
+  "best_score": 2.0485,
+  "best_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v2_best.pt"
+}
