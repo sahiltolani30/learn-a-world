@@ -1,20 +1,17 @@
 {
   "device": "cuda",
   "runtime_seconds": 1556.0205309391022,
-  "runtime_minutes": 25.93,
   "step1": {
-    "checkpoint": "checkpoints/jepa_crafter_v3_step1_value.pt",
+    "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_value.pt",
     "final_pearson_r": 0.3758431673049927,
     "final_q_std": 0.705476701259613,
-    "gate_passed": true,
-    "notes": "Q standard deviation expanded from 0.0081 to 0.7055 (87x expansion). Pearson r reached 0.3758. Broken critic (R1) solved."
+    "gate_passed": true
   },
   "step2": {
-    "checkpoint": "checkpoints/jepa_crafter_v3_phase2.pt",
+    "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase2.pt",
     "final_10_step_mse": 0.8455935368935267,
     "final_wood_pr_auc": 0.49204269072386364,
     "final_macro_pr_auc": 0.5937047429975818,
-    "gate_passed": true,
-    "notes": "10-step latent rollout MSE dropped from 12.37 to 0.8456 (14.6x error reduction). Wood PR-AUC jumped from 0.0065 to 0.4920 (75x improvement). Recurrent memory (R2) and task shaping (R5) solved."
+    "gate_passed": true
   }
 }

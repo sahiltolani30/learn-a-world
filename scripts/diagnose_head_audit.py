@@ -36,6 +36,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from eval.metrics import CRAFTER_ACHIEVEMENTS
 from models.jepa_v2 import JEPAv2
+from models.jepa_v3 import JEPAv3
 
 
 def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
@@ -49,6 +50,7 @@ def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
     all_events = []
     all_masks = []
     all_rewards = []
+    all_lengths = []
 
     for p in shard_paths:
         data = np.load(p, allow_pickle=True)
@@ -57,6 +59,16 @@ def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
         all_events.append(data["events"])
         all_masks.append(data["mask_before"])
         all_rewards.append(data["rewards"])
+        lengths = data.get("episode_lengths", None)
+        if lengths is not None and len(lengths) > 0:
+            all_lengths.extend(lengths.tolist())
+        else:
+            dones = data["dones"]
+            start = 0
+            for i, d in enumerate(dones):
+                if d or i == len(dones) - 1:
+                    all_lengths.append(i + 1 - start)
+                    start = i + 1
 
     return {
         "obs": np.concatenate(all_obs, axis=0),
@@ -64,6 +76,7 @@ def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
         "events": np.concatenate(all_events, axis=0),
         "mask_before": np.concatenate(all_masks, axis=0),
         "rewards": np.concatenate(all_rewards, axis=0),
+        "episode_lengths": all_lengths,
     }
 
 
@@ -89,23 +102,49 @@ def audit_heads(
 
     print(f"[Head-Audit] Evaluating {N} transitions in batches of {batch_size}...")
 
-    with torch.no_grad():
-        for i in range(0, N, batch_size):
-            b_obs = obs[i:i + batch_size]
-            b_act = actions[i:i + batch_size]
-            b_mask = mask_before[i:i + batch_size]
+    if isinstance(model, JEPAv3):
+        lengths = data.get("episode_lengths", [N])
+        idx = 0
+        with torch.no_grad():
+            for ep_len in lengths:
+                ep_slice = slice(idx, idx + ep_len)
+                b_obs = obs[ep_slice]
+                b_act = actions[ep_slice]
+                b_mask = mask_before[ep_slice]
 
-            t_obs = torch.from_numpy(b_obs).permute(0, 3, 1, 2).float() / 255.0
-            t_obs = t_obs.to(dev)
-            t_act = torch.from_numpy(b_act).long().to(dev)
-            t_mask = torch.from_numpy(b_mask).float().to(dev)
+                t_obs = torch.from_numpy(b_obs).permute(0, 3, 1, 2).float() / 255.0
+                t_obs = t_obs.to(dev)
+                t_act = torch.from_numpy(b_act).long().to(dev)
+                t_mask = torch.from_numpy(b_mask).float().to(dev)
 
-            z = model.encode(t_obs, use_target=True)
-            p_event = model.event_head.predict_proba(z, t_act, t_mask)
-            pred_h = model.health_head(z, t_act).squeeze(-1)
+                z = model.encode(t_obs, use_target=True)
+                h = model.recurrent_core.unroll_sequence(z.unsqueeze(0), t_act.unsqueeze(0)).squeeze(0)
+                s = torch.cat([z, h], dim=-1)
 
-            all_pred_probs.append(p_event.cpu().numpy())
-            all_pred_health.append(pred_h.cpu().numpy())
+                p_event = model.event_head.predict_proba(s, t_act, t_mask)
+                pred_h = model.health_head(s, t_act).squeeze(-1)
+
+                all_pred_probs.append(p_event.cpu().numpy())
+                all_pred_health.append(pred_h.cpu().numpy())
+                idx += ep_len
+    else:
+        with torch.no_grad():
+            for i in range(0, N, batch_size):
+                b_obs = obs[i:i + batch_size]
+                b_act = actions[i:i + batch_size]
+                b_mask = mask_before[i:i + batch_size]
+
+                t_obs = torch.from_numpy(b_obs).permute(0, 3, 1, 2).float() / 255.0
+                t_obs = t_obs.to(dev)
+                t_act = torch.from_numpy(b_act).long().to(dev)
+                t_mask = torch.from_numpy(b_mask).float().to(dev)
+
+                z = model.encode(t_obs, use_target=True)
+                p_event = model.event_head.predict_proba(z, t_act, t_mask)
+                pred_h = model.health_head(z, t_act).squeeze(-1)
+
+                all_pred_probs.append(p_event.cpu().numpy())
+                all_pred_health.append(pred_h.cpu().numpy())
 
     pred_probs = np.concatenate(all_pred_probs, axis=0)  # [N, 22]
     pred_health = np.concatenate(all_pred_health, axis=0)  # [N]
@@ -236,7 +275,12 @@ def main():
     args = parser.parse_args()
 
     print(f"[Head-Audit] Loading model from {args.checkpoint}...")
-    model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
+    ckpt_raw = torch.load(args.checkpoint, map_location="cpu")
+    if isinstance(ckpt_raw, dict) and ckpt_raw.get("version") == "v3":
+        model = JEPAv3()
+        model.load_checkpoint(args.checkpoint, device=args.device)
+    else:
+        model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
 
     print(f"[Head-Audit] Loading held-out data from {args.shards_dir}...")
     data = load_heldout_data(args.shards_dir)

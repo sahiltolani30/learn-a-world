@@ -33,6 +33,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from models.jepa_v2 import JEPAv2
+from models.jepa_v3 import JEPAv3
 
 
 def load_episodes_for_rollout(shards_dir: str, min_length: int = 12) -> List[Dict[str, np.ndarray]]:
@@ -116,31 +117,58 @@ def evaluate_imagination(
                 t_obs = t_obs.to(dev)
                 gt_latents = model.encode(t_obs, use_target=True)
 
-                # Imagined trajectory starting from z_0
-                z_hat = gt_latents[0:1]  # [1, 128]
-                m_hat = torch.zeros((1, 22), device=dev)
+                if isinstance(model, JEPAv3):
+                    z_hat = gt_latents[0:1]
+                    h_hat = torch.zeros((1, model.recurrent_dim), device=dev)
+                    m_hat = torch.zeros((1, 22), device=dev)
 
-                for h in range(horizon):
-                    a_h = torch.tensor([seg_actions[h]], dtype=torch.long, device=dev)
-                    # Next latent imagined
-                    z_hat = model.predict_next(z_hat, a_h)
-                    gt_z = gt_latents[h + 1:h + 2]
+                    for h in range(horizon):
+                        a_h = torch.tensor([seg_actions[h]], dtype=torch.long, device=dev)
+                        next_z, next_h, next_s = model.predict_next_step(z_hat, h_hat, a_h)
+                        gt_z = gt_latents[h + 1:h + 2]
 
-                    # Metrics
-                    mse = F.mse_loss(z_hat, gt_z).item()
-                    cos = F.cosine_similarity(z_hat, gt_z).item()
-                    norm_ratio = (torch.norm(z_hat) / (torch.norm(gt_z) + 1e-6)).item()
+                        mse = F.mse_loss(next_z, gt_z).item()
+                        cos = F.cosine_similarity(next_z, gt_z).item()
+                        norm_ratio = (torch.norm(next_z) / (torch.norm(gt_z) + 1e-6)).item()
 
-                    # Reward prediction along imagined path
-                    r_hat, decomp = model.predict_reward(z_hat, a_h, m_hat, return_decomposition=True)
-                    r_mae = abs(float(r_hat.item()) - float(seg_rewards[h]))
-                    p_event = decomp["event_probs"]
-                    m_hat = torch.where(p_event > 0.5, torch.tensor(1.0, device=dev), m_hat)
+                        r_hat, decomp = model.predict_reward(next_s, a_h, m_hat, return_decomposition=True)
+                        r_mae = abs(float(r_hat.item()) - float(seg_rewards[h]))
+                        p_event = decomp["event_probs"]
+                        m_hat = torch.where(p_event > 0.5, torch.tensor(1.0, device=dev), m_hat)
 
-                    step_mse[h].append(mse)
-                    step_cosine[h].append(cos)
-                    step_norm_ratio[h].append(norm_ratio)
-                    step_reward_mae[h].append(r_mae)
+                        step_mse[h].append(mse)
+                        step_cosine[h].append(cos)
+                        step_norm_ratio[h].append(norm_ratio)
+                        step_reward_mae[h].append(r_mae)
+
+                        z_hat = next_z
+                        h_hat = next_h
+                else:
+                    # Imagined trajectory starting from z_0 for JEPAv2
+                    z_hat = gt_latents[0:1]  # [1, 128]
+                    m_hat = torch.zeros((1, 22), device=dev)
+
+                    for h in range(horizon):
+                        a_h = torch.tensor([seg_actions[h]], dtype=torch.long, device=dev)
+                        # Next latent imagined
+                        z_hat = model.predict_next(z_hat, a_h)
+                        gt_z = gt_latents[h + 1:h + 2]
+
+                        # Metrics
+                        mse = F.mse_loss(z_hat, gt_z).item()
+                        cos = F.cosine_similarity(z_hat, gt_z).item()
+                        norm_ratio = (torch.norm(z_hat) / (torch.norm(gt_z) + 1e-6)).item()
+
+                        # Reward prediction along imagined path
+                        r_hat, decomp = model.predict_reward(z_hat, a_h, m_hat, return_decomposition=True)
+                        r_mae = abs(float(r_hat.item()) - float(seg_rewards[h]))
+                        p_event = decomp["event_probs"]
+                        m_hat = torch.where(p_event > 0.5, torch.tensor(1.0, device=dev), m_hat)
+
+                        step_mse[h].append(mse)
+                        step_cosine[h].append(cos)
+                        step_norm_ratio[h].append(norm_ratio)
+                        step_reward_mae[h].append(r_mae)
 
                 sample_count += 1
             if sample_count >= max_samples:
@@ -218,7 +246,12 @@ def main():
     args = parser.parse_args()
 
     print(f"[Imagination] Loading model from {args.checkpoint}...")
-    model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
+    ckpt_raw = torch.load(args.checkpoint, map_location="cpu")
+    if isinstance(ckpt_raw, dict) and ckpt_raw.get("version") == "v3":
+        model = JEPAv3()
+        model.load_checkpoint(args.checkpoint, device=args.device)
+    else:
+        model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
 
     print(f"[Imagination] Loading episodes from {args.shards_dir}...")
     episodes = load_episodes_for_rollout(args.shards_dir, min_length=args.horizon + 2)

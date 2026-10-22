@@ -164,7 +164,7 @@ def get_test_resources(tmp_path):
 
     if ckpt_path is None:
         dummy_base = JEPAWorldModel(in_channels=3, latent_dim=128, num_actions=17)
-        dummy_v2 = JEPAv2(dummy_base, hidden_dim=256)
+        dummy_v2 = JEPAv2(dummy_base, hidden_dim=64)
         dummy_ckpt = tmp_path / "dummy_v2_base.pt"
         torch.save({
             "base_model_state": dummy_base.state_dict(),

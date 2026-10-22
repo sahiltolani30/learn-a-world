@@ -1,0 +1,20 @@
+{
+  "num_episodes": 48,
+  "total_transitions": 8000,
+  "pearson_r": 0.29666513204574585,
+  "pearson_p_value": 3.00290591194961e-162,
+  "spearman_rho": 0.38098195698663295,
+  "spearman_p_value": 1.0059358411097936e-274,
+  "mae": 0.8006507754325867,
+  "rmse": 1.0169020891189575,
+  "q_pred_mean": 0.1796204000711441,
+  "q_pred_std": 0.40108299255371094,
+  "q_pred_min": -0.06835776567459106,
+  "q_pred_max": 2.332960844039917,
+  "realized_return_mean": 0.46138903498649597,
+  "realized_return_std": 1.017868161201477,
+  "realized_return_min": -0.8999999761581421,
+  "realized_return_max": 4.101992607116699,
+  "mean_ensemble_disagreement": 0.02414902113378048,
+  "max_ensemble_disagreement": 0.5757432579994202
+}

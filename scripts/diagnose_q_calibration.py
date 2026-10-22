@@ -26,6 +26,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from models.jepa_v2 import JEPAv2
+from models.jepa_v3 import JEPAv3
 
 
 def compute_discounted_returns(rewards: np.ndarray, gamma: float = 0.99) -> np.ndarray:
@@ -108,24 +109,42 @@ def evaluate_q_calibration(
             returns = compute_discounted_returns(rewards, gamma=gamma)
             T = len(returns)
 
-            # Process in batches
-            for i in range(0, T, batch_size):
-                b_obs = obs[i:i + batch_size]
-                b_actions = actions[i:i + batch_size]
-
-                # Convert to tensor [B, C, H, W]
-                t_obs = torch.from_numpy(b_obs).permute(0, 3, 1, 2).float() / 255.0
+            if isinstance(model, JEPAv3):
+                t_obs = torch.from_numpy(obs).permute(0, 3, 1, 2).float() / 255.0
                 t_obs = t_obs.to(dev)
-                t_act = torch.from_numpy(b_actions).long().to(dev)
+                t_act = torch.from_numpy(actions).long().to(dev)
 
                 z = model.encode(t_obs, use_target=True)
-                q_pred = model.q_mean(z, t_act).cpu().numpy()
-                q_std = model.q_std(z, t_act).cpu().numpy()
+                h_seq = model.recurrent_core.unroll_sequence(z.unsqueeze(0), t_act.unsqueeze(0)).squeeze(0)
+                s = torch.cat([z, h_seq], dim=-1)
+                q_pred = model.q_mean(s, t_act)
+                if hasattr(model, "return_normalizer") and model.return_normalizer.initialized:
+                    q_pred = model.return_normalizer.denormalize(q_pred)
+                q_std = model.q_std(s, t_act)
 
-                all_q_pred.extend(q_pred.tolist())
-                all_q_std.extend(q_std.tolist())
-                all_returns.extend(returns[i:i + batch_size].tolist())
-                all_step_indices.extend(list(range(i, min(i + batch_size, T))))
+                all_q_pred.extend(q_pred.cpu().numpy().tolist())
+                all_q_std.extend(q_std.cpu().numpy().tolist())
+                all_returns.extend(returns.tolist())
+                all_step_indices.extend(list(range(T)))
+            else:
+                # Process in batches for JEPAv2
+                for i in range(0, T, batch_size):
+                    b_obs = obs[i:i + batch_size]
+                    b_actions = actions[i:i + batch_size]
+
+                    # Convert to tensor [B, C, H, W]
+                    t_obs = torch.from_numpy(b_obs).permute(0, 3, 1, 2).float() / 255.0
+                    t_obs = t_obs.to(dev)
+                    t_act = torch.from_numpy(b_actions).long().to(dev)
+
+                    z = model.encode(t_obs, use_target=True)
+                    q_pred = model.q_mean(z, t_act).cpu().numpy()
+                    q_std = model.q_std(z, t_act).cpu().numpy()
+
+                    all_q_pred.extend(q_pred.tolist())
+                    all_q_std.extend(q_std.tolist())
+                    all_returns.extend(returns[i:i + batch_size].tolist())
+                    all_step_indices.extend(list(range(i, min(i + batch_size, T))))
 
     q_pred_arr = np.array(all_q_pred, dtype=np.float32)
     q_std_arr = np.array(all_q_std, dtype=np.float32)
@@ -220,7 +239,12 @@ def main():
     args = parser.parse_args()
 
     print(f"[Q-Calibration] Loading model from {args.checkpoint}...")
-    model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
+    ckpt_raw = torch.load(args.checkpoint, map_location="cpu")
+    if isinstance(ckpt_raw, dict) and ckpt_raw.get("version") == "v3":
+        model = JEPAv3()
+        model.load_checkpoint(args.checkpoint, device=args.device)
+    else:
+        model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
 
     print(f"[Q-Calibration] Loading episodes from {args.shards_dir}...")
     episodes = load_episodes_from_shards(args.shards_dir)
