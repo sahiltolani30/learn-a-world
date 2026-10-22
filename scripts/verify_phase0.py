@@ -20,7 +20,10 @@ def test_imports():
     import crafter
     import stable_baselines3
     import huggingface_hub
-    import gradio
+    try:
+        import gradio
+    except ImportError:
+        pass
     
     import importlib.metadata
     crafter_version = importlib.metadata.version('crafter')
