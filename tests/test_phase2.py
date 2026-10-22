@@ -29,6 +29,9 @@ def trained_jepa_model(tmp_path_factory):
     """Provides a trained JEPA world model for Phase 2 tests."""
     temp_dir = tmp_path_factory.mktemp("phase2_model")
     ckpt_path = Path("checkpoints/jepa_maze.pt")
+    drive_ckpt = Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_maze.pt")
+    if drive_ckpt.exists():
+        ckpt_path = drive_ckpt
 
     device = get_device("cpu")  # use CPU for deterministic CI tests
     if ckpt_path.exists():
