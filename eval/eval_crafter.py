@@ -115,14 +115,12 @@ def evaluate_crafter_benchmark(
         has_wood_pick = inv.get("wood_pickaxe", 0) > 0
         has_stone_pick = inv.get("stone_pickaxe", 0) > 0
         has_wood_sword = ach.get("make_wood_sword", 0) > 0
+        did_place_stone = ach.get("place_stone", 0) > 0
         did_place_plant = ach.get("place_plant", 0) > 0
-        did_eat_plant = ach.get("eat_plant", 0) > 0
 
         # Per-episode state reset
         if not has_table:
             state["placed_table_step"] = -999
-        if not did_place_plant:
-            state["plant_placed_step"] = -999
 
         # ── SURVIVAL PRIORITY (highest priority, prevents step-184 death) ──────
         if drink <= 2:
@@ -132,20 +130,20 @@ def evaluate_crafter_benchmark(
         if energy <= 2:
             return 6   # sleep to recover energy and wake_up
 
-        # ── EAT PLANT REFLEX ──────────────────────────────────────────────────
-        # Right after placing a plant, eat it immediately (stays in adjacent tile)
-        if did_place_plant and not did_eat_plant:
-            if (s - state["plant_placed_step"]) <= 3:
-                return 5  # "Do" on the adjacent freshly-placed plant tile
-
         # ── PLANT PLACEMENT ───────────────────────────────────────────────────
         if sapling >= 1 and not did_place_plant:
-            state["plant_placed_step"] = s
             return 10  # place_plant
 
+        # ── PLACE STONE ACHIEVEMENT (Tier 3 free unlock) ──────────────────────
+        # When stone >= 2, placing one unlocks place_stone while leaving >=1 for crafting
+        if stone >= 2 and not did_place_stone:
+            return 7   # place_stone
+
         # ── CRAFTING SEQUENCE (sequential reflexes) ───────────────────────────
-        # 1. Wait for >= 3 wood: 2 for table + 1 left for pickaxe
-        if wood >= 3 and not has_table:
+        # 1. Wait for >= 4 wood (2 for table, 1 for pickaxe, 1 for sword)
+        # Fallback at step > 80: if >= 3 wood, place table anyway
+        can_place_table = (wood >= 4) or (wood >= 3 and s > 80)
+        if can_place_table and not has_table:
             state["placed_table_step"] = s
             return 8   # place_table
 
@@ -153,21 +151,21 @@ def evaluate_crafter_benchmark(
         if (s - state["placed_table_step"] == 1) and not has_wood_pick:
             return 11  # make_wood_pickaxe
 
-        # 3. t+2: Craft wood sword for combat if wood remains
+        # 3. t+2: Craft wood sword immediately while still adjacent to table
         if (s - state["placed_table_step"] == 2) and wood >= 1 and not has_wood_sword:
             return 14  # make_wood_sword
 
         # 4. Near-table stone upgrades (within 30 steps of table placement)
         near_table = (s - state["placed_table_step"]) <= 30
-        if near_table and has_wood_pick and stone >= 1 and not has_stone_pick:
+        if near_table and has_wood_pick and stone >= 1 and wood >= 1 and not has_stone_pick:
             return 12  # make_stone_pickaxe
         if near_table and stone >= 4 and ach.get("place_furnace", 0) == 0:
             return 9   # place_furnace
 
         # ── POST-PICKAXE: HEAVY MINING MODE ──────────────────────────────────
-        # Once the pickaxe is held, spam "Do" heavily to mine stone/coal
+        # Once the pickaxe is held, spam "Do" heavily (60%) to mine stone/coal
         if has_wood_pick and not has_stone_pick:
-            if np.random.random() < 0.65:
+            if np.random.random() < 0.60:
                 return 5   # Mine (stone/coal require wood_pickaxe via "Do")
             return int(np.random.randint(1, 5))
 

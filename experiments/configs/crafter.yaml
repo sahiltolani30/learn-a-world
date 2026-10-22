@@ -37,8 +37,8 @@ training:
 
 # Planning & Curiosity (Phase 3 & Colab)
 planning:
-  horizon: 7
-  num_candidates: 128
+  horizon: 8
+  num_candidates: 256
   elite_ratio: 0.15
 
 curiosity:
