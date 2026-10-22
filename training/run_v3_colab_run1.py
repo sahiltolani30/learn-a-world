@@ -61,11 +61,24 @@ def run_colab_run1(
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    base_checkpoint = ckpt_dir / "jepa_crafter_v2_best.pt"
-    if not base_checkpoint.exists():
-        local_base = repo_root / "checkpoints" / "jepa_crafter_v2_best.pt"
-        if local_base.exists():
-            base_checkpoint = local_base
+    # Locate base checkpoint
+    candidate_bases = [
+        ckpt_dir / "jepa_crafter_v2_best.pt",
+        ckpt_dir / "jepa_crafter_v2.pt",
+        repo_root / "checkpoints" / "jepa_crafter_v2_best.pt",
+        repo_root / "checkpoints" / "jepa_crafter_v2.pt",
+        ckpt_dir / "jepa_crafter.pt",
+        repo_root / "checkpoints" / "jepa_crafter.pt",
+    ]
+    base_checkpoint = None
+    for cand in candidate_bases:
+        if cand.exists():
+            base_checkpoint = cand
+            break
+    if base_checkpoint is None:
+        base_checkpoint = ckpt_dir / "jepa_crafter_v2_best.pt"
+    print(f"--> Base Checkpoint: {base_checkpoint}")
+
 
     step1_checkpoint = ckpt_dir / "jepa_crafter_v3_step1_value.pt"
     step1_json = results_dir / "colab_step1_results.json"
