@@ -1,0 +1,227 @@
+{
+  "step": 100,
+  "recurrent_dim": 128,
+  "initial_metrics": {
+    "10_step_rollout_mse": 11.649702231089273,
+    "macro_pr_auc": 0.011007576640118139,
+    "wood_pr_auc": 0.008995105138710638,
+    "sapling_pr_auc": 0.03300633488471744,
+    "per_head": {
+      "collect_coal": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_diamond": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_drink": {
+        "pr_auc": 0.004226422550618782,
+        "pos_count": 5
+      },
+      "collect_iron": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_sapling": {
+        "pr_auc": 0.03300633488471744,
+        "pos_count": 49
+      },
+      "collect_stone": {
+        "pr_auc": 0.003484320557491289,
+        "pos_count": 1
+      },
+      "collect_wood": {
+        "pr_auc": 0.008995105138710638,
+        "pos_count": 14
+      },
+      "defeat_skeleton": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "defeat_zombie": {
+        "pr_auc": 0.0013605442176870747,
+        "pos_count": 1
+      },
+      "eat_cow": {
+        "pr_auc": 0.0045045045045045045,
+        "pos_count": 1
+      },
+      "eat_plant": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_iron_pickaxe": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_iron_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_stone_pickaxe": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_stone_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_wood_pickaxe": {
+        "pr_auc": 0.0009505703422053232,
+        "pos_count": 1
+      },
+      "make_wood_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_furnace": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_plant": {
+        "pr_auc": 0.03800643557185947,
+        "pos_count": 12
+      },
+      "place_stone": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_table": {
+        "pr_auc": 0.0026455026455026454,
+        "pos_count": 1
+      },
+      "wake_up": {
+        "pr_auc": 0.012896025987884217,
+        "pos_count": 6
+      }
+    }
+  },
+  "final_metrics": {
+    "10_step_rollout_mse": 1.0151781539122264,
+    "macro_pr_auc": 0.06407285911393894,
+    "wood_pr_auc": 0.043302711158271154,
+    "sapling_pr_auc": 0.0914374704083116,
+    "per_head": {
+      "collect_coal": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_diamond": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_drink": {
+        "pr_auc": 0.00935031906314391,
+        "pos_count": 8
+      },
+      "collect_iron": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "collect_sapling": {
+        "pr_auc": 0.0914374704083116,
+        "pos_count": 85
+      },
+      "collect_stone": {
+        "pr_auc": 0.001315571137680997,
+        "pos_count": 5
+      },
+      "collect_wood": {
+        "pr_auc": 0.043302711158271154,
+        "pos_count": 23
+      },
+      "defeat_skeleton": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "defeat_zombie": {
+        "pr_auc": 0.0008594757198109154,
+        "pos_count": 2
+      },
+      "eat_cow": {
+        "pr_auc": 0.002222530919654881,
+        "pos_count": 3
+      },
+      "eat_plant": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_iron_pickaxe": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_iron_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_stone_pickaxe": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_stone_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "make_wood_pickaxe": {
+        "pr_auc": 0.0009191218868638224,
+        "pos_count": 2
+      },
+      "make_wood_sword": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_furnace": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_plant": {
+        "pr_auc": 0.3324820897981366,
+        "pos_count": 27
+      },
+      "place_stone": {
+        "pr_auc": 0.0,
+        "pos_count": 0
+      },
+      "place_table": {
+        "pr_auc": 0.0037305414753217585,
+        "pos_count": 7
+      },
+      "wake_up": {
+        "pr_auc": 0.15510875957219383,
+        "pos_count": 8
+      }
+    }
+  },
+  "history": {
+    "step": [
+      50,
+      100
+    ],
+    "total_loss": [
+      3.0475332736968994,
+      2.5264346599578857
+    ],
+    "loss_dyn": [
+      0.10611216723918915,
+      0.104587621986866
+    ],
+    "loss_event": [
+      0.0025767383631318808,
+      0.002739025978371501
+    ],
+    "loss_q": [
+      2.00544810295105,
+      1.5417250394821167
+    ],
+    "10_step_rollout_mse": [
+      1.8862085739771526,
+      1.2222550511360168
+    ],
+    "wood_pr_auc": [
+      0.018039632508792952,
+      0.033773258962234765
+    ]
+  },
+  "gate_passed": false
+}
