@@ -3,11 +3,17 @@ Curiosity-Driven Exploration Module for Learn-a-World.
 Computes self-supervised intrinsic exploration bonuses based on world model prediction errors:
 r_intrinsic = ||\hat{z}_{t+1} - \bar{z}_{t+1}||_2
 And provides curiosity-guided action selection to drive exploration to novel states.
+
+Phase 3 addition: Plan2ExploreCuriosity — 3-predictor ensemble disagreement over imagined
+next latents (Plan2Explore). NOT Q-ensemble disagreement.
 """
 
+from pathlib import Path
 from typing import List, Optional, Union
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from models.jepa import JEPAWorldModel
 
@@ -130,3 +136,165 @@ class CuriosityModule:
         best_action = int(torch.argmax(scores).item())
         self.last_action = best_action
         return best_action
+
+
+# ---------------------------------------------------------------------------
+# Plan2Explore Curiosity — Phase 3
+# ---------------------------------------------------------------------------
+
+class _PredictorHead(nn.Module):
+    """Single latent dynamics predictor: (z, h, a) → next_z."""
+
+    def __init__(
+        self,
+        latent_dim: int = 128,
+        recurrent_dim: int = 256,
+        action_emb_dim: int = 32,
+        hidden_dim: int = 256,
+        num_actions: int = 17,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.action_emb_dim = action_emb_dim
+        self.action_emb = nn.Embedding(num_actions, action_emb_dim)
+        in_dim = latent_dim + recurrent_dim + action_emb_dim
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, latent_dim),
+        )
+
+    def forward(self, z: torch.Tensor, h: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        """
+        z: [B, latent_dim]
+        h: [B, recurrent_dim]
+        action: [B] int64
+        Returns: next_z_pred: [B, latent_dim]  (residual: z + delta)
+        """
+        if action.dtype in (torch.int64, torch.int32):
+            if action.ndim > 1:
+                action = action.squeeze(-1)
+            a_emb = self.action_emb(action)
+        else:
+            a_emb = action
+
+        feat = torch.cat([z, h, a_emb], dim=-1)
+        delta_z = self.net(feat)
+        return z + delta_z
+
+
+class Plan2ExploreCuriosity(nn.Module):
+    """
+    Plan2Explore intrinsic curiosity module (Phase 3).
+
+    Curiosity bonus = mean per-dimension std across K independent latent dynamics predictors.
+    Each predictor independently learns to predict z_{t+1} from (z_t, h_t, a_t).
+    High disagreement → the world model's imagination is uncertain → informative transition.
+
+    This is NOT Q-ensemble disagreement. Q measures value uncertainty; predictor ensemble
+    measures dynamics model novelty — exploration novel to the model's own imagination.
+
+    Usage during collection:
+        bonus = curiosity.curiosity_bonus(z, h, action)      # [B] float, add to task reward
+        loss  = curiosity.predictor_loss(z, h, action, z_tgt) # train online every N steps
+    """
+
+    def __init__(
+        self,
+        latent_dim: int = 128,
+        recurrent_dim: int = 256,
+        action_emb_dim: int = 32,
+        hidden_dim: int = 256,
+        num_actions: int = 17,
+        num_predictors: int = 3,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.recurrent_dim = recurrent_dim
+        self.num_predictors = num_predictors
+
+        self.predictors = nn.ModuleList([
+            _PredictorHead(
+                latent_dim=latent_dim,
+                recurrent_dim=recurrent_dim,
+                action_emb_dim=action_emb_dim,
+                hidden_dim=hidden_dim,
+                num_actions=num_actions,
+            )
+            for _ in range(num_predictors)
+        ])
+
+    def forward(
+        self,
+        z: torch.Tensor,
+        h: torch.Tensor,
+        action: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Returns per-predictor next-z predictions.
+        z: [B, latent_dim]
+        h: [B, recurrent_dim]
+        action: [B] int64
+        Returns: predictions: [K, B, latent_dim]
+        """
+        preds = [p(z, h, action) for p in self.predictors]
+        return torch.stack(preds, dim=0)  # [K, B, latent_dim]
+
+    @torch.no_grad()
+    def curiosity_bonus(
+        self,
+        z: torch.Tensor,
+        h: torch.Tensor,
+        action: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes scalar curiosity bonus per sample.
+        bonus = mean over latent dims of std over K predictors.
+        z: [B, latent_dim], h: [B, recurrent_dim], action: [B] int64
+        Returns: [B] float
+        """
+        self.eval()
+        preds = self.forward(z, h, action)  # [K, B, latent_dim]
+        # std along K dimension, mean along latent dimension → [B]
+        bonus = preds.std(dim=0).mean(dim=-1)  # [B]
+        return bonus
+
+    def predictor_loss(
+        self,
+        z: torch.Tensor,
+        h: torch.Tensor,
+        action: torch.Tensor,
+        z_target: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Mean MSE loss for each predictor vs stop-gradient target.
+        z_target should be stop-grad (e.g. target encoder output).
+        Returns scalar loss.
+        """
+        self.train()
+        z_tgt = z_target.detach()
+        losses = [
+            F.mse_loss(pred(z, h, action), z_tgt)
+            for pred in self.predictors
+        ]
+        return torch.stack(losses).mean()
+
+    def make_optimizers(self, lr: float = 3e-4) -> List["torch.optim.Adam"]:
+        """Returns K independent Adam optimizers (one per predictor)."""
+        return [
+            torch.optim.Adam(p.parameters(), lr=lr)
+            for p in self.predictors
+        ]
+
+    def save_checkpoint(self, path: Union[str, "Path"]) -> None:
+        """Saves the curiosity module state dict."""
+        torch.save({"state_dict": self.state_dict()}, str(path))
+
+    def load_checkpoint(self, path: Union[str, "Path"], device: Union[str, torch.device] = "cpu") -> None:
+        """Loads curiosity module state dict from checkpoint."""
+        ckpt = torch.load(str(path), map_location=device)
+        self.load_state_dict(ckpt["state_dict"])
