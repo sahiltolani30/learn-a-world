@@ -327,6 +327,12 @@ def train_value_fix(
             history["q_pred_std"].append(calib["q_pred_std"])
             history["mean_disagreement"].append(calib["mean_disagreement"])
 
+        # Periodic checkpoint save every 1,000 steps (Drive resilience)
+        if step % 1000 == 0:
+            Path(output_checkpoint).parent.mkdir(parents=True, exist_ok=True)
+            model.save_checkpoint(output_checkpoint, step=step)
+
+
     # Final calibration audit
     final_calib = evaluate_critic_calibration(model, val_buf, normalizer, gamma=gamma, device=dev, num_batches=16)
 

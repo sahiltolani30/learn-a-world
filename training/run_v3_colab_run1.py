@@ -29,8 +29,8 @@ from training.run_step2_v3_build import train_v3_recurrent
 
 def run_colab_run1(
     drive_dir: str = "/content/drive/MyDrive/learn-a-world",
-    step1_steps: int = 2000,
-    step2_steps: int = 2000,
+    step1_steps: int = 10000,
+    step2_steps: int = 5000,
     batch_size: int = 16,
     recurrent_dim: int = 256,
     device_override: str = None,
@@ -167,8 +167,8 @@ def run_colab_run1(
 def main():
     parser = argparse.ArgumentParser(description="Run Learn-a-World v3 Colab Campaign Run 1.")
     parser.add_argument("--drive_dir", type=str, default="/content/drive/MyDrive/learn-a-world")
-    parser.add_argument("--step1_steps", type=int, default=2000)
-    parser.add_argument("--step2_steps", type=int, default=2000)
+    parser.add_argument("--step1_steps", type=int, default=10000)
+    parser.add_argument("--step2_steps", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--recurrent_dim", type=int, default=256)
     parser.add_argument("--device", type=str, default=None)

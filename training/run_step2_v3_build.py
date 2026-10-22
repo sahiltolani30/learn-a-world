@@ -286,6 +286,12 @@ def train_v3_recurrent(
             history["10_step_rollout_mse"].append(val_metrics["10_step_rollout_mse"])
             history["wood_pr_auc"].append(val_metrics["wood_pr_auc"])
 
+        # Periodic checkpoint save every 1,000 steps (Drive resilience)
+        if step % 1000 == 0:
+            Path(output_checkpoint).parent.mkdir(parents=True, exist_ok=True)
+            model.save_checkpoint(output_checkpoint, step=step)
+
+
     # Final audit
     final_metrics = evaluate_v3_metrics(model, val_buf, horizon=10, device=dev, num_batches=12)
 
