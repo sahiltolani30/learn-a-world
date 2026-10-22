@@ -1,6 +1,27 @@
 {
   "device": "cuda",
   "runtime_seconds": 1556.0205309391022,
+  "baseline_clarification": {
+    "note": "Initial metrics in colab_step2_results.json (10-step MSE 12.37, Wood PR-AUC 0.0065) represent Step 0 initial measurements of the untrained v3 recurrent memory pathway before Stage 2 training, NOT the v2 pure baseline. Honest cross-model comparisons must reference identical Phase-0 diagnostic instruments.",
+    "v2_pure_baseline_phase0": {
+      "d1_q_std": 0.0157,
+      "d1_ensemble_disagreement": 0.00041,
+      "d1_pearson_r": 0.3025,
+      "d3_macro_pr_auc_active": 0.2250,
+      "d3_wood_pr_auc": 0.0894,
+      "d4_step10_mse": 0.8380,
+      "d4_step10_cosine": 0.8616
+    },
+    "v3_phase2_diagnostic_rerun": {
+      "d1_q_std": 0.4011,
+      "d1_ensemble_disagreement": 0.0241,
+      "d1_pearson_r": 0.2967,
+      "d3_macro_pr_auc_active": 0.4873,
+      "d3_wood_pr_auc": 0.3867,
+      "d4_step10_mse": 0.7778,
+      "d4_step10_cosine": 0.8953
+    }
+  },
   "step1": {
     "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_value.pt",
     "final_pearson_r": 0.3758431673049927,
