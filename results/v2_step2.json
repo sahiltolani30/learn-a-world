@@ -1,0 +1,44 @@
+{
+  "crafter_score": 0.1744,
+  "unlocked_count": 1,
+  "mean_survival_steps": 20.0,
+  "mean_reward": 0.2,
+  "num_episodes": 3,
+  "unlock_percentages": {
+    "collect_coal": 0.0,
+    "collect_diamond": 0.0,
+    "collect_drink": 0.0,
+    "collect_iron": 0.0,
+    "collect_sapling": 33.33333333333333,
+    "collect_stone": 0.0,
+    "collect_wood": 0.0,
+    "defeat_skeleton": 0.0,
+    "defeat_zombie": 0.0,
+    "eat_cow": 0.0,
+    "eat_plant": 0.0,
+    "make_iron_pickaxe": 0.0,
+    "make_iron_sword": 0.0,
+    "make_stone_pickaxe": 0.0,
+    "make_stone_sword": 0.0,
+    "make_wood_pickaxe": 0.0,
+    "make_wood_sword": 0.0,
+    "place_furnace": 0.0,
+    "place_plant": 0.0,
+    "place_stone": 0.0,
+    "place_table": 0.0,
+    "wake_up": 0.0
+  },
+  "debug_decomposition": {
+    "mean_reward_sum": 14.1301,
+    "mean_terminal_value": 5.4893,
+    "mean_uncertainty_penalty": 0.023,
+    "mean_best_score": 20.1891,
+    "reward_sum_variance": 2.471406
+  },
+  "metadata": {
+    "agent": "v2_pure",
+    "checkpoint": "checkpoints/jepa_crafter_v2.pt",
+    "seed_start": 1000,
+    "num_episodes": 3
+  }
+}

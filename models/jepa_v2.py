@@ -8,19 +8,20 @@ Exposes unified reward prediction for the v2 reward-value planner:
 predict_reward(z, a, mask) = sum_i(p_i * (1 - m_i)) + h_hat
 """
 
+import copy
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 
-from models.heads import EventHead, HealthHead
+from models.heads import EventHead, HealthHead, PolicyPrior, QEnsemble
 from models.jepa import JEPAWorldModel
 
 class JEPAv2(nn.Module):
     """
     JEPA v2 Task World Model.
-    Combines self-supervised latent dynamics with calibrated achievement
-    and survival prediction heads.
+    Combines self-supervised latent dynamics with calibrated achievement,
+    survival, Q-value ensemble, and policy prior heads.
     """
 
     def __init__(
@@ -28,6 +29,9 @@ class JEPAv2(nn.Module):
         base_model: JEPAWorldModel,
         hidden_dim: int = 256,
         action_emb_dim: int = 32,
+        q_heads: int = 3,
+        q_bins: int = 51,
+        q_max: float = 12.0,
         freeze_base: bool = True,
     ):
         super().__init__()
@@ -46,6 +50,27 @@ class JEPAv2(nn.Module):
             latent_dim=self.latent_dim,
             num_actions=num_actions,
             action_emb_dim=action_emb_dim,
+            hidden_dim=hidden_dim,
+        )
+
+        self.q_ensemble = QEnsemble(
+            latent_dim=self.latent_dim,
+            num_actions=num_actions,
+            action_emb_dim=action_emb_dim,
+            num_heads=q_heads,
+            num_bins=q_bins,
+            v_min=0.0,
+            v_max=q_max,
+            hidden_dim=hidden_dim,
+        )
+
+        self.q_target_ensemble = copy.deepcopy(self.q_ensemble)
+        for p in self.q_target_ensemble.parameters():
+            p.requires_grad = False
+
+        self.policy_prior = PolicyPrior(
+            latent_dim=self.latent_dim,
+            num_actions=num_actions,
             hidden_dim=hidden_dim,
         )
 
@@ -110,6 +135,33 @@ class JEPAv2(nn.Module):
             }
         return total_reward
 
+    def update_target_q(self, decay: float = 0.995) -> None:
+        """EMA momentum update of target Q ensemble network: xi <- tau*xi + (1-tau)*theta."""
+        with torch.no_grad():
+            for target_param, online_param in zip(
+                self.q_target_ensemble.parameters(), self.q_ensemble.parameters()
+            ):
+                target_param.data.mul_(decay).add_(online_param.data, alpha=1.0 - decay)
+
+    def q_mean(self, z: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
+        """Mean expected return across ensemble heads."""
+        ensemble = self.q_target_ensemble if use_target else self.q_ensemble
+        return ensemble.q_mean(z, action)
+
+    def q_std(self, z: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
+        """Epistemic uncertainty (std dev) across ensemble heads."""
+        ensemble = self.q_target_ensemble if use_target else self.q_ensemble
+        return ensemble.q_std(z, action)
+
+    def sample_prior_action(
+        self,
+        z: torch.Tensor,
+        mask: torch.Tensor,
+        temperature: float = 1.0,
+    ) -> torch.Tensor:
+        """Samples categorical action indices guided by PolicyPrior."""
+        return self.policy_prior.sample(z, mask, temperature=temperature)
+
     @classmethod
     def from_v1_checkpoint(
         cls,
@@ -136,6 +188,9 @@ class JEPAv2(nn.Module):
         predictor_layers = m_cfg.get("predictor_layers", 2)
         ema_decay = m_cfg.get("ema_decay", 0.99)
         hidden_dim = h_cfg.get("hidden_dim", 256)
+        q_heads = h_cfg.get("q_ensemble", 3)
+        q_bins = h_cfg.get("q_bins", 51)
+        q_max = h_cfg.get("q_max", 12.0)
 
         # Auto-detect architectural dimensions if present in checkpoint state_dict
         model_state = ckpt.get("model_state", {})
@@ -163,6 +218,9 @@ class JEPAv2(nn.Module):
             base_model=base_model,
             hidden_dim=hidden_dim,
             action_emb_dim=action_emb_dim,
+            q_heads=q_heads,
+            q_bins=q_bins,
+            q_max=q_max,
             freeze_base=freeze_base,
         ).to(dev)
 
@@ -183,6 +241,9 @@ class JEPAv2(nn.Module):
             "base_model_state": self.base_model.state_dict(),
             "event_head_state": self.event_head.state_dict(),
             "health_head_state": self.health_head.state_dict(),
+            "q_ensemble_state": self.q_ensemble.state_dict(),
+            "q_target_ensemble_state": self.q_target_ensemble.state_dict(),
+            "policy_prior_state": self.policy_prior.state_dict(),
         }
         if optimizer_state is not None:
             ckpt_data["optimizer_state"] = optimizer_state
@@ -202,5 +263,11 @@ class JEPAv2(nn.Module):
         self.base_model.load_state_dict(ckpt["base_model_state"])
         self.event_head.load_state_dict(ckpt["event_head_state"])
         self.health_head.load_state_dict(ckpt["health_head_state"])
+        if "q_ensemble_state" in ckpt:
+            self.q_ensemble.load_state_dict(ckpt["q_ensemble_state"])
+        if "q_target_ensemble_state" in ckpt:
+            self.q_target_ensemble.load_state_dict(ckpt["q_target_ensemble_state"])
+        if "policy_prior_state" in ckpt:
+            self.policy_prior.load_state_dict(ckpt["policy_prior_state"])
         self.to(dev)
         return ckpt

@@ -173,7 +173,12 @@ def train_heads(
 
     event_weight = loss_cfg.get("event_weight", 1.0)
     health_weight = loss_cfg.get("health_weight", 0.5)
+    q_weight = loss_cfg.get("q_weight", 1.0)
+    prior_weight = loss_cfg.get("prior_weight", 0.5)
     focal_gamma = loss_cfg.get("focal_gamma", 2.0)
+    gamma = loss_cfg.get("gamma", 0.99)
+    n_step = loss_cfg.get("n_step", 5)
+    target_ema = loss_cfg.get("target_ema", 0.995)
     lr_heads = t_cfg.get("lr_heads", 3e-4)
 
     # Initialize JEPAv2 from v1 checkpoint
@@ -186,7 +191,10 @@ def train_heads(
     )
 
     optimizer = optim.AdamW(
-        list(model.event_head.parameters()) + list(model.health_head.parameters()),
+        list(model.event_head.parameters()) +
+        list(model.health_head.parameters()) +
+        list(model.q_ensemble.parameters()) +
+        list(model.policy_prior.parameters()),
         lr=lr_heads,
         weight_decay=1e-4,
     )
@@ -201,7 +209,7 @@ def train_heads(
 
     print(f"--> Beginning Head Training for {total_steps} steps (Batch: {batch_size}, SeqLen: {seq_len}, Device: {device})...")
 
-    history = {"step": [], "loss": [], "loss_event": [], "loss_health": []}
+    history = {"step": [], "loss": [], "loss_event": [], "loss_health": [], "loss_q": [], "loss_prior": []}
 
     model.train()
     for step in range(1, total_steps + 1):
@@ -215,6 +223,7 @@ def train_heads(
         obs = batch["obs"]          # [B, T, 3, 64, 64]
         actions = batch["actions"]  # [B, T]
         rewards = batch["rewards"]  # [B, T]
+        dones = batch["dones"]      # [B, T]
         events = batch["events"]    # [B, T, 22]
         mask = batch["mask_before"] # [B, T, 22]
 
@@ -225,30 +234,78 @@ def train_heads(
             z_flat = model.encode(obs_flat, use_target=True)
             z = z_flat.view(B, T, -1)
 
+        # 1. EventHead loss
         event_logits = model.event_head(z, actions, mask)
         loss_event = model.event_head.compute_loss(event_logits, events, gamma=focal_gamma)
 
+        # 2. HealthHead loss
         event_counts = events.sum(dim=-1)
         health_target = (rewards - event_counts).clamp(-1.0, 1.0)
         health_pred = model.health_head(z, actions)
         loss_health = model.health_head.compute_loss(health_pred, health_target)
 
-        total_loss = event_weight * loss_event + health_weight * loss_health
+        # 3. PolicyPrior BC loss
+        prior_logits = model.policy_prior(z, mask)
+        loss_prior = model.policy_prior.compute_loss(prior_logits, actions)
+
+        # 4. Q-Ensemble n-step return regression
+        with torch.no_grad():
+            n_step_targets = torch.zeros(B, T, device=device)
+            # Compute bootstrap actions at all steps
+            bootstrap_actions = model.sample_prior_action(z, mask, temperature=1.0)
+            target_q_vals = model.q_mean(z, bootstrap_actions, use_target=True)
+
+            for t in range(T):
+                ret = torch.zeros(B, device=device)
+                discount = 1.0
+                bootstrapped = False
+                for k in range(n_step):
+                    idx = t + k
+                    if idx >= T:
+                        break
+                    ret = ret + discount * rewards[:, idx]
+                    if dones[:, idx].any():
+                        # Stop bootstrap if done
+                        bootstrapped = True
+                        break
+                    discount *= gamma
+
+                # Add bootstrap terminal value if sequence did not terminate
+                if not bootstrapped and (t + n_step) < T:
+                    ret = ret + discount * target_q_vals[:, t + n_step]
+
+                n_step_targets[:, t] = ret
+
+        q_logits = model.q_ensemble(z, actions)
+        loss_q = model.q_ensemble.compute_loss(q_logits, n_step_targets)
+
+        total_loss = (
+            event_weight * loss_event +
+            health_weight * loss_health +
+            q_weight * loss_q +
+            prior_weight * loss_prior
+        )
 
         optimizer.zero_grad()
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(
-            list(model.event_head.parameters()) + list(model.health_head.parameters()),
+            list(model.event_head.parameters()) +
+            list(model.health_head.parameters()) +
+            list(model.q_ensemble.parameters()) +
+            list(model.policy_prior.parameters()),
             max_norm=1.0,
         )
         optimizer.step()
+        model.update_target_q(decay=target_ema)
 
         if step % 50 == 0 or step == total_steps:
-            print(f"    Step {step:4d}/{total_steps} | Loss: {total_loss.item():.4f} (Event: {loss_event.item():.4f}, Health: {loss_health.item():.4f})")
+            print(f"    Step {step:4d}/{total_steps} | Loss: {total_loss.item():.4f} (Event: {loss_event.item():.4f}, Health: {loss_health.item():.4f}, Q: {loss_q.item():.4f}, Prior: {loss_prior.item():.4f})")
             history["step"].append(step)
             history["loss"].append(float(total_loss.item()))
             history["loss_event"].append(float(loss_event.item()))
             history["loss_health"].append(float(loss_health.item()))
+            history["loss_q"].append(float(loss_q.item()))
+            history["loss_prior"].append(float(loss_prior.item()))
 
     print("--> Running validation diagnostic evaluation...")
     val_report = evaluate_heads(
