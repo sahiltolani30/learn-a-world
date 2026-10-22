@@ -16,10 +16,17 @@ import sys
 import time
 from pathlib import Path
 
+# Force unbuffered live stdout streaming in Colab / Jupyter
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 # Ensure repo root is on sys.path
 repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
+
 
 import torch
 from experiments.utils import get_device

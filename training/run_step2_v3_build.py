@@ -22,6 +22,12 @@ import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
+
 import numpy as np
 from sklearn.metrics import average_precision_score
 import torch
