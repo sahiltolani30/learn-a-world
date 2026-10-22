@@ -534,23 +534,14 @@ def run_step3_rounds(
         for ep in round_buf.episodes:
             buffer.add_episode(**ep)
 
-        # Initialize model from current checkpoint
-        base_v1 = "checkpoints/jepa_crafter.pt"
-        if not Path(base_v1).exists():
-            if Path(base_checkpoint_path).exists():
-                base_v1 = base_checkpoint_path
-            else:
-                drive_fallback = Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter.pt")
-                if drive_fallback.exists():
-                    base_v1 = str(drive_fallback)
-
+        # Initialize model from base v1 checkpoint (always, then overlay v2 weights if available)
         model = JEPAv2.from_v1_checkpoint(
-            checkpoint_path=base_v1,
+            checkpoint_path=base_checkpoint_path,
             config=cfg,
             device=device,
             freeze_base=False,
         )
-        if Path(current_ckpt).exists() and current_ckpt != base_v1:
+        if Path(current_ckpt).exists() and current_ckpt != base_checkpoint_path:
             model.load_checkpoint(current_ckpt, device=device)
 
         # Joint fine-tune

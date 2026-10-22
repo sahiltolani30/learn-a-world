@@ -163,7 +163,10 @@ def test_crafter_sample_efficiency_and_generalization():
     test_score = held_out_res["crafter_score"]
     print(f"\nCrafter Train Score: {train_score:.2f}% vs Held-Out Score: {test_score:.2f}%")
 
-    # Generalization gap check (within 2.5 percentage points on Crafter benchmark scale)
+    # Generalization gap check (within 2.0 percentage points on Crafter benchmark scale).
+    # Note: with only 5-episode stochastic episodes, natural RNG variance can produce ~1.5% gaps
+    # across platforms (Mac vs Colab Linux). The 2.0 tolerance keeps the gate meaningful while
+    # preventing false failures from small-sample variance.
     abs_gap = abs(train_score - test_score)
-    assert abs_gap <= 2.5, f"Generalization score gap {abs_gap:.2f}% exceeded 2.5% tolerance."
+    assert abs_gap <= 2.0, f"Generalization score gap {abs_gap:.2f}% exceeded 2.0% tolerance."
     env.close()

@@ -201,21 +201,22 @@ def test_final_comparison_runner_smoke(tmp_path: Path):
     assert "promotion_decision" in res
 
 def test_phase3_mini_round_smoke(tmp_path: Path):
-    """Executes a 1-round mini collect-retrain smoke cycle on Mac/CPU."""
-    ckpt_dir = tmp_path / "checkpoints"
-    out_dir = tmp_path / "results"
+    """Executes a 1-round mini collect-retrain smoke cycle on CPU."""
+    # Resolve the v1 checkpoint via absolute repo-root path so this test works
+    # identically on Mac (from local workspace) and Colab (from /content/learn-a-world).
+    repo_root = Path(__file__).resolve().parent.parent
+    v1_ckpt = repo_root / "checkpoints" / "jepa_crafter.pt"
+    v2_cfg  = repo_root / "experiments" / "configs" / "crafter_v2.yaml"
 
-    base_ckpt = "checkpoints/jepa_crafter.pt"
-    if not Path(base_ckpt).exists():
-        drive_ckpt = Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter.pt")
-        if drive_ckpt.exists():
-            base_ckpt = str(drive_ckpt)
-        else:
-            pytest.skip("checkpoints/jepa_crafter.pt not found")
+    if not v1_ckpt.exists():
+        pytest.skip(f"Base v1 checkpoint not found at {v1_ckpt}; skipping smoke round.")
+
+    ckpt_dir = tmp_path / "checkpoints"
+    out_dir  = tmp_path / "results"
 
     res = run_step3_rounds(
-        base_checkpoint_path=base_ckpt,
-        config_path="experiments/configs/crafter_v2.yaml",
+        base_checkpoint_path=str(v1_ckpt),
+        config_path=str(v2_cfg),
         rounds=1,
         transitions_per_round=20,
         joint_steps_per_round=2,
