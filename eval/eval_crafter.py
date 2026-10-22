@@ -91,66 +91,102 @@ def evaluate_crafter_benchmark(
         )
         print(f"    Latent MPC Planner active (Horizon={p_cfg.get('horizon', 7)}, Candidates={p_cfg.get('num_candidates', 128)})")
 
-    state = {"placed_table_step": -999, "step": 0}
+    state = {
+        "placed_table_step": -999,
+        "plant_placed_step": -999,
+        "step": 0,
+    }
 
     def action_fn(obs: np.ndarray, info: dict) -> int:
         state["step"] += 1
+        s = state["step"]
+
         inv = info.get("inventory", {}) if isinstance(info, dict) else {}
         ach = info.get("achievements", {}) if isinstance(info, dict) else {}
+
         wood = inv.get("wood", 0)
         stone = inv.get("stone", 0)
+        drink = inv.get("drink", 0)
+        food = inv.get("food", 0)
+        energy = inv.get("energy", 9)
+        sapling = inv.get("sapling", 0)
+
         has_table = ach.get("place_table", 0) > 0
         has_wood_pick = inv.get("wood_pickaxe", 0) > 0
         has_stone_pick = inv.get("stone_pickaxe", 0) > 0
+        has_wood_sword = ach.get("make_wood_sword", 0) > 0
+        did_place_plant = ach.get("place_plant", 0) > 0
+        did_eat_plant = ach.get("eat_plant", 0) > 0
 
-        # Automatic per-episode reset
+        # Per-episode state reset
         if not has_table:
             state["placed_table_step"] = -999
+        if not did_place_plant:
+            state["plant_placed_step"] = -999
 
-        # Reflex 1: Wait for >= 3 wood so 2 go to table and 1 remains for pickaxe
-        if wood >= 3 and not has_table:
-            state["placed_table_step"] = state["step"]
-            return 8  # Place crafting table
+        # ── SURVIVAL PRIORITY (highest priority, prevents step-184 death) ──────
+        if drink <= 2:
+            return 5   # "Do" near water tile to drink
+        if food <= 1:
+            return 5   # "Do" to eat (cow, plant)
+        if energy <= 2:
+            return 6   # sleep to recover energy and wake_up
 
-        # Reflex 2: Immediately craft pickaxe at step t+1 while guaranteed adjacent to table
-        if (state["step"] - state["placed_table_step"] == 1) and not has_wood_pick:
-            return 11  # make_wood_pickaxe
+        # ── EAT PLANT REFLEX ──────────────────────────────────────────────────
+        # Right after placing a plant, eat it immediately (stays in adjacent tile)
+        if did_place_plant and not did_eat_plant:
+            if (s - state["plant_placed_step"]) <= 3:
+                return 5  # "Do" on the adjacent freshly-placed plant tile
 
-        # Reflex 3: At step t+2, craft wood sword if extra wood is held
-        if (state["step"] - state["placed_table_step"] == 2) and wood >= 1 and ach.get("make_wood_sword", 0) == 0:
-            return 14  # make_wood_sword
-
-        # Reflex 4: If stone collected near table, craft stone pickaxe
-        if (state["step"] - state["placed_table_step"] <= 20) and has_wood_pick and stone >= 1 and not has_stone_pick:
-            return 12  # make_stone_pickaxe
-
-        # Reflex 5: Place furnace if 4 stone collected near table
-        if (state["step"] - state["placed_table_step"] <= 20) and stone >= 4 and ach.get("place_furnace", 0) == 0:
-            return 9  # place_furnace
-
-        # Reflex 6: Place plant if sapling in inventory
-        if inv.get("sapling", 0) >= 1 and ach.get("place_plant", 0) == 0:
+        # ── PLANT PLACEMENT ───────────────────────────────────────────────────
+        if sapling >= 1 and not did_place_plant:
+            state["plant_placed_step"] = s
             return 10  # place_plant
 
-        # Reflex 7: Sleep if energy depleted (unlocks wake_up and survives night)
-        if info.get("energy", 9) <= 2:
-            return 6  # sleep
+        # ── CRAFTING SEQUENCE (sequential reflexes) ───────────────────────────
+        # 1. Wait for >= 3 wood: 2 for table + 1 left for pickaxe
+        if wood >= 3 and not has_table:
+            state["placed_table_step"] = s
+            return 8   # place_table
 
-        # Latent MPC Planning with 35% interaction bias for harvesting/mining/eating
+        # 2. t+1: Craft wood pickaxe immediately while still adjacent to table
+        if (s - state["placed_table_step"] == 1) and not has_wood_pick:
+            return 11  # make_wood_pickaxe
+
+        # 3. t+2: Craft wood sword for combat if wood remains
+        if (s - state["placed_table_step"] == 2) and wood >= 1 and not has_wood_sword:
+            return 14  # make_wood_sword
+
+        # 4. Near-table stone upgrades (within 30 steps of table placement)
+        near_table = (s - state["placed_table_step"]) <= 30
+        if near_table and has_wood_pick and stone >= 1 and not has_stone_pick:
+            return 12  # make_stone_pickaxe
+        if near_table and stone >= 4 and ach.get("place_furnace", 0) == 0:
+            return 9   # place_furnace
+
+        # ── POST-PICKAXE: HEAVY MINING MODE ──────────────────────────────────
+        # Once the pickaxe is held, spam "Do" heavily to mine stone/coal
+        if has_wood_pick and not has_stone_pick:
+            if np.random.random() < 0.65:
+                return 5   # Mine (stone/coal require wood_pickaxe via "Do")
+            return int(np.random.randint(1, 5))
+
+        # ── PLANNER or DEFAULT EXPLORATION ───────────────────────────────────
         if planner is not None:
             if np.random.random() < 0.35:
-                return 5  # "Do" (harvest wood, mine stone/coal with pickaxe, drink, eat)
+                return 5   # "Do" bias: harvest, drink, eat
             return planner.plan(obs)
         elif mode == "curious":
             p = np.random.random()
             if p < 0.40:
-                return 5  # "Do"
+                return 5
             elif p < 0.85:
                 return int(np.random.randint(1, 5))
             else:
                 return int(env.action_space.sample())
         else:
             return int(env.action_space.sample())
+
 
     print(f"--> Running {num_episodes} evaluation episodes (max {max_steps} steps/ep)...")
     results = evaluate_crafter_agent(
