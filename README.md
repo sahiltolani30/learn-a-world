@@ -15,10 +15,13 @@ Headline experiment: when the world's dynamics change at test time, the model ke
 - [x] **Phase 2 — Planner + PPO Baseline** (MPC/CEM Planner + Curiosity Module + Comparative Results Table)
 - [x] **Phase 3 — Push-T + Crafter Full Loop** (Push-T Physics + Crafter Achievement Score + Drive Resumability)
 - [x] **Phase 4 — Dynamics Change & Test-Time Adaptation** (Headline Table: Frozen vs Adaptive vs PPO)
-- [ ] **Phase 5 — Release** (Hugging Face Checkpoints + Model Card + Gradio Live Demo + 1-Min Video)
+- [x] **v2 Promotion — Pure Learned World Model & Locked Evaluation** (**2.16%** on Crafter benchmark across 100 locked seeds — **PROMOTED TO V2 ✅**)
+- [ ] **Phase 5 — Hierarchical Subgoal Layer & Full Release** (Autonomous Causal Precedence DAG Mining, Hugging Face Checkpoints & Model Card)
+
+*(Note: The original v1 hybrid milestone remains permanently archived and accessible at tag [`v1-freeze`](https://github.com/sahiltolani30/learn-a-world/tree/v1-freeze)).*
 
 Full design blueprint: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)  
-Architecture & reference notes: [`docs/REFERENCE_STUDY.md`](docs/REFERENCE_STUDY.md)
+Comprehensive results & per-achievement breakdown: [`RESULTS.md`](RESULTS.md)
 
 ---
 
@@ -40,20 +43,19 @@ When world dynamics secretly shift at test time (e.g. controls inverted), the **
 ---
 
 
-## Phase 3 Results (Push-T Physics & Flagship Crafter Benchmark)
+## Crafter Flagship Benchmark: v2 Promotion Results
 
-- **Push-T Visual Physics (`PushT-v0`):** 2D visual physics with continuous sliding friction, rotational torque, and end-effector collision dynamics.
-- **Crafter Flagship World Model (`Crafter-v0`):** Evaluated across 22 benchmark achievements on held-out procedural seeds.
-- **Chunked Replay Buffering:** 10,000 transitions verified with `.npz` chunking without RAM degradation.
-- **Google Colab Session Resumability:** Checkpoints saved to Google Drive resume seamlessly on new runtimes with 100% parameter parity.
+> **Protocol & Budget:** **2.16%** Crafter Score · 100 episodes on fixed held-out seeds `1000..1099` (max 1,000 steps/ep) · 390,000 transitions collected (300k starting dataset + 90k self-play) · **Pure learned, zero scripted rules**.
 
-| Crafter Benchmark Metric | Curiosity Agent / World Model | Random Baseline |
-| :--- | :---: | :---: |
-| **Official Crafter Achievement Score** | **1.60%** | 0.96% |
-| **Distinct Achievements Unlocked** | **5+ achievements** (`collect_wood`, `collect_drink`, `collect_sapling`, `place_plant`, `wake_up`) | 4 achievements |
-| **Generalization Gap (Train vs Held-Out Seeds)** | **0.45%** (High generalization) | — |
+| Agent | Architecture & Planning Mode | Reflexes / Rules | Crafter Score | Achievements Unlocked | Mean Survival | Mean Reward | Promotion Verdict |
+|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **`v2_pure` (Ours)** | **JEPA v2 + Learned RewardValuePlanner** | **None (Pure Learned)** | **2.16%** | **10 / 22** | 171.1 steps | **+2.09** | **PROMOTED ✅** |
+| **`v1_hybrid`** | Latent JEPA World Model + MPC | **Hybrid (Scripted Reflexes ON)** | **1.44%** | 7 / 22 | 179.5 steps | +1.62 | Baseline to beat |
+| **`random`** | Uniform Random Action Policy | None | **1.77%** | 7 / 22 | 188.7 steps | +1.75 | Baseline |
+| **`v1_pure`** | Latent JEPA World Model + MPC | **Scripted Reflexes OFF** | **0.00%** | 0 / 22 | 177.0 steps | -0.90 | Control (Ablation) |
 
-*All 19 gate tests across Phases 0, 1, 2, and 3 passing with 100% parity (`pytest -v tests/`).*
+*Full 22-achievement breakdown, training curves, single source of truth, and honest caveats (random survival baseline, tool crafting frequency, and planning horizon):* 👉 **[`RESULTS.md`](RESULTS.md)**  
+*Promotion decision audit & gate report:* 👉 **[`results/promotion_decision.md`](results/promotion_decision.md)**
 
 ---
 

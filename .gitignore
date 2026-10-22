@@ -41,5 +41,5 @@ wandb/
 *.swp
 *.swo
 
-# Jupyter
-.ipynb_checkpoints/
+# Downloaded Archives
+learn-a-world*/
