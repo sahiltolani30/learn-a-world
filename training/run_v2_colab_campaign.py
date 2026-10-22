@@ -178,6 +178,7 @@ def run_campaign(
             joint_steps_per_round=joint_steps_per_round,
             eval_episodes=50,
             out_dir=str(results_dir),
+            ckpt_dir_override=str(ckpt_dir),
             device_override=str(device),
         )
         print(f"\n--> Phase 3 finished! Best checkpoint: {step3_results['best_checkpoint']} with Crafter Score: {step3_results['best_score']:.2f}%")
