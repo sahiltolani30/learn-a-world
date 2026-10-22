@@ -347,3 +347,45 @@ class PolicyPrior(nn.Module):
         """Cross-Entropy loss against teacher actions."""
         return F.cross_entropy(logits.reshape(-1, self.num_actions), target_actions.reshape(-1))
 
+class GRUBeliefModule(nn.Module):
+    """
+    Recurrent Memory Belief Module for Temporal Representation (Phase 3).
+    h_t = GRUCell([z_t, emb(a_{t-1})], h_{t-1})
+    Maintains a 128-dimensional hidden state across sequence rollouts.
+    """
+
+    def __init__(
+        self,
+        latent_dim: int = 128,
+        num_actions: int = 17,
+        action_emb_dim: int = 32,
+        hidden_dim: int = 128,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.hidden_dim = hidden_dim
+        self.action_emb = nn.Embedding(num_actions, action_emb_dim)
+        self.gru = nn.GRUCell(latent_dim + action_emb_dim, hidden_dim)
+
+    def forward(
+        self,
+        z: torch.Tensor,
+        action_prev: torch.Tensor,
+        h_prev: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        z: [B, latent_dim]
+        action_prev: [B] int64
+        h_prev: [B, hidden_dim] or None
+        Returns: h_t of shape [B, hidden_dim]
+        """
+        if h_prev is None:
+            h_prev = torch.zeros(z.shape[0], self.hidden_dim, device=z.device)
+        if action_prev.dtype in (torch.int64, torch.int32):
+            a_emb = self.action_emb(action_prev)
+        else:
+            a_emb = action_prev
+        inputs = torch.cat([z, a_emb], dim=-1)
+        return self.gru(inputs, h_prev)
+
+

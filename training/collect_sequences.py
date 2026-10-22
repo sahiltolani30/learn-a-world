@@ -123,6 +123,64 @@ def build_policy(
 
         return teacher_hybrid_action
 
+    elif policy_name == "planner_v2":
+        from experiments.utils import get_device, load_config
+        from models.jepa import JEPAWorldModel
+        from models.jepa_v2 import JEPAv2
+        from planning.agent_v2 import AgentBelief
+        from planning.mpc_v2 import RewardValuePlanner
+
+        device = get_device(None)
+        cfg = load_config("experiments/configs/crafter_v2.yaml")
+        m_cfg = cfg.get("model", {})
+        h_cfg = cfg.get("heads", {})
+        p_cfg = cfg.get("planner_v2", {})
+
+        if checkpoint_path and Path(checkpoint_path).exists():
+            try:
+                base_m = JEPAWorldModel(
+                    in_channels=3,
+                    latent_dim=m_cfg.get("latent_dim", 128),
+                    num_actions=m_cfg.get("num_actions", 17),
+                    action_emb_dim=m_cfg.get("action_emb_dim", 32),
+                ).to(device)
+                model = JEPAv2(base_model=base_m).to(device)
+                model.load_checkpoint(checkpoint_path, device=device)
+            except Exception:
+                model = JEPAv2.from_v1_checkpoint(checkpoint_path, config=cfg, device=device)
+        else:
+            base_m = JEPAWorldModel(
+                in_channels=3,
+                latent_dim=m_cfg.get("latent_dim", 128),
+                num_actions=m_cfg.get("num_actions", 17),
+            ).to(device)
+            model = JEPAv2(base_model=base_m).to(device)
+
+        model.eval()
+        planner = RewardValuePlanner(
+            model=model,
+            horizon=p_cfg.get("horizon", 10),
+            num_candidates=p_cfg.get("num_candidates", 128),
+            cem_iterations=p_cfg.get("cem_iterations", 2),
+            device=device,
+        )
+        belief = AgentBelief()
+
+        def planner_v2_action(obs: np.ndarray, info: Dict[str, Any]) -> int:
+            # 10% structured_random mix for coverage
+            if np.random.random() < 0.10:
+                p = np.random.random()
+                if p < 0.60:
+                    return int(np.random.randint(1, 5))
+                elif p < 0.85:
+                    return 5
+                return int(env.action_space.sample())
+
+            action, _ = planner.plan(obs, belief)
+            return action
+
+        return planner_v2_action
+
     else:
         raise ValueError(f"Unknown collection policy: '{policy_name}'")
 
@@ -133,6 +191,7 @@ def collect_episodes(
     chunk_size: int = 5_000,
     seed: int = 42,
     max_steps_per_ep: int = 1000,
+    checkpoint_path: Optional[str] = None,
 ) -> EpisodeBuffer:
     """
     Runs environment rollout loop and saves chunked sequence datasets.
@@ -142,7 +201,7 @@ def collect_episodes(
     save_achievement_index(out_path)
 
     env = gym.make("Crafter-v0", render_size=64, max_steps=max_steps_per_ep)
-    policy_fn = build_policy(policy_name, env)
+    policy_fn = build_policy(policy_name, env, checkpoint_path=checkpoint_path)
 
     buffer = EpisodeBuffer(capacity_transitions=n_transitions + 5000)
     total_steps = 0
@@ -238,7 +297,7 @@ def collect_episodes(
 def main():
     parser = argparse.ArgumentParser(description="Collect Crafter Sequence Episodes")
     parser.add_argument("--policy", type=str, default="structured_random",
-                        choices=["structured_random", "teacher_hybrid"],
+                        choices=["structured_random", "teacher_hybrid", "planner_v2"],
                         help="Data collection policy")
     parser.add_argument("--n-transitions", type=int, default=50_000,
                         help="Target number of transitions to collect")
@@ -246,6 +305,8 @@ def main():
                         help="Output directory for sequence shards")
     parser.add_argument("--chunk-size", type=int, default=5_000,
                         help="Transitions per saved .npz shard")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v2.pt",
+                        help="Checkpoint path for planner_v2 policy")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
     args = parser.parse_args()
@@ -255,6 +316,7 @@ def main():
         n_transitions=args.n_transitions,
         out_dir=args.out_dir,
         chunk_size=args.chunk_size,
+        checkpoint_path=args.checkpoint,
         seed=args.seed,
     )
 

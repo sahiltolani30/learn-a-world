@@ -14,14 +14,14 @@ from typing import Any, Dict, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 
-from models.heads import EventHead, HealthHead, PolicyPrior, QEnsemble
+from models.heads import EventHead, GRUBeliefModule, HealthHead, PolicyPrior, QEnsemble
 from models.jepa import JEPAWorldModel
 
 class JEPAv2(nn.Module):
     """
     JEPA v2 Task World Model.
     Combines self-supervised latent dynamics with calibrated achievement,
-    survival, Q-value ensemble, and policy prior heads.
+    survival, Q-value ensemble, policy prior, and recurrent GRU belief heads.
     """
 
     def __init__(
@@ -32,6 +32,7 @@ class JEPAv2(nn.Module):
         q_heads: int = 3,
         q_bins: int = 51,
         q_max: float = 12.0,
+        use_gru: bool = True,
         freeze_base: bool = True,
     ):
         super().__init__()
@@ -72,6 +73,14 @@ class JEPAv2(nn.Module):
             latent_dim=self.latent_dim,
             num_actions=num_actions,
             hidden_dim=hidden_dim,
+        )
+
+        self.use_gru = use_gru
+        self.gru_belief = GRUBeliefModule(
+            latent_dim=self.latent_dim,
+            num_actions=num_actions,
+            action_emb_dim=action_emb_dim,
+            hidden_dim=128,
         )
 
         if freeze_base:
@@ -226,6 +235,10 @@ class JEPAv2(nn.Module):
 
         return v2_model
 
+    def update_base_target(self, decay: Optional[float] = None) -> None:
+        """Momentum update of JEPA base target encoder."""
+        self.base_model.update_target_encoder(decay=decay)
+
     def save_checkpoint(
         self,
         path: Union[str, Path],
@@ -244,6 +257,7 @@ class JEPAv2(nn.Module):
             "q_ensemble_state": self.q_ensemble.state_dict(),
             "q_target_ensemble_state": self.q_target_ensemble.state_dict(),
             "policy_prior_state": self.policy_prior.state_dict(),
+            "gru_belief_state": self.gru_belief.state_dict(),
         }
         if optimizer_state is not None:
             ckpt_data["optimizer_state"] = optimizer_state
@@ -269,5 +283,7 @@ class JEPAv2(nn.Module):
             self.q_target_ensemble.load_state_dict(ckpt["q_target_ensemble_state"])
         if "policy_prior_state" in ckpt:
             self.policy_prior.load_state_dict(ckpt["policy_prior_state"])
+        if "gru_belief_state" in ckpt:
+            self.gru_belief.load_state_dict(ckpt["gru_belief_state"])
         self.to(dev)
         return ckpt

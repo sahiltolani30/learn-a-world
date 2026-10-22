@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
+import torch.nn.functional as F
 import torch.optim as optim
 
 from eval.metrics import CRAFTER_ACHIEVEMENTS
@@ -331,38 +332,323 @@ def train_heads(
 
     return model, val_report
 
+def train_joint(
+    model: JEPAv2,
+    buffer: EpisodeBuffer,
+    total_steps: int = 1000,
+    batch_size: int = 32,
+    seq_len: int = 16,
+    unroll_steps: int = 4,
+    lr_base: float = 1e-4,
+    lr_heads: float = 3e-4,
+    config: Optional[Dict[str, Any]] = None,
+    device: Optional[Union[str, torch.device]] = None,
+) -> Dict[str, Any]:
+    """
+    Joint Fine-Tuning (Phase 3):
+    Unfreezes encoder and predictor at lr_base (1e-4) while training task heads at lr_heads (3e-4).
+    Computes multi-step consistency losses by unrolling predictor for k=1..unroll_steps.
+    """
+    dev = torch.device(device) if device is not None else torch.device("cpu")
+    model.unfreeze_base_model()
+    model.to(dev)
+
+    cfg = config or {}
+    loss_cfg = cfg.get("loss", {})
+    event_weight = loss_cfg.get("event_weight", 1.0)
+    health_weight = loss_cfg.get("health_weight", 0.5)
+    q_weight = loss_cfg.get("q_weight", 1.0)
+    prior_weight = loss_cfg.get("prior_weight", 0.5)
+    target_ema = loss_cfg.get("target_ema", 0.995)
+
+    base_params = list(model.base_model.encoder.parameters()) + list(model.base_model.predictor.parameters())
+    head_params = (
+        list(model.event_head.parameters()) +
+        list(model.health_head.parameters()) +
+        list(model.q_ensemble.parameters()) +
+        list(model.policy_prior.parameters()) +
+        list(model.gru_belief.parameters())
+    )
+
+    optimizer = optim.AdamW([
+        {"params": base_params, "lr": lr_base, "weight_decay": 1e-5},
+        {"params": head_params, "lr": lr_heads, "weight_decay": 1e-4},
+    ])
+
+    print(f"--> Beginning Joint Training for {total_steps} steps (LR_base={lr_base}, LR_heads={lr_heads}, Unroll={unroll_steps})...")
+
+    model.train()
+    history = {"step": [], "loss": [], "loss_unroll": [], "loss_dyn": []}
+
+    for step in range(1, total_steps + 1):
+        batch = buffer.sample_sequences(
+            batch_size=batch_size,
+            seq_len=seq_len,
+            mode="event_balanced",
+            device=dev,
+        )
+
+        obs = batch["obs"]          # [B, T, 3, 64, 64]
+        actions = batch["actions"]  # [B, T]
+        rewards = batch["rewards"]  # [B, T]
+        events = batch["events"]    # [B, T, 22]
+        mask = batch["mask_before"] # [B, T, 22]
+
+        B, T = actions.shape
+        obs_flat = obs.view(B * T, 3, 64, 64)
+
+        # Online encoder
+        z_online = model.base_model.encoder(obs_flat).view(B, T, -1)
+
+        # Target encoder (stop-gradient target)
+        with torch.no_grad():
+            z_target = model.base_model.target_encoder(obs_flat).view(B, T, -1)
+
+        K = min(unroll_steps, T - 1)
+        loss_dyn = 0.0
+        loss_unroll_event = 0.0
+        loss_unroll_health = 0.0
+
+        # Multi-step imagination rollout from anchor step t=0
+        z_hat = z_online[:, 0]
+        for k in range(1, K + 1):
+            act_prev = actions[:, k - 1]
+            z_hat = model.predict_next(z_hat, act_prev)
+
+            # 1. Latent dynamic alignment with target encoder
+            loss_dyn = loss_dyn + F.mse_loss(z_hat, z_target[:, k])
+
+            # 2. Multi-step EventHead loss on imagined latents
+            event_pred = model.event_head(z_hat, actions[:, k], mask[:, k])
+            loss_unroll_event = loss_unroll_event + model.event_head.compute_loss(event_pred, events[:, k])
+
+            # 3. Multi-step HealthHead loss on imagined latents
+            event_cnt = events[:, k].sum(dim=-1)
+            h_tgt = (rewards[:, k] - event_cnt).clamp(-1.0, 1.0)
+            h_pred = model.health_head(z_hat, actions[:, k])
+            loss_unroll_health = loss_unroll_health + model.health_head.compute_loss(h_pred, h_tgt)
+
+        loss_dyn = loss_dyn / K
+        loss_unroll_event = loss_unroll_event / K
+        loss_unroll_health = loss_unroll_health / K
+
+        # Anti-collapse variance regularization on online latents
+        z_flat_online = z_online.view(B * T, -1)
+        std_z = torch.sqrt(z_flat_online.var(dim=0) + 1e-4)
+        loss_var = torch.mean(F.relu(1.0 - std_z))
+
+        # Standard step 0 heads & Q loss on z_online
+        prior_logits = model.policy_prior(z_online, mask)
+        loss_prior = model.policy_prior.compute_loss(prior_logits, actions)
+
+        q_logits = model.q_ensemble(z_online, actions)
+        with torch.no_grad():
+            bootstrap_acts = model.sample_prior_action(z_online, mask, temperature=1.0)
+            q_mean_targets = model.q_mean(z_online, bootstrap_acts, use_target=True)
+        loss_q = model.q_ensemble.compute_loss(q_logits, q_mean_targets)
+
+        total_loss = (
+            1.0 * loss_dyn +
+            1.0 * loss_var +
+            event_weight * loss_unroll_event +
+            health_weight * loss_unroll_health +
+            q_weight * loss_q +
+            prior_weight * loss_prior
+        )
+
+        optimizer.zero_grad()
+        total_loss.backward()
+        torch.nn.utils.clip_grad_norm_(base_params + head_params, max_norm=1.0)
+        optimizer.step()
+
+        # Update EMA networks
+        model.update_base_target(decay=0.99)
+        model.update_target_q(decay=target_ema)
+
+        if step % 50 == 0 or step == total_steps:
+            print(f"    Joint Step {step:4d}/{total_steps} | Loss: {total_loss.item():.4f} (Dyn: {loss_dyn.item():.4f}, UnrollEvent: {loss_unroll_event.item():.4f}, Var: {loss_var.item():.4f})")
+            history["step"].append(step)
+            history["loss"].append(float(total_loss.item()))
+            history["loss_dyn"].append(float(loss_dyn.item()))
+            history["loss_unroll"].append(float(loss_unroll_event.item()))
+
+    return history
+
+def run_step3_rounds(
+    base_checkpoint_path: str = "checkpoints/jepa_crafter_v2.pt",
+    config_path: str = "experiments/configs/crafter_v2.yaml",
+    rounds: int = 3,
+    transitions_per_round: int = 30_000,
+    joint_steps_per_round: int = 1_000,
+    eval_episodes: int = 50,
+    eval_max_steps: int = 1000,
+    out_dir: str = "results",
+    ckpt_dir_override: Optional[str] = None,
+    device_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Executes the 3-Round Collect-Retrain Loop (Phase 3):
+    For round r in 1..rounds:
+      1. Collect transitions with current pure v2 planner (+ 10% random exploration).
+      2. Joint fine-tune encoder, predictor, and task heads.
+      3. Evaluate with eval_v2.py and track best checkpoint.
+      4. Saves results to results/v2_step3_rounds.json.
+    """
+    from eval.eval_v2 import evaluate_v2
+    from training.collect_sequences import collect_episodes
+
+    device = get_device(device_override)
+    cfg = load_config(config_path)
+
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    ckpt_dir = Path(ckpt_dir_override) if ckpt_dir_override else Path("checkpoints")
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\n" + "=" * 75)
+    print(f"         PHASE 3: JOINT FINE-TUNE & COLLECT-RETRAIN ({rounds} ROUNDS)")
+    print("=" * 75)
+
+    current_ckpt = base_checkpoint_path
+    best_score = -1.0
+    best_ckpt = str(ckpt_dir / "jepa_crafter_v2_best.pt")
+    rounds_history = []
+
+    # Initial buffer
+    dataset_dir = out_path / "sequences"
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+
+    buffer = EpisodeBuffer(capacity_transitions=transitions_per_round * (rounds + 1))
+
+    for r in range(1, rounds + 1):
+        print(f"\n>>> [Round {r}/{rounds}] Collecting {transitions_per_round} transitions with planner_v2...")
+        round_buf = collect_episodes(
+            policy_name="planner_v2",
+            n_transitions=transitions_per_round,
+            out_dir=str(dataset_dir),
+            chunk_size=min(5000, max(50, transitions_per_round)),
+            checkpoint_path=current_ckpt,
+            seed=300 + r * 10,
+        )
+
+        for ep in round_buf.episodes:
+            buffer.add_episode(**ep)
+
+        # Initialize model from current checkpoint
+        model = JEPAv2.from_v1_checkpoint(
+            checkpoint_path="checkpoints/jepa_crafter.pt",
+            config=cfg,
+            device=device,
+            freeze_base=False,
+        )
+        if Path(current_ckpt).exists() and current_ckpt != "checkpoints/jepa_crafter.pt":
+            model.load_checkpoint(current_ckpt, device=device)
+
+        # Joint fine-tune
+        print(f"\n>>> [Round {r}/{rounds}] Joint fine-tuning for {joint_steps_per_round} steps...")
+        train_joint(
+            model=model,
+            buffer=buffer,
+            total_steps=joint_steps_per_round,
+            batch_size=min(32, max(2, buffer.total_transitions // 16)),
+            seq_len=min(16, max(4, buffer.total_transitions // 2)),
+            unroll_steps=cfg.get("loss", {}).get("unroll_steps", 4),
+            config=cfg,
+            device=device,
+        )
+
+        round_ckpt = str(ckpt_dir / f"jepa_crafter_v2_r{r}.pt")
+        model.save_checkpoint(round_ckpt, step=r * joint_steps_per_round)
+
+        # Evaluate round
+        print(f"\n>>> [Round {r}/{rounds}] Screening evaluation ({eval_episodes} eps, seeds 1000..{1000 + eval_episodes - 1})...")
+        eval_res = evaluate_v2(
+            checkpoint_path=round_ckpt,
+            config_path=config_path,
+            num_episodes=eval_episodes,
+            seed_start=1000,
+            max_steps=eval_max_steps,
+            device_override=str(device),
+        )
+
+        round_entry = {
+            "round": r,
+            "transitions_collected": transitions_per_round,
+            "total_dataset_transitions": buffer.total_transitions,
+            "checkpoint": round_ckpt,
+            "crafter_score": eval_res["crafter_score"],
+            "unlocked_count": eval_res["unlocked_count"],
+            "mean_survival_steps": eval_res["mean_survival_steps"],
+            "mean_reward": eval_res["mean_reward"],
+            "debug_decomposition": eval_res["debug_decomposition"],
+        }
+        rounds_history.append(round_entry)
+
+        if eval_res["crafter_score"] > best_score:
+            best_score = eval_res["crafter_score"]
+            model.save_checkpoint(best_ckpt, step=r * joint_steps_per_round)
+            print(f"🎉 New best checkpoint saved to: {best_ckpt} (Score: {best_score:.2f}%)")
+
+        current_ckpt = round_ckpt
+
+        # Save cumulative rounds log
+        rounds_file = out_path / "v2_step3_rounds.json"
+        with open(rounds_file, "w") as f:
+            json.dump({"rounds": rounds_history, "best_score": best_score, "best_checkpoint": best_ckpt}, f, indent=2)
+        print(f"--> Saved Step 3 cumulative history to: {rounds_file}")
+
+    return {"rounds": rounds_history, "best_score": best_score, "best_checkpoint": best_ckpt}
+
 def main():
-    parser = argparse.ArgumentParser(description="Train Task Heads for JEPA v2")
+    parser = argparse.ArgumentParser(description="Train Task Heads and Joint JEPA v2")
+    parser.add_argument("--mode", type=str, default="heads", choices=["heads", "joint", "rounds"],
+                        help="Training mode: heads, joint, or rounds")
     parser.add_argument("--config", type=str, default="experiments/configs/crafter_v2.yaml")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter.pt")
     parser.add_argument("--steps", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seq-len", type=int, default=16)
+    parser.add_argument("--rounds", type=int, default=3)
+    parser.add_argument("--transitions-per-round", type=int, default=30_000)
+    parser.add_argument("--joint-steps", type=int, default=1_000)
+    parser.add_argument("--eval-episodes", type=int, default=50)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--out-json", type=str, default="results/v2_head_validation.json")
     args = parser.parse_args()
 
-    # Collect mini dataset if not provided
-    from training.collect_sequences import collect_episodes
-    print("--> Collecting mini dataset for trainer smoke run...")
-    buf = collect_episodes(
-        policy_name="structured_random",
-        n_transitions=1500,
-        out_dir="data/sequences_smoke",
-        chunk_size=1000,
-        seed=100,
-    )
+    if args.mode == "rounds":
+        run_step3_rounds(
+            base_checkpoint_path=args.checkpoint,
+            config_path=args.config,
+            rounds=args.rounds,
+            transitions_per_round=args.transitions_per_round,
+            joint_steps_per_round=args.joint_steps,
+            eval_episodes=args.eval_episodes,
+            device_override=args.device,
+        )
+    else:
+        # Collect mini dataset if buffer not present
+        from training.collect_sequences import collect_episodes
+        print("--> Collecting mini dataset for trainer run...")
+        buf = collect_episodes(
+            policy_name="structured_random",
+            n_transitions=1500,
+            out_dir="data/sequences_smoke",
+            chunk_size=1000,
+            seed=100,
+        )
 
-    train_heads(
-        config_path=args.config,
-        checkpoint_path=args.checkpoint,
-        buffer=buf,
-        total_steps=args.steps,
-        batch_size=args.batch_size,
-        seq_len=args.seq_len,
-        device_override=args.device,
-        out_json_path=args.out_json,
-    )
+        train_heads(
+            config_path=args.config,
+            checkpoint_path=args.checkpoint,
+            buffer=buf,
+            total_steps=args.steps,
+            batch_size=args.batch_size,
+            seq_len=args.seq_len,
+            device_override=args.device,
+            out_json_path=args.out_json,
+        )
 
 if __name__ == "__main__":
     main()
+
