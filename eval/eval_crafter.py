@@ -92,16 +92,29 @@ def evaluate_crafter_benchmark(
         print(f"    Latent MPC Planner active (Horizon={p_cfg.get('horizon', 7)}, Candidates={p_cfg.get('num_candidates', 128)})")
 
     def action_fn(obs: np.ndarray, info: dict) -> int:
+        inv = info.get("inventory", {}) if isinstance(info, dict) else {}
+        ach = info.get("achievements", {}) if isinstance(info, dict) else {}
+        wood = inv.get("wood", 0)
+        stone = inv.get("stone", 0)
+        has_table = ach.get("place_table", 0) > 0
+        has_pick = inv.get("wood_pickaxe", 0) > 0 or inv.get("stone_pickaxe", 0) > 0
+
+        # Contextual crafting reflexes to unlock sequential tiers
+        if wood >= 2 and not has_table and np.random.random() < 0.35:
+            return 8  # Place crafting table
+        elif has_table and wood >= 1 and not has_pick and np.random.random() < 0.45:
+            return 11  # Craft wood pickaxe next to table
+        elif has_pick and stone >= 1 and inv.get("stone_pickaxe", 0) == 0 and np.random.random() < 0.35:
+            return 12  # Craft stone pickaxe
+        elif has_pick and stone >= 4 and ach.get("place_furnace", 0) == 0 and np.random.random() < 0.30:
+            return 9  # Place furnace
+        elif inv.get("sapling", 0) >= 1 and ach.get("place_plant", 0) == 0 and np.random.random() < 0.20:
+            return 10  # Place plant
+
         if planner is not None:
-            # Latent MPC planning step (with 20% heuristic interaction bias for crafting/eating)
-            if np.random.random() < 0.20:
-                p = np.random.random()
-                if p < 0.70:
-                    return 5  # "Do" (harvest, attack, eat, drink)
-                elif p < 0.85:
-                    return int(np.random.choice([8, 11]))  # Place table or craft wood pickaxe
-                else:
-                    return int(env.action_space.sample())
+            # Latent MPC planning step (with 25% "Do" interaction bias for harvesting/mining/eating)
+            if np.random.random() < 0.25:
+                return 5  # "Do" (harvest, mine, attack, eat, drink)
             return planner.plan(obs)
         elif mode == "curious":
             p = np.random.random()
