@@ -93,6 +93,7 @@ def train_jepa(
         if output_dir_override
         else get_output_dir("./checkpoints")
     )
+    output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_file = output_dir / cfg["training"].get("checkpoint_name", "jepa_maze.pt")
 
     print(f"==================================================")
@@ -215,6 +216,7 @@ def train_jepa(
 
         # Checkpointing
         if step % ckpt_interval == 0 or step == total_steps:
+            checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
             torch.save(
                 {
                     "step": step,
