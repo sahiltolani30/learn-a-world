@@ -1,0 +1,151 @@
+{
+  "num_episodes": 15,
+  "seed_range": "2000-2014",
+  "max_steps": 500,
+  "total_deaths": 15,
+  "survival_rate": 0.0,
+  "mean_episode_length": 177.73333333333332,
+  "std_episode_length": 47.87270156942843,
+  "mean_death_step": 177.73333333333332,
+  "night_deaths": 11,
+  "day_deaths": 4,
+  "night_death_fraction": 0.7333333333333333,
+  "cause_breakdown": {
+    "starvation": 0,
+    "dehydration": 0,
+    "starvation_and_dehydration": 1,
+    "zombie_night": 9,
+    "zombie_day": 2,
+    "skeleton_night": 0,
+    "skeleton_day": 3,
+    "monster_night_unseen": 0,
+    "environmental": 0,
+    "survived_max_steps": 0
+  },
+  "high_level_causes": {
+    "Monsters (Zombies/Skeletons)": 14,
+    "Starvation": 0,
+    "Dehydration": 0,
+    "Starvation & Dehydration": 1,
+    "Environmental / Other": 0,
+    "Survived Max Steps": 0
+  },
+  "total_damage_events": {
+    "starvation": 0,
+    "dehydration": 1,
+    "starvation_and_dehydration": 2,
+    "zombie_night": 40,
+    "zombie_day": 11,
+    "skeleton_night": 0,
+    "skeleton_day": 20,
+    "monster_night_unseen": 0,
+    "environmental": 0
+  },
+  "episodes": [
+    {
+      "episode": 0,
+      "seed": 2000,
+      "length": 263,
+      "final_status": "starvation_and_dehydration",
+      "damage_events": 6
+    },
+    {
+      "episode": 1,
+      "seed": 2001,
+      "length": 227,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 2,
+      "seed": 2002,
+      "length": 62,
+      "final_status": "skeleton_day",
+      "damage_events": 6
+    },
+    {
+      "episode": 3,
+      "seed": 2003,
+      "length": 202,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 4,
+      "seed": 2004,
+      "length": 143,
+      "final_status": "zombie_day",
+      "damage_events": 3
+    },
+    {
+      "episode": 5,
+      "seed": 2005,
+      "length": 142,
+      "final_status": "skeleton_day",
+      "damage_events": 5
+    },
+    {
+      "episode": 6,
+      "seed": 2006,
+      "length": 160,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 7,
+      "seed": 2007,
+      "length": 229,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 8,
+      "seed": 2008,
+      "length": 159,
+      "final_status": "zombie_night",
+      "damage_events": 6
+    },
+    {
+      "episode": 9,
+      "seed": 2009,
+      "length": 210,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 10,
+      "seed": 2010,
+      "length": 190,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    },
+    {
+      "episode": 11,
+      "seed": 2011,
+      "length": 150,
+      "final_status": "zombie_day",
+      "damage_events": 5
+    },
+    {
+      "episode": 12,
+      "seed": 2012,
+      "length": 186,
+      "final_status": "zombie_night",
+      "damage_events": 3
+    },
+    {
+      "episode": 13,
+      "seed": 2013,
+      "length": 134,
+      "final_status": "skeleton_day",
+      "damage_events": 5
+    },
+    {
+      "episode": 14,
+      "seed": 2014,
+      "length": 209,
+      "final_status": "zombie_night",
+      "damage_events": 5
+    }
+  ]
+}
