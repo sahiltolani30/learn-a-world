@@ -134,14 +134,76 @@ def test_recurrent_mpc_planner_step():
     assert "terminal_value" in debug
 
 
+def get_test_resources(tmp_path):
+    from training.sequence_buffer import EpisodeBuffer
+    from models.jepa import JEPAWorldModel
+    from models.jepa_v2 import JEPAv2
+
+    # Check for existing shards
+    shards_dir = None
+    for cand in [
+        Path("data/sequences"),
+        Path("/content/drive/MyDrive/learn-a-world/data/sequences"),
+    ]:
+        if cand.exists() and list(cand.glob("*.npz")):
+            shards_dir = str(cand)
+            break
+
+    if shards_dir is None:
+        dummy_dir = tmp_path / "dummy_shards"
+        dummy_dir.mkdir(parents=True, exist_ok=True)
+        buf = EpisodeBuffer(capacity_transitions=1000)
+        for ep_i in range(3):
+            T = 16
+            obs = np.random.randint(0, 255, (T, 64, 64, 3), dtype=np.uint8)
+            actions = np.random.randint(0, 17, (T,), dtype=np.int64)
+            rewards = np.zeros(T, dtype=np.float32)
+            dones = np.zeros(T, dtype=bool)
+            dones[-1] = True
+            events = np.zeros((T, 22), dtype=np.uint8)
+            events[5, 6] = 1
+            mask_before = np.zeros((T, 22), dtype=np.uint8)
+            buf.add_episode(obs, actions, rewards, dones, events, mask_before, source="dummy")
+        buf.save_shard(dummy_dir / "shard_0000.npz")
+        shards_dir = str(dummy_dir)
+
+    # Check for existing base checkpoint
+    ckpt_path = None
+    for cand in [
+        Path("checkpoints/jepa_crafter_v2_best.pt"),
+        Path("checkpoints/jepa_crafter_v2.pt"),
+        Path("checkpoints/jepa_crafter.pt"),
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v2_best.pt"),
+    ]:
+        if cand.exists():
+            ckpt_path = str(cand)
+            break
+
+    if ckpt_path is None:
+        dummy_base = JEPAWorldModel(in_channels=3, latent_dim=128, num_actions=17)
+        dummy_v2 = JEPAv2(dummy_base, hidden_dim=64)
+        dummy_ckpt = tmp_path / "dummy_v2_base.pt"
+        torch.save({
+            "base_model_state": dummy_base.state_dict(),
+            "event_head_state": dummy_v2.event_head.state_dict(),
+            "health_head_state": dummy_v2.health_head.state_dict(),
+            "q_ensemble_state": dummy_v2.q_ensemble.state_dict(),
+            "policy_prior_state": dummy_v2.policy_prior.state_dict(),
+        }, dummy_ckpt)
+        ckpt_path = str(dummy_ckpt)
+
+    return shards_dir, ckpt_path
+
+
 def test_step2_joint_training_smoke(tmp_path):
     """Gate Test 6: End-to-end CPU smoke training test for Phase 2."""
     out_ckpt = tmp_path / "test_v3_phase2.pt"
     out_json = tmp_path / "test_v3_screening.json"
+    shards_dir, ckpt_path = get_test_resources(tmp_path)
 
     results = train_v3_recurrent(
-        checkpoint_base="checkpoints/jepa_crafter_v2_best.pt",
-        shards_dir="data/sequences",
+        checkpoint_base=ckpt_path,
+        shards_dir=shards_dir,
         total_steps=12,
         batch_size=4,
         seq_len=8,
@@ -155,3 +217,4 @@ def test_step2_joint_training_smoke(tmp_path):
     assert out_json.exists()
     assert len(results["history"]["step"]) >= 1
     assert "final_metrics" in results
+
