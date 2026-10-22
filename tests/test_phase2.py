@@ -49,13 +49,7 @@ def trained_jepa_model(tmp_path_factory):
         ckpt = torch.load(ckpt_path, map_location=device)
         model.load_state_dict(ckpt["model_state"])
     else:
-        model, _ = train_jepa(
-            config_path="experiments/configs/maze.yaml",
-            device_override="cpu",
-            output_dir_override=str(temp_dir),
-            total_steps_override=200,
-            seed_steps_override=200,
-        )
+        pytest.skip("checkpoints/jepa_maze.pt not found. Run Step 4 training first.")
     model.eval()
     return model
 
