@@ -115,3 +115,40 @@ def test_event_head_integration():
     # 3. Can bypass calibration with use_calibration=False
     uncal_p = head.predict_proba(z, action, mask, use_calibration=False)
     torch.testing.assert_close(uncal_p, raw_p)
+
+
+def test_mpc_planner_calibration_smoke():
+    """Smoke test: RecurrentMPCPlanner runs with use_calibration=True and use_calibration=False."""
+    from planning.agent_v3 import AgentBeliefV3
+    from planning.mpc_v3 import RecurrentMPCPlanner
+
+    model = JEPAv3(latent_dim=32, recurrent_dim=64, num_actions=17)
+    calibrator = EventHeadCalibrator(num_heads=22, fit_bias=True)
+    model.set_calibrator(calibrator)
+
+    planner_cal = RecurrentMPCPlanner(
+        model=model,
+        horizon=2,
+        num_candidates=4,
+        cem_iterations=1,
+        use_calibration=True,
+    )
+    planner_uncal = RecurrentMPCPlanner(
+        model=model,
+        horizon=2,
+        num_candidates=4,
+        cem_iterations=1,
+        use_calibration=False,
+    )
+
+    obs = np.zeros((64, 64, 3), dtype=np.uint8)
+    belief = AgentBeliefV3(recurrent_dim=64)
+
+    a_cal, d_cal = planner_cal.plan(obs, belief)
+    a_uncal, d_uncal = planner_uncal.plan(obs, belief)
+
+    assert 0 <= a_cal < 17
+    assert 0 <= a_uncal < 17
+    assert "best_score" in d_cal
+    assert "best_score" in d_uncal
+

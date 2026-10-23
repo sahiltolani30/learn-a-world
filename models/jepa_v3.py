@@ -323,12 +323,13 @@ class JEPAv3(nn.Module):
         action: torch.Tensor,
         mask_before: torch.Tensor,
         return_decomposition: bool = False,
+        use_calibration: bool = True,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         """
         Predicts expected reward from composite state s = [z, h]:
         r_hat = sum_i(p_i * (1 - m_i)) + h_hat
         """
-        p = self.event_head.predict_proba(s, action, mask_before)
+        p = self.event_head.predict_proba(s, action, mask_before, use_calibration=use_calibration)
         h = self.health_head(s, action)
 
         unlocked_mask = mask_before.float()

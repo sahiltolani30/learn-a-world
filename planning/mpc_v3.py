@@ -37,6 +37,7 @@ class RecurrentMPCPlanner:
         novelty_weight: float = 0.02,
         prior_mix: float = 0.5,
         num_actions: int = 17,
+        use_calibration: bool = True,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -49,6 +50,7 @@ class RecurrentMPCPlanner:
         self.novelty_weight = novelty_weight
         self.prior_mix = prior_mix
         self.num_actions = num_actions
+        self.use_calibration = use_calibration
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
     def plan(
@@ -108,7 +110,7 @@ class RecurrentMPCPlanner:
                 for h_step in range(self.horizon):
                     a_h = self.model.sample_prior_action(s_roll, m_roll, temperature=1.0)
                     prior_actions[:, h_step] = a_h
-                    p_h = self.model.event_head.predict_proba(s_roll, a_h, m_roll)
+                    p_h = self.model.event_head.predict_proba(s_roll, a_h, m_roll, use_calibration=self.use_calibration)
                     m_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=self.device), m_roll)
                     z_roll, h_roll, s_roll = self.model.predict_next_step(z_roll, h_roll, a_h)
 
@@ -130,7 +132,9 @@ class RecurrentMPCPlanner:
 
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
-                    r_hat, decomp = self.model.predict_reward(s_t, a_t, m_t, return_decomposition=True)
+                    r_hat, decomp = self.model.predict_reward(
+                        s_t, a_t, m_t, return_decomposition=True, use_calibration=self.use_calibration
+                    )
                     cumulative_reward = cumulative_reward + (self.gamma ** t) * r_hat
 
                     # Simulated belief progression
