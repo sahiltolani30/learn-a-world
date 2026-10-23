@@ -245,6 +245,7 @@ def main():
         model.load_checkpoint(args.checkpoint, device=args.device)
     else:
         model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
+    model.to(args.device)
 
     print(f"[Q-Calibration] Loading episodes from {args.shards_dir}...")
     episodes = load_episodes_from_shards(args.shards_dir)

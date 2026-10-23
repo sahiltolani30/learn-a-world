@@ -415,6 +415,7 @@ class JEPAv3(nn.Module):
     def load_checkpoint(self, path: str, device: Optional[Union[str, torch.device]] = None) -> None:
         """Loads v3 checkpoint or transfers weights from v2 base."""
         dev = torch.device(device) if device is not None else torch.device("cpu")
+        self.to(dev)
         ckpt = torch.load(path, map_location=dev)
 
         if ckpt.get("version") == "v3":
@@ -431,7 +432,8 @@ class JEPAv3(nn.Module):
                 self.return_normalizer.low = ckpt["normalizer"]["low"]
                 self.return_normalizer.high = ckpt["normalizer"]["high"]
                 self.return_normalizer.initialized = ckpt["normalizer"]["initialized"]
-            print(f"[JEPAv3] Successfully loaded v3 checkpoint from {path}")
+            self.to(dev)
+            print(f"[JEPAv3] Successfully loaded v3 checkpoint from {path} (device: {dev})")
         else:
             # Transfer base encoder weights from v1/v2 checkpoint
             base_state = ckpt.get("base_model_state", ckpt.get("model_state", {}))

@@ -281,6 +281,7 @@ def main():
         model.load_checkpoint(args.checkpoint, device=args.device)
     else:
         model = JEPAv2.from_v1_checkpoint(args.checkpoint, device=args.device)
+    model.to(args.device)
 
     print(f"[Head-Audit] Loading held-out data from {args.shards_dir}...")
     data = load_heldout_data(args.shards_dir)
