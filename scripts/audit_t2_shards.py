@@ -119,7 +119,8 @@ def audit_shards(
 
     crafter_score_data = compute_crafter_score(per_episode_achievements)
 
-    # Reference T1 comparison counts (from Phase 3 T1 160k dataset)
+    # Reference T1 comparison counts (from Phase 3 T1 160k dataset, 878 episodes total)
+    T1_TOTAL_EPISODES = 878
     t1_baseline = {
         "collect_coal": 0,
         "collect_diamond": 0,
@@ -131,7 +132,7 @@ def audit_shards(
         "defeat_skeleton": 1,
         "defeat_zombie": 3,
         "eat_cow": 4,
-        "eat_plant": 123,
+        "eat_plant": 0,  # Corrected baseline (was previously showing 123)
         "make_iron_pickaxe": 0,
         "make_iron_sword": 0,
         "make_stone_pickaxe": 0,
@@ -145,10 +146,10 @@ def audit_shards(
         "wake_up": 54,
     }
 
-    # Print Table
-    print("\n" + "=" * 80)
-    print("PHASE 3 TRANCHE T2 CURIOSITY SHARD AUDIT REPORT")
-    print("=" * 80)
+    # Print Table with Rate-Based Comparisons
+    print("\n" + "=" * 90)
+    print("PHASE 3 TRANCHE T2 CURIOSITY SHARD AUDIT REPORT (RATE-BASED COMPARISON)")
+    print("=" * 90)
     print(f"Total Shards Analyzed:         {len(shard_files)}")
     print(f"Total Transitions Collected:   {total_transitions:,}")
     print(f"Total Episodes Collected:      {total_episodes:,}")
@@ -157,30 +158,31 @@ def audit_shards(
     print(f"Official Crafter Score:        {crafter_score_data['score']:.2f}%")
     print(f"Mean Achievements Per Ep:      {crafter_score_data['mean_achievements_per_ep']:.2f}")
     print(f"Unique Categories Unlocked:    {unlocked_categories} / 22")
-    print("-" * 80)
-    print(f"{'Achievement':<24} | {'T2 Count':<10} | {'T2 Unlock %':<12} | {'T1 Baseline':<12} | {'Status'}")
-    print("-" * 80)
+    print("-" * 90)
+    print(f"{'Achievement':<22} | {'T2 Count':<8} | {'T2 Rate %':<10} | {'T1 Count':<8} | {'T1 Rate %':<10} | {'Delta (pp)':<10} | {'Status'}")
+    print("-" * 90)
 
     for ach in CRAFTER_ACHIEVEMENTS:
         t2_cnt = achievement_unlock_counts[ach]
         t2_pct = unlock_percentages[ach]
         t1_cnt = t1_baseline.get(ach, 0)
+        t1_rate_pct = (t1_cnt / float(T1_TOTAL_EPISODES)) * 100.0
+        delta_pp = t2_pct - t1_rate_pct
 
-        delta = t2_cnt - t1_cnt
         if t2_cnt > 0 and t1_cnt == 0:
             status = "🔥 NEW DISCOVERY!"
-        elif delta > 0:
-            status = f"▲ +{delta}"
-        elif delta == 0 and t2_cnt > 0:
+        elif delta_pp > 0:
+            status = f"▲ +{delta_pp:.2f}%"
+        elif delta_pp == 0 and t2_cnt > 0:
             status = "Steady"
         elif t2_cnt == 0:
             status = "Frontier (0)"
         else:
-            status = f"▼ {delta}"
+            status = f"▼ {delta_pp:.2f}%"
 
-        print(f"{ach:<24} | {t2_cnt:<10} | {t2_pct:>10.2f}% | {t1_cnt:<12} | {status}")
+        print(f"{ach:<22} | {t2_cnt:<8} | {t2_pct:>8.2f}%  | {t1_cnt:<8} | {t1_rate_pct:>8.2f}%  | {delta_pp:>+8.2f}pp | {status}")
 
-    print("=" * 80)
+    print("=" * 90)
 
     result_block = {
         "num_shards": len(shard_files),
