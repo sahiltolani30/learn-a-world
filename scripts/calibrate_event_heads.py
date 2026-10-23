@@ -34,15 +34,51 @@ from training.sequence_buffer import EpisodeBuffer
 
 
 def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
-    """Loads held-out sequence episodes."""
+    """Loads held-out sequence episodes directly from npz shards."""
     p = Path(shards_dir)
     if not p.exists():
         raise FileNotFoundError(f"Held-out directory not found: {shards_dir}")
 
-    buffer = EpisodeBuffer(capacity_transitions=50_000)
-    loaded = buffer.load_sharded_dataset(str(p))
-    print(f"[Calibration] Loaded {buffer.num_episodes} held-out episodes ({buffer.total_transitions:,} transitions) from {shards_dir}")
-    return buffer.get_all_transitions()
+    shard_paths = sorted(p.glob("*.npz"))
+    if not shard_paths:
+        raise FileNotFoundError(f"No .npz shards found in {shards_dir}")
+
+    all_obs = []
+    all_actions = []
+    all_events = []
+    all_masks = []
+    all_rewards = []
+    all_lengths = []
+
+    for sp in shard_paths:
+        data = np.load(str(sp), allow_pickle=True)
+        all_obs.append(data["obs"])
+        all_actions.append(data["actions"])
+        all_events.append(data["events"])
+        all_masks.append(data["mask_before"])
+        all_rewards.append(data["rewards"])
+        lengths = data.get("episode_lengths", None)
+        if lengths is not None and len(lengths) > 0:
+            all_lengths.extend(lengths.tolist())
+        else:
+            dones = data["dones"]
+            start = 0
+            for i, d in enumerate(dones):
+                if d or i == len(dones) - 1:
+                    all_lengths.append(i + 1 - start)
+                    start = i + 1
+
+    total_trans = sum(len(o) for o in all_obs)
+    print(f"[Calibration] Loaded {len(all_lengths)} held-out episodes ({total_trans:,} transitions) from {len(shard_paths)} shards in {shards_dir}")
+
+    return {
+        "obs": np.concatenate(all_obs, axis=0),
+        "actions": np.concatenate(all_actions, axis=0),
+        "events": np.concatenate(all_events, axis=0),
+        "mask_before": np.concatenate(all_masks, axis=0),
+        "rewards": np.concatenate(all_rewards, axis=0),
+        "episode_lengths": all_lengths,
+    }
 
 
 def extract_logits_and_labels(
