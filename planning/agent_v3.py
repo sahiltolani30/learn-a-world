@@ -82,6 +82,24 @@ class AgentBeliefV3:
             "mask": self.mask.copy(),
         })
 
+    def set_mask(self, mask: Union[np.ndarray, torch.Tensor]) -> None:
+        """Sets belief mask directly (used for true mask updates or snapshot restoration)."""
+        if isinstance(mask, torch.Tensor):
+            m = mask.detach().cpu().numpy().astype(np.float32).reshape(-1)
+        else:
+            m = np.array(mask, dtype=np.float32).reshape(-1)
+        assert len(m) == NUM_ACHIEVEMENTS, f"Expected {NUM_ACHIEVEMENTS} elements, got {len(m)}"
+        self.mask = m.copy()
+
+    def set_h(self, h: Union[np.ndarray, torch.Tensor]) -> None:
+        """Sets recurrent memory state h directly (used for snapshot restoration)."""
+        if isinstance(h, torch.Tensor):
+            h_arr = h.detach().cpu().numpy().astype(np.float32).reshape(-1)
+        else:
+            h_arr = np.array(h, dtype=np.float32).reshape(-1)
+        assert len(h_arr) == self.recurrent_dim, f"Expected {self.recurrent_dim} elements, got {len(h_arr)}"
+        self.h = h_arr.copy()
+
     def get_mask(self) -> np.ndarray:
         """Returns copy of unlocked mask [22]."""
         return self.mask.copy()
