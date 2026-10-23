@@ -1,0 +1,27 @@
+{
+  "num_episodes": 48,
+  "total_transitions": 8091,
+  "pearson_r": 0.3597525656223297,
+  "pearson_p_value": 8.790983494079678e-246,
+  "spearman_rho": 0.31355696909130765,
+  "spearman_p_value": 4.620631573755553e-184,
+  "mae": 0.7630635499954224,
+  "rmse": 0.9399260878562927,
+  "q_pred_mean": 0.34438422322273254,
+  "q_pred_std": 0.5054411888122559,
+  "q_pred_min": -0.09654948860406876,
+  "q_pred_max": 2.9287757873535156,
+  "realized_return_mean": 0.4347350597381592,
+  "realized_return_std": 0.9898501634597778,
+  "realized_return_min": -0.8999999761581421,
+  "realized_return_max": 3.9682178497314453,
+  "mean_ensemble_disagreement": 0.08079014718532562,
+  "max_ensemble_disagreement": 2.0934677124023438,
+  "slice_type": "SELF_PLAY_FRESH",
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t1_joint.pt",
+  "seed_range": [
+    4000,
+    4047
+  ],
+  "tag": "DIAGNOSTICS-ONLY (never enter training manifest)"
+}
