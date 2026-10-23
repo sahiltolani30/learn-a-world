@@ -25,10 +25,13 @@ wheels/
 *.egg
 
 # Data, Replay Buffer, Checkpoints
-data/
+data/*
+!data/sequences/
+!data/sequences/**
 replay_buffer/
 checkpoints/
 *.npz
+!data/sequences/*.npz
 *.pt
 *.pth
 *.h5

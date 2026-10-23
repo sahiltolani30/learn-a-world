@@ -1,0 +1,35 @@
+{
+  "total_episodes": 11,
+  "total_transitions": 2000,
+  "per_achievement_positive_counts": {
+    "collect_coal": 0,
+    "collect_diamond": 0,
+    "collect_drink": 21,
+    "collect_iron": 0,
+    "collect_sapling": 63,
+    "collect_stone": 1,
+    "collect_wood": 9,
+    "defeat_skeleton": 0,
+    "defeat_zombie": 2,
+    "eat_cow": 1,
+    "eat_plant": 0,
+    "make_iron_pickaxe": 0,
+    "make_iron_sword": 0,
+    "make_stone_pickaxe": 0,
+    "make_stone_sword": 0,
+    "make_wood_pickaxe": 1,
+    "make_wood_sword": 0,
+    "place_furnace": 0,
+    "place_plant": 22,
+    "place_stone": 0,
+    "place_table": 2,
+    "wake_up": 6
+  },
+  "per_source_counts": {
+    "teacher_hybrid": 2000
+  },
+  "shards": [
+    "shard_teacher_hybrid_0000.npz",
+    "shard_teacher_hybrid_final.npz"
+  ]
+}
