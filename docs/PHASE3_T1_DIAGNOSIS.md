@@ -66,7 +66,7 @@ If `defeat_zombie` had merely maintained a 10% unlock rate (5 episodes), the T1 
   - `place_plant`: 123 events
   - `wake_up`: 54 events
   - `eat_cow`: 4 events
-  - `defeat_zombie`: ≥ 7 events (recounted from Drive manifest across shards; initial "3" report was incomplete)
+  - `defeat_zombie`: 3 events
   - `defeat_skeleton`: 1 event *(Major autonomous milestone: killed a skeleton without task reward!)*
   - `place_table`: 1 event
 * The ensemble disagreement drove broad spatial exploration across diverse terrain rather than repetitive local loops.
@@ -94,7 +94,7 @@ If `defeat_zombie` had merely maintained a 10% unlock rate (5 episodes), the T1 
   ```
 * Because `data/` is excluded by `.gitignore`, the base 8,000 sequence transitions (Phase 1/2 teacher hybrid dataset with combat/zombie demonstrations) were missing on Colab.
 * Consequently, Step 5 trained **exclusively** on the 76 curiosity shards.
-* Because curiosity exploration naturally avoids fatal damage, only ≥ 7 zombie defeats occurred in 160k transitions. Training purely on this dataset without replay of the base teacher buffer caused policy forgetting of active zombie combat.
+* Because curiosity exploration naturally avoids fatal damage, only 3 zombie defeats occurred in 160k transitions. Training purely on this dataset without replay of the base teacher buffer caused policy forgetting of active zombie combat.
 
 ---
 
