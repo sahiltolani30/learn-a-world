@@ -422,6 +422,13 @@ class JEPAv3(nn.Module):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(ckpt, path)
 
+    @classmethod
+    def from_checkpoint(cls, path: str, device: Optional[Union[str, torch.device]] = None) -> "JEPAv3":
+        """Instantiates and loads a JEPAv3 model directly from checkpoint."""
+        model = cls()
+        model.load_checkpoint(path, device=device)
+        return model
+
     def load_checkpoint(self, path: str, device: Optional[Union[str, torch.device]] = None) -> None:
         """Loads v3 checkpoint or transfers weights from v2 base."""
         dev = torch.device(device) if device is not None else torch.device("cpu")

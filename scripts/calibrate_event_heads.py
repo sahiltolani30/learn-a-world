@@ -142,7 +142,8 @@ def run_calibration_pipeline(
 
     # 1. Load model
     print(f"[Calibration] Loading model from {checkpoint}...")
-    model = JEPAv3.load_checkpoint(checkpoint, device=device)
+    model = JEPAv3()
+    model.load_checkpoint(checkpoint, device=device)
     model.to(torch.device(device))
     model.eval()
 
