@@ -5,10 +5,17 @@ scripts/audit_t2_shards.py — Comprehensive Audit of T2 Curiosity Shards
 
 Analyzes all collected T2 curiosity shards (from local directory or Google Drive):
 1. Reads all shard_curiosity_v3_t02_*.npz files.
-2. Extracts transition count, episode count, and achievement events.
-3. Computes per-achievement unlock counts and episode unlock percentages (%) across all 22 Crafter achievements.
-4. Compares against Phase 3 T1 baseline to quantify improvements in rare achievements.
-5. Prints a formatted Markdown summary table and saves results to results/diagnostics/t2_curiosity_audit.json.
+2. Computes complete official Crafter benchmark block:
+   - mean_survival_length, std_survival_length
+   - mean_episode_reward, std_episode_reward
+   - crafter_score (geometric mean across 22 achievements)
+   - mean_achievements_per_ep
+   - unlocked_achievement_count (out of 22)
+   - unlock_percentages (all 22 achievements)
+   - raw_unlock_counts
+3. Prints side-by-side comparative table against Phase 3 T1 baseline.
+4. Outputs the complete standard JSON result block.
+5. Mirrors results to Google Drive.
 """
 
 import argparse
@@ -28,7 +35,7 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS, compute_crafter_score
 
 def audit_shards(
     shards_dir: Path,
-    t1_reference_counts: Optional[Dict[str, int]] = None,
+    drive_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Scans shards_dir for shard_curiosity_v3_t02_*.npz files and computes full metrics.
@@ -38,25 +45,28 @@ def audit_shards(
 
     shard_files = sorted(shards_dir.glob("shard_curiosity_v3_t02_*.npz"))
     if not shard_files:
-        # Fallback: check for all curiosity shards
         shard_files = sorted(shards_dir.glob("*curiosity*.npz"))
 
     print(f"[Audit] Scanning shards directory: {shards_dir}")
     print(f"[Audit] Found {len(shard_files)} shard files.")
 
     if len(shard_files) == 0:
+        print("[Audit] Error: No shard files found to audit.")
         return {"error": "no_shards_found", "num_shards": 0}
 
     total_transitions = 0
     total_episodes = 0
     achievement_unlock_counts = {ach: 0 for ach in CRAFTER_ACHIEVEMENTS}
     per_episode_achievements: List[Dict[str, int]] = []
+    episode_rewards: List[float] = []
+    episode_lengths: List[int] = []
 
     for s_idx, sf in enumerate(shard_files):
         try:
             data = np.load(str(sf), allow_pickle=True)
             obs = data["obs"]
             events = data["events"]
+            rewards = data["rewards"]
             dones = data["dones"]
 
             n_trans = len(obs)
@@ -70,8 +80,13 @@ def audit_shards(
 
             for ep_end in ep_indices:
                 ep_events = events[ep_start : ep_end + 1]  # [T, 22]
+                ep_rews = rewards[ep_start : ep_end + 1]
+                ep_len = len(ep_events)
                 ep_start = ep_end + 1
                 total_episodes += 1
+
+                episode_lengths.append(int(ep_len))
+                episode_rewards.append(float(np.sum(ep_rews)))
 
                 # Episode-level unlock (did this episode achieve it at least once?)
                 ep_unlock_mask = np.any(ep_events > 0, axis=0)  # [22]
@@ -87,11 +102,20 @@ def audit_shards(
         except Exception as e:
             print(f"  Warning: could not process shard {sf.name}: {e}")
 
+    # Compute statistics
+    mean_survival = float(np.mean(episode_lengths)) if episode_lengths else 0.0
+    std_survival = float(np.std(episode_lengths)) if episode_lengths else 0.0
+    mean_reward = float(np.mean(episode_rewards)) if episode_rewards else 0.0
+    std_reward = float(np.std(episode_rewards)) if episode_rewards else 0.0
+
     # Compute unlock percentages
     unlock_percentages = {}
+    unlocked_categories = 0
     for ach in CRAFTER_ACHIEVEMENTS:
         pct = (achievement_unlock_counts[ach] / max(1, total_episodes)) * 100.0
         unlock_percentages[ach] = round(pct, 2)
+        if achievement_unlock_counts[ach] > 0:
+            unlocked_categories += 1
 
     crafter_score_data = compute_crafter_score(per_episode_achievements)
 
@@ -121,14 +145,18 @@ def audit_shards(
         "wake_up": 54,
     }
 
+    # Print Table
     print("\n" + "=" * 80)
     print("PHASE 3 TRANCHE T2 CURIOSITY SHARD AUDIT REPORT")
     print("=" * 80)
-    print(f"Total Shards Analyzed:     {len(shard_files)}")
-    print(f"Total Transitions:         {total_transitions:,}")
-    print(f"Total Episodes:            {total_episodes:,}")
-    print(f"Curiosity Rollout Score:   {crafter_score_data['score']:.2f}%")
-    print(f"Mean Unlocks Per Episode:  {crafter_score_data['mean_achievements_per_ep']:.2f}")
+    print(f"Total Shards Analyzed:         {len(shard_files)}")
+    print(f"Total Transitions Collected:   {total_transitions:,}")
+    print(f"Total Episodes Collected:      {total_episodes:,}")
+    print(f"Mean Survival Length:          {mean_survival:.2f} ± {std_survival:.2f} steps")
+    print(f"Mean Episode Reward:           {mean_reward:.2f} ± {std_reward:.2f}")
+    print(f"Official Crafter Score:        {crafter_score_data['score']:.2f}%")
+    print(f"Mean Achievements Per Ep:      {crafter_score_data['mean_achievements_per_ep']:.2f}")
+    print(f"Unique Categories Unlocked:    {unlocked_categories} / 22")
     print("-" * 80)
     print(f"{'Achievement':<24} | {'T2 Count':<10} | {'T2 Unlock %':<12} | {'T1 Baseline':<12} | {'Status'}")
     print("-" * 80)
@@ -154,19 +182,49 @@ def audit_shards(
 
     print("=" * 80)
 
-    return {
+    result_block = {
         "num_shards": len(shard_files),
         "total_transitions": total_transitions,
         "total_episodes": total_episodes,
+        "mean_survival_length": round(mean_survival, 2),
+        "std_survival_length": round(std_survival, 2),
+        "mean_episode_reward": round(mean_reward, 2),
+        "std_episode_reward": round(std_reward, 2),
         "crafter_score": round(crafter_score_data["score"], 3),
         "mean_achievements_per_ep": round(crafter_score_data["mean_achievements_per_ep"], 2),
-        "unlock_counts": achievement_unlock_counts,
+        "unlocked_achievement_count": unlocked_categories,
         "unlock_percentages": unlock_percentages,
+        "per_achievement_counts": achievement_unlock_counts,
     }
+
+    # Print Full JSON Block (Exact format used in screening checks)
+    print("\n--- COMPLETE AUDIT RESULT BLOCK (JSON) ---")
+    print(json.dumps(result_block, indent=2))
+    print("------------------------------------------\n")
+
+    # Save to local results
+    out_dir = REPO_ROOT / "results" / "diagnostics"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "t2_curiosity_audit.json"
+    out_file.write_text(json.dumps(result_block, indent=2))
+    print(f"[Audit] Saved local report to: {out_file}")
+
+    # Mirror to Drive if available
+    if drive_dir is not None and drive_dir.exists():
+        try:
+            drive_out_dir = drive_dir / "results" / "diagnostics"
+            drive_out_dir.mkdir(parents=True, exist_ok=True)
+            drive_out_file = drive_out_dir / "t2_curiosity_audit.json"
+            drive_out_file.write_text(json.dumps(result_block, indent=2))
+            print(f"[Audit] Mirrored to Drive: {drive_out_file}")
+        except Exception as e:
+            print(f"[Audit] Warning: could not mirror to Drive: {e}")
+
+    return result_block
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Audit T2 curiosity shards")
+    parser = argparse.ArgumentParser(description="Audit T2 curiosity shards with complete screening-style output")
     parser.add_argument(
         "--drive-dir",
         type=str,
@@ -175,8 +233,9 @@ def main():
     )
     args = parser.parse_args()
 
+    drive_p = Path(args.drive_dir)
     candidates = [
-        Path(args.drive_dir) / "data" / "curiosity_shards",
+        drive_p / "data" / "curiosity_shards",
         REPO_ROOT / "data" / "curiosity_shards",
     ]
 
@@ -189,14 +248,7 @@ def main():
     if target_dir is None:
         target_dir = candidates[0]
 
-    report = audit_shards(target_dir)
-
-    # Save report
-    out_dir = REPO_ROOT / "results" / "diagnostics"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "t2_curiosity_audit.json"
-    out_file.write_text(json.dumps(report, indent=2))
-    print(f"\n[Audit] Saved structured audit results to: {out_file}")
+    audit_shards(target_dir, drive_dir=drive_p if drive_p.exists() else None)
 
 
 if __name__ == "__main__":
