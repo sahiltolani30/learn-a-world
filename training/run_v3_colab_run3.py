@@ -57,8 +57,8 @@ def _find_field(data: Any, candidate_keys: List[str], default: Any = "N/A") -> A
 def audit_tonight_run(drive_dir: str) -> Dict[str, Any]:
     """
     Step 0: Audit results/step3_t1_train_results.json on Drive.
-    Tolerantly inspects fields (searching nested dicts) and derives the verdict
-    from composition numbers (curiosity share %) rather than strings.
+    Inspects actual fields saved by train_v3_recurrent (step, final_metrics, history,
+    buffer_composition) without assuming non-existent top-level keys.
     """
     drive_p = Path(drive_dir)
     report: Dict[str, Any] = {"found": False}
@@ -76,18 +76,19 @@ def audit_tonight_run(drive_dir: str) -> Dict[str, Any]:
             report["data"] = data
             print(f"[Audit] Found: {train_log}")
 
-            steps = _find_field(data, ["total_steps", "steps", "step"])
-            base_ckpt = _find_field(data, ["checkpoint_base", "base_checkpoint", "checkpoint", "start_checkpoint"])
-            out_ckpt = _find_field(data, ["output_checkpoint", "out_ckpt", "checkpoint_path"])
-            shards_dir = _find_field(data, ["shards_dir", "data_dir", "combined_dir"])
-            init_mse = _find_field(data, ["10_step_rollout_mse", "mse", "initial_mse"])
+            step = data.get("step", _find_field(data, ["total_steps", "steps"]))
+            recurrent_dim = data.get("recurrent_dim", "N/A")
+            final_metrics = data.get("final_metrics", {})
+            gate_passed = data.get("gate_passed", "N/A")
 
-            print(f"  Training Steps:    {steps}")
-            print(f"  Base Checkpoint:   {base_ckpt}")
-            print(f"  Output Checkpoint: {out_ckpt}")
-            print(f"  Shards Directory:  {shards_dir}")
-            if init_mse != "N/A":
-                print(f"  Recorded MSE:      {init_mse}")
+            print(f"  Training Steps:    {step}")
+            print(f"  Recurrent Dim:     {recurrent_dim}")
+            if final_metrics:
+                rollout_mse = final_metrics.get("10_step_rollout_mse", "N/A")
+                wood_pr = final_metrics.get("wood_pr_auc", "N/A")
+                print(f"  10-Step Val MSE:   {rollout_mse}")
+                print(f"  Wood PR-AUC:       {wood_pr}")
+            print(f"  Gate Passed:       {gate_passed}")
 
             # Buffer composition analysis based on transition NUMBERS
             comp = data.get("buffer_composition", {})
@@ -106,11 +107,10 @@ def audit_tonight_run(drive_dir: str) -> Dict[str, Any]:
 
                 is_curiosity_only = cur_share > 85.0 or teacher_trans <= 2000
             else:
-                # If composition dict not stored, examine file size or record
-                # The curiosity-only buffer tonight had ~160k-168k transitions
+                # If composition dict not stored, tonight's run was the curiosity-heavy combined run
                 is_curiosity_only = True
-                print(f"\n  Buffer Composition: No explicit composition dict embedded.")
-                print(f"  Buffer size from tonight's log: ~167,976 transitions (80 shards).")
+                print(f"\n  Buffer Composition: No explicit composition dict embedded in log.")
+                print(f"  Note: Tonight's earlier run2 retrain was executed on combined_shards (80 shards, ~167,976 transitions).")
 
             report["is_curiosity_only"] = is_curiosity_only
             if is_curiosity_only:
@@ -185,23 +185,30 @@ def audit_curiosity_manifest(drive_dir: str) -> Dict[str, Any]:
     event_counts: Dict[str, int] = {}
 
     if manifest_data:
-        total_transitions = manifest_data.get("total_transitions", 0)
-
         # 1. Sum across all shard entries in manifest (per_achievement_event_counts)
         shard_entries = manifest_data.get("shards", [])
         if isinstance(shard_entries, list) and len(shard_entries) > 0:
+            manifest_trans_sum = 0
             for s_info in shard_entries:
                 if isinstance(s_info, dict):
+                    manifest_trans_sum += s_info.get("transition_count", 0)
                     counts = s_info.get("per_achievement_event_counts", s_info.get("event_counts", {}))
                     for ach, cnt in counts.items():
                         event_counts[ach] = event_counts.get(ach, 0) + int(cnt)
+            if manifest_trans_sum > 0:
+                total_transitions = manifest_trans_sum
+
+        if total_transitions == 0:
+            total_transitions = manifest_data.get("total_transitions", 0)
 
         # 2. Check top-level keys if shard entries had no counts
         if not event_counts:
-            if "event_counts" in manifest_data:
-                event_counts = dict(manifest_data["event_counts"])
+            if "per_achievement_event_counts" in manifest_data:
+                event_counts = dict(manifest_data["per_achievement_event_counts"])
             elif "per_achievement_positive_counts" in manifest_data:
                 event_counts = dict(manifest_data["per_achievement_positive_counts"])
+            elif "event_counts" in manifest_data:
+                event_counts = dict(manifest_data["event_counts"])
 
     # 3. Fallback: recount from shard .npz files directly if manifest was empty
     if not event_counts and shards:
