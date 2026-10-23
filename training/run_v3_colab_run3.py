@@ -535,6 +535,8 @@ def assemble_combined_shards_dir(
 
 def retrain_t1_joint(
     drive_dir: str,
+    buffer: Optional[EpisodeBuffer] = None,
+    composition: Optional[Dict[str, Any]] = None,
     structured_random_final: Optional[str] = None,
     teacher_hybrid_final: Optional[str] = None,
     planner_v2_final: Optional[str] = None,
@@ -560,32 +562,26 @@ def retrain_t1_joint(
         base_checkpoint = str(drive_path / "checkpoints" / "jepa_crafter_v3_phase2.pt")
     local_ckpt = _ensure_local_checkpoint(base_checkpoint, drive_path)
 
-    # 2. Resolve Base Shards on Drive
-    if None in (structured_random_final, teacher_hybrid_final, planner_v2_final):
-        resolved = find_drive_base_shards(drive_dir)
-        structured_random_final = structured_random_final or resolved["structured_random_final"]
-        teacher_hybrid_final = teacher_hybrid_final or resolved["teacher_hybrid_final"]
-        planner_v2_final = planner_v2_final or resolved["planner_v2_final"]
+    # 2. Reuse in-memory buffer if passed, otherwise build once
+    if buffer is None:
+        if None in (structured_random_final, teacher_hybrid_final, planner_v2_final):
+            resolved = find_drive_base_shards(drive_dir)
+            structured_random_final = structured_random_final or resolved["structured_random_final"]
+            teacher_hybrid_final = teacher_hybrid_final or resolved["teacher_hybrid_final"]
+            planner_v2_final = planner_v2_final or resolved["planner_v2_final"]
 
-    if curiosity_dir is None:
-        curiosity_dir = str(drive_path / "data" / "curiosity_shards")
+        if curiosity_dir is None:
+            curiosity_dir = str(drive_path / "data" / "curiosity_shards")
 
-    # 3. Dry-Run Audit of Joint Buffer
-    joint_buffer, composition = build_joint_buffer(
-        structured_random_final=structured_random_final,
-        teacher_hybrid_final=teacher_hybrid_final,
-        planner_v2_final=planner_v2_final,
-        curiosity_dir=curiosity_dir,
-    )
+        buffer, composition = build_joint_buffer(
+            structured_random_final=structured_random_final,
+            teacher_hybrid_final=teacher_hybrid_final,
+            planner_v2_final=planner_v2_final,
+            curiosity_dir=curiosity_dir,
+        )
 
-    # 4. Prepare Clean Combined Directory on Drive
-    combined_dir = assemble_combined_shards_dir(
-        drive_dir=drive_dir,
-        structured_random_final=structured_random_final,
-        teacher_hybrid_final=teacher_hybrid_final,
-        planner_v2_final=planner_v2_final,
-        curiosity_dir=curiosity_dir,
-    )
+    if composition is None:
+        composition = {"total_transitions": buffer.total_transitions}
 
     if output_checkpoint is None:
         output_checkpoint = str(drive_path / "checkpoints" / "jepa_crafter_v3_t1_joint.pt")
@@ -595,15 +591,15 @@ def retrain_t1_joint(
     print("\n" + "=" * 70)
     print("PHASE 3 — T1 JOINT RETRAIN EXECUTION")
     print(f"  Base Checkpoint: {local_ckpt}")
-    print(f"  Total Data:      {composition['total_transitions']:,} transitions across 4 sources")
+    print(f"  Total Data:      {composition.get('total_transitions', buffer.total_transitions):,} transitions across 4 sources")
     print(f"  Training Steps:  {num_steps} | Batch: {batch_size} | Seq: {seq_len} | LR: {lr}")
     print(f"  Output Model:    {output_checkpoint}")
     print("=" * 70)
 
-    # 5. Execute 15k-step joint training
+    # 3. Execute 15k-step joint training reusing in-memory buffer directly (zero duplication)
     results = train_v3_recurrent(
         checkpoint_base=str(local_ckpt),
-        shards_dir=combined_dir,
+        shards_dir="",
         total_steps=num_steps,
         batch_size=batch_size,
         seq_len=seq_len,
@@ -611,6 +607,7 @@ def retrain_t1_joint(
         device_name=device,
         output_checkpoint=output_checkpoint,
         output_json=output_json,
+        buffer=buffer,
     )
 
     # Embed buffer composition directly into result file

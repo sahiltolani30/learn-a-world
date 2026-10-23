@@ -131,6 +131,7 @@ def train_v3_recurrent(
     device_name: str = "cpu",
     output_checkpoint: str = "checkpoints/jepa_crafter_v3_phase2.pt",
     output_json: str = "results/step2_screening.json",
+    buffer: Optional[EpisodeBuffer] = None,
 ) -> Dict[str, Any]:
     """Executes Phase 2 JEPA v3 Joint Recurrent Training."""
     dev = torch.device(device_name)
@@ -141,9 +142,14 @@ def train_v3_recurrent(
     print(f"Steps: {total_steps} | Batch: {batch_size} | SeqLen: {seq_len} | RecurrentDim: {recurrent_dim}")
     print(f"Device: {dev} | LR: {lr} (End-to-End Task Shaping)")
 
-    # 1. Load buffer
-    buffer = load_buffer_from_shards(shards_dir)
-    train_buf, val_buf = buffer.split_train_val(val_ratio=0.15)
+    # 1. Load buffer (or reuse pre-verified in-memory buffer)
+    if buffer is None:
+        buffer = load_buffer_from_shards(shards_dir)
+    print(f"[Buffer] Using buffer with {buffer.total_transitions:,} transitions ({buffer.num_episodes} episodes).")
+    train_buf, val_buf = buffer.split_train_val(val_ratio=0.05)
+    del buffer
+    import gc
+    gc.collect()
     if val_buf.num_episodes == 0:
         val_buf = train_buf
 
