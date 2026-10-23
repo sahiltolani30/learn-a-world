@@ -120,6 +120,13 @@ class EpisodeBuffer:
 
         windows: List[Tuple[int, int]] = []
         event_windows: List[Tuple[int, int]] = []
+        event_weights: List[float] = []
+
+        # Generic per-event-type counts across entire buffer (no hardcoded names)
+        num_event_types = self.episodes[0]["events"].shape[-1] if self.episodes else NUM_ACHIEVEMENTS
+        event_type_counts = np.zeros(num_event_types, dtype=np.float64)
+        for ep in self.episodes:
+            event_type_counts += np.sum(ep["events"] > 0, axis=0)
 
         for ep_idx, ep in enumerate(self.episodes):
             T = len(ep["actions"])
@@ -129,11 +136,23 @@ class EpisodeBuffer:
             for start_t in range(T - seq_len + 1):
                 win = (ep_idx, start_t)
                 windows.append(win)
-                if np.any(events[start_t : start_t + seq_len] > 0):
+                w_events = events[start_t : start_t + seq_len]
+                active_types = np.where(np.any(w_events > 0, axis=0))[0]
+                if len(active_types) > 0:
                     event_windows.append(win)
+                    # Generic inverse-frequency weighting: rarer event types get higher weight
+                    w_weight = float(np.sum(1.0 / np.maximum(event_type_counts[active_types], 1.0)))
+                    event_weights.append(w_weight)
 
         self._cached_windows = windows
         self._cached_event_windows = event_windows
+        if event_weights:
+            total_w = sum(event_weights)
+            self._cached_event_probs = np.array([w / total_w for w in event_weights], dtype=np.float64)
+            # Normalize to guarantee exact sum of 1.0
+            self._cached_event_probs /= np.sum(self._cached_event_probs)
+        else:
+            self._cached_event_probs = None
         self._cached_seq_len = seq_len
 
     def sample_sequences(
@@ -147,7 +166,8 @@ class EpisodeBuffer:
         Samples a batch of contiguous sequence windows.
         mode:
           - 'uniform': all valid windows sampled uniformly.
-          - 'event_balanced': 50% from windows with >= 1 achievement event, 50% uniform.
+          - 'event_balanced': 50% from event windows (weighted inversely by event-type rarity,
+            no hardcoded names), 50% uniform.
         Returns:
           obs: [B, seq_len, 3, 64, 64] float32 in [0, 1]
           actions: [B, seq_len] int64
@@ -161,11 +181,16 @@ class EpisodeBuffer:
             raise ValueError(f"No valid sequence windows found of length {seq_len} in buffer.")
 
         chosen_windows: List[Tuple[int, int]] = []
-        if mode == "event_balanced" and self._cached_event_windows:
+        if mode == "event_balanced" and self._cached_event_windows and self._cached_event_probs is not None:
             n_event = min(batch_size // 2, len(self._cached_event_windows))
             n_uniform = batch_size - n_event
 
-            event_indices = np.random.choice(len(self._cached_event_windows), size=n_event, replace=True)
+            event_indices = np.random.choice(
+                len(self._cached_event_windows),
+                size=n_event,
+                replace=True,
+                p=self._cached_event_probs,
+            )
             for idx in event_indices:
                 chosen_windows.append(self._cached_event_windows[idx])
 
