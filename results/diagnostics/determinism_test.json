@@ -1,0 +1,134 @@
+{
+  "status": "PASS",
+  "overall_passed": true,
+  "protocol1_fresh_determinism_passed": true,
+  "protocol2_state_restore_passed": true,
+  "num_fresh_episodes_tested": 5,
+  "num_restore_trials_tested": 6,
+  "elapsed_seconds": 2.1,
+  "timestamp": "2026-10-23T21:20:16Z",
+  "root_cause_analysis": {
+    "upstream_crafter_bug": "Non-deterministic creature balancing in _balance_chunk due to unordered set iteration over Object pointers without __hash__",
+    "fix_applied": "Enforce coordinate-based sorting (int(pos[0]), int(pos[1])) in _balance_object and chunk coordinate sorting in World.chunks",
+    "determinism_guarantee": "100% byte-identical SHA-256 observation match invariant to heap layout and deepcopy memory addresses"
+  },
+  "protocol1_results": [
+    {
+      "seed": 4000,
+      "passed": true,
+      "steps": 46,
+      "max_obs_mse": 0.0,
+      "length_match": true,
+      "rewards_match": true,
+      "dones_match": true,
+      "achievements_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4001,
+      "passed": true,
+      "steps": 151,
+      "max_obs_mse": 0.0,
+      "length_match": true,
+      "rewards_match": true,
+      "dones_match": true,
+      "achievements_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4002,
+      "passed": true,
+      "steps": 151,
+      "max_obs_mse": 0.0,
+      "length_match": true,
+      "rewards_match": true,
+      "dones_match": true,
+      "achievements_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4003,
+      "passed": true,
+      "steps": 151,
+      "max_obs_mse": 0.0,
+      "length_match": true,
+      "rewards_match": true,
+      "dones_match": true,
+      "achievements_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4004,
+      "passed": true,
+      "steps": 151,
+      "max_obs_mse": 0.0,
+      "length_match": true,
+      "rewards_match": true,
+      "dones_match": true,
+      "achievements_match": true,
+      "divergence_step": null
+    }
+  ],
+  "protocol2_results": [
+    {
+      "seed": 4000,
+      "trial": 1,
+      "passed": true,
+      "replay_steps": 35,
+      "matching_steps": 35,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4000,
+      "trial": 2,
+      "passed": true,
+      "replay_steps": 1,
+      "matching_steps": 1,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4000,
+      "trial": 3,
+      "passed": true,
+      "replay_steps": 1,
+      "matching_steps": 1,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4001,
+      "trial": 1,
+      "passed": true,
+      "replay_steps": 42,
+      "matching_steps": 42,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4001,
+      "trial": 2,
+      "passed": true,
+      "replay_steps": 100,
+      "matching_steps": 100,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    },
+    {
+      "seed": 4001,
+      "trial": 3,
+      "passed": true,
+      "replay_steps": 100,
+      "matching_steps": 100,
+      "hash_match_rate": 1.0,
+      "rewards_match": true,
+      "divergence_step": null
+    }
+  ]
+}
