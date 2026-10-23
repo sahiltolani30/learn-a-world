@@ -159,9 +159,13 @@ def retrain_t1(
 
     os.makedirs(Path(output_json).parent, exist_ok=True)
 
+    repo_shards = drive_path / "data" / "sequences"
+    if not repo_shards.exists():
+        repo_shards = REPO_ROOT / "data" / "sequences"
+
     # Merge ALL data shards into a single combined shards dir for training
     combined_dir = _merge_all_shards(
-        repo_shards_dir=str(REPO_ROOT / "data" / "sequences"),
+        repo_shards_dir=str(repo_shards),
         curiosity_shards_dir=str(drive_path / "data" / "curiosity_shards"),
         combined_dir=str(drive_path / "data" / "combined_shards"),
     )
@@ -247,7 +251,7 @@ def screen_t1(
     _copy_to_drive(output_json, drive_path / "results")
 
     print(f"\nT1 Screening Results (committed BEFORE this print):")
-    print(f"  Crafter Score: {results['crafter_score']:.4%}")
+    print(f"  Crafter Score: {results['crafter_score']:.2f}%")
     print(f"  Mean Reward:   {results['mean_episode_reward']:.3f}")
     print(f"  Unique Ach:    {results['unlocked_achievement_count']} / 22")
 
@@ -267,18 +271,18 @@ def gate_check_t1(t1_results: Dict[str, Any], pre_phase3_json: Optional[str] = N
     if pre_phase3_json is None:
         pre_phase3_json = str(REPO_ROOT / "results" / "screen_v3_50eps_results.json")
 
-    pre_score = 0.0231  # default fallback
+    pre_score = 2.313  # default fallback
     if Path(pre_phase3_json).exists():
         pre_data = json.loads(Path(pre_phase3_json).read_text())
-        pre_score = pre_data.get("crafter_score", 0.0231)
+        pre_score = pre_data.get("crafter_score", 2.313)
 
     t1_score = t1_results["crafter_score"]
     passed = t1_score > pre_score
 
     print("\n" + "=" * 70)
     print("T1 GATE CHECK")
-    print(f"  Pre-Phase-3 v3 baseline (seeds 2050-2099): {pre_score:.4%}")
-    print(f"  T1 checkpoint score    (seeds 2050-2099): {t1_score:.4%}")
+    print(f"  Pre-Phase-3 v3 baseline (seeds 2050-2099): {pre_score:.2f}%")
+    print(f"  T1 checkpoint score    (seeds 2050-2099): {t1_score:.2f}%")
     print(f"  Gate: T1 > pre-Phase-3?  →  {'✅ PASSED' if passed else '❌ FAILED — DO NOT PROCEED TO PHASE 4'}")
     print("=" * 70)
 
