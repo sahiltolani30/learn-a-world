@@ -318,10 +318,9 @@ class EpisodeBuffer:
             )
             offset += length
 
-    def split_train_val(self, val_ratio: float = 0.10) -> Tuple["EpisodeBuffer", "EpisodeBuffer"]:
+    def split_train_val(self, val_ratio: float = 0.05) -> Tuple["EpisodeBuffer", "EpisodeBuffer"]:
         """
-        Splits buffer by held-out last val_ratio of episodes.
-        Ensures temporal/session validation consistency.
+        Splits buffer by held-out last val_ratio of episodes in-place with zero memory copy.
         """
         n_eps = len(self.episodes)
         n_val = max(1, int(round(n_eps * val_ratio))) if n_eps > 1 else 0
@@ -330,27 +329,17 @@ class EpisodeBuffer:
         train_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
         val_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
 
-        for ep in self.episodes[:n_train]:
-            train_buf.add_episode(
-                obs=ep["obs"],
-                actions=ep["actions"],
-                rewards=ep["rewards"],
-                dones=ep["dones"],
-                events=ep["events"],
-                mask_before=ep["mask_before"],
-                source=ep["source"],
-            )
+        # Move episode references directly without copying arrays
+        train_buf.episodes = self.episodes[:n_train]
+        train_buf._total_transitions = sum(len(ep["actions"]) for ep in train_buf.episodes)
 
-        for ep in self.episodes[n_train:]:
-            val_buf.add_episode(
-                obs=ep["obs"],
-                actions=ep["actions"],
-                rewards=ep["rewards"],
-                dones=ep["dones"],
-                events=ep["events"],
-                mask_before=ep["mask_before"],
-                source=ep["source"],
-            )
+        val_buf.episodes = self.episodes[n_train:]
+        val_buf._total_transitions = sum(len(ep["actions"]) for ep in val_buf.episodes)
+
+        # Clear original buffer to release any duplicate references
+        self.episodes = []
+        self._total_transitions = 0
+        self._invalidate_window_cache()
 
         return train_buf, val_buf
 

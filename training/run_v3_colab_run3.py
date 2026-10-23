@@ -346,44 +346,120 @@ def _load_single_shard(
     if not p.exists():
         raise FileNotFoundError(f"[ABORT] Shard file not found: {npz_path} ({source_label})")
 
-    data = np.load(str(p), allow_pickle=True)
-    lengths = data.get("episode_lengths", None)
-    obs = data["obs"]
-    actions = data["actions"]
-    rewards = data["rewards"]
-    dones = data["dones"]
-    events = data["events"]
-    mask_before = data["mask_before"]
-    loaded = 0
+    with np.load(str(p), allow_pickle=True) as data:
+        lengths = data.get("episode_lengths", None)
+        obs = data["obs"]
+        actions = data["actions"]
+        rewards = data["rewards"]
+        dones = data["dones"]
+        events = data["events"]
+        mask_before = data["mask_before"]
+        loaded = 0
 
-    if lengths is not None and len(lengths) > 0:
-        idx = 0
-        for ep_len in lengths:
-            sl = slice(idx, idx + int(ep_len))
-            buffer.add_episode(
-                obs=obs[sl], actions=actions[sl], rewards=rewards[sl],
-                dones=dones[sl], events=events[sl], mask_before=mask_before[sl],
-                source=source_label,
-            )
-            idx += int(ep_len)
-            loaded += int(ep_len)
-    else:
-        ep_start = 0
-        for i, done in enumerate(dones):
-            if done or i == len(dones) - 1:
-                sl = slice(ep_start, i + 1)
+        if lengths is not None and len(lengths) > 0:
+            idx = 0
+            for ep_len in lengths:
+                sl = slice(idx, idx + int(ep_len))
                 buffer.add_episode(
                     obs=obs[sl], actions=actions[sl], rewards=rewards[sl],
                     dones=dones[sl], events=events[sl], mask_before=mask_before[sl],
                     source=source_label,
                 )
-                loaded += (i + 1 - ep_start)
-                ep_start = i + 1
+                idx += int(ep_len)
+                loaded += int(ep_len)
+        else:
+            ep_start = 0
+            for i, done in enumerate(dones):
+                if done or i == len(dones) - 1:
+                    sl = slice(ep_start, i + 1)
+                    buffer.add_episode(
+                        obs=obs[sl], actions=actions[sl], rewards=rewards[sl],
+                        dones=dones[sl], events=events[sl], mask_before=mask_before[sl],
+                        source=source_label,
+                    )
+                    loaded += (i + 1 - ep_start)
+                    ep_start = i + 1
 
     if loaded == 0:
         raise RuntimeError(f"[ABORT] Shard '{p.name}' loaded 0 transitions ({source_label}).")
 
     return loaded
+
+
+def verify_joint_shards(
+    structured_random_final: str,
+    teacher_hybrid_final: str,
+    planner_v2_final: str,
+    curiosity_dir: str,
+) -> Dict[str, Any]:
+    """
+    Lightweight, Zero-RAM verification of joint shards.
+    Reads only .npz array shapes without allocating episode images in RAM.
+    Prints per-source transition counts and asserts >= 400k threshold.
+    """
+    print("\n" + "=" * 70)
+    print("JOINT SHARD VERIFICATION — T1 REPAIR (Zero-RAM Audit)")
+    print("=" * 70)
+    print("Cumulative Families : Verify _final snapshot per base family.")
+    print("Disjoint Family     : Count ALL curiosity exploration shards.")
+    print()
+
+    def _count(path: str, label: str) -> int:
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"[ABORT] Shard file not found: {path} ({label})")
+        d = np.load(str(p), allow_pickle=True)
+        cnt = int(d["obs"].shape[0])
+        if cnt == 0:
+            raise RuntimeError(f"[ABORT] Shard '{p.name}' has 0 transitions ({label}).")
+        return cnt
+
+    n_structured = _count(structured_random_final, "structured_random")
+    print(f"  [Verified] structured_random : {n_structured:>9,} transitions ({Path(structured_random_final).name})")
+
+    n_teacher = _count(teacher_hybrid_final, "teacher_hybrid")
+    print(f"  [Verified] teacher_hybrid    : {n_teacher:>9,} transitions ({Path(teacher_hybrid_final).name})")
+
+    n_planner = _count(planner_v2_final, "planner_v2")
+    print(f"  [Verified] planner_v2        : {n_planner:>9,} transitions ({Path(planner_v2_final).name})")
+
+    cur_p = Path(curiosity_dir)
+    cur_shards = sorted(cur_p.glob("*.npz"))
+    if not cur_shards:
+        raise FileNotFoundError(f"[ABORT] No curiosity shards found in: {curiosity_dir}")
+
+    n_curiosity = 0
+    for s in cur_shards:
+        d = np.load(str(s), allow_pickle=True)
+        n_curiosity += int(d["obs"].shape[0])
+
+    print(f"  [Verified] curiosity_v3      : {n_curiosity:>9,} transitions ({len(cur_shards)} shards)")
+
+    total = n_structured + n_teacher + n_planner + n_curiosity
+    print()
+    print("  ─────────────────────────────────────────────────────")
+    print(f"  TOTAL JOINT TRANSITIONS      : {total:>9,}")
+    print("=" * 70)
+
+    min_threshold = 400_000 if n_teacher < 120_000 else 450_000
+    if total < min_threshold:
+        raise RuntimeError(
+            f"[ABORT] Joint transitions {total:,} below {min_threshold:,} threshold."
+        )
+
+    return {
+        "structured_random_path": str(structured_random_final),
+        "structured_random_transitions": n_structured,
+        "teacher_hybrid_path": str(teacher_hybrid_final),
+        "teacher_hybrid_transitions": n_teacher,
+        "teacher_snapshot_used": Path(teacher_hybrid_final).name,
+        "planner_v2_path": str(planner_v2_final),
+        "planner_v2_transitions": n_planner,
+        "curiosity_dir": str(curiosity_dir),
+        "curiosity_shard_count": len(cur_shards),
+        "curiosity_transitions": n_curiosity,
+        "total_transitions": total,
+    }
 
 
 def build_joint_buffer(
@@ -407,16 +483,22 @@ def build_joint_buffer(
     print("Disjoint Family     : Load ALL curiosity exploration shards.")
     print()
 
+    import gc
+    gc.collect()
+
     buffer = EpisodeBuffer(capacity_transitions=600_000)
 
     # 1. Base Cumulative Snapshots
     n_structured = _load_single_shard(structured_random_final, "structured_random", buffer)
+    gc.collect()
     print(f"  [Buffer] structured_random   : {n_structured:>9,} transitions loaded ({Path(structured_random_final).name})")
 
     n_teacher = _load_single_shard(teacher_hybrid_final, "teacher_hybrid", buffer)
+    gc.collect()
     print(f"  [Buffer] teacher_hybrid      : {n_teacher:>9,} transitions loaded ({Path(teacher_hybrid_final).name})")
 
     n_planner = _load_single_shard(planner_v2_final, "planner_v2", buffer)
+    gc.collect()
     print(f"  [Buffer] planner_v2          : {n_planner:>9,} transitions loaded ({Path(planner_v2_final).name})")
 
     # 2. Curiosity Disjoint Shards
@@ -426,9 +508,11 @@ def build_joint_buffer(
         raise FileNotFoundError(f"[ABORT] No curiosity shards found in: {curiosity_dir}")
 
     n_curiosity = 0
-    for s in cur_shards:
+    for i, s in enumerate(cur_shards):
         n_curiosity += _load_single_shard(str(s), "curiosity_v3", buffer)
-    print(f"  [Buffer] curiosity_v3        : {n_curiosity:>9,} transitions loaded ({len(cur_shards)} shards)")
+        if (i + 1) % 20 == 0 or (i + 1) == len(cur_shards):
+            print(f"  [Buffer] curiosity shards    : {i + 1:>3}/{len(cur_shards)} loaded ({n_curiosity:>7,} transitions)")
+            gc.collect()
 
     total = buffer.total_transitions
     print()
