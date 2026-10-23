@@ -368,8 +368,12 @@ def _copy_to_drive(src: str, dst_dir: Path) -> None:
     """Copy a file to Drive directory, creating it if needed."""
     dst_dir.mkdir(parents=True, exist_ok=True)
     dst = dst_dir / Path(src).name
-    shutil.copy(src, str(dst))
-    print(f"[ColabRun2] Copied to Drive: {dst}")
+    try:
+        if Path(src).resolve() != dst.resolve():
+            shutil.copy(src, str(dst))
+            print(f"[ColabRun2] Copied to Drive: {dst}")
+    except (shutil.SameFileError, ValueError):
+        pass
 
 
 def _merge_all_shards(
