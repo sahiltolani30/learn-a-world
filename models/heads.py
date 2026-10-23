@@ -7,7 +7,7 @@ Implements:
    Loss: Huber (SmoothL1) Loss.
 """
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 import numpy as np
 import torch
 import torch.nn as nn
@@ -89,14 +89,21 @@ class EventHead(nn.Module):
         features = torch.cat([z, a_emb, mask_before], dim=-1)
         return self.net(features)
 
+    def set_calibrator(self, calibrator: Optional[Any] = None) -> None:
+        """Attaches an EventHeadCalibrator instance."""
+        self.calibrator = calibrator
+
     def predict_proba(
         self,
         z: torch.Tensor,
         action: torch.Tensor,
         mask_before: torch.Tensor,
+        use_calibration: bool = True,
     ) -> torch.Tensor:
-        """Returns calibrated probabilities in [0, 1]^22."""
+        """Returns probabilities in [0, 1]^22, calibrated if calibrator is attached and enabled."""
         logits = self.forward(z, action, mask_before)
+        if use_calibration and hasattr(self, "calibrator") and self.calibrator is not None:
+            return self.calibrator.apply(logits)
         return torch.sigmoid(logits)
 
     def compute_loss(

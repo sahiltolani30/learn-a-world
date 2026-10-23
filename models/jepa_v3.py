@@ -368,6 +368,16 @@ class JEPAv3(nn.Module):
         """Samples categorical action indices guided by PolicyPrior."""
         return self.policy_prior.sample(s, mask, temperature=temperature)
 
+    def set_calibrator(self, calibrator: Optional[Any] = None) -> None:
+        """Attaches an EventHeadCalibrator to the event head."""
+        self.event_head.set_calibrator(calibrator)
+
+    def load_calibrator(self, calibrator_path: Union[str, Path]) -> None:
+        """Loads and attaches an EventHeadCalibrator from JSON."""
+        from models.calibration import EventHeadCalibrator
+        cal = EventHeadCalibrator.load(calibrator_path)
+        self.set_calibrator(cal)
+
     def update_target_networks(self, decay_encoder: float = 0.99, decay_q: float = 0.995) -> None:
         """Momentum update of target encoder and target Q ensemble."""
         with torch.no_grad():

@@ -39,6 +39,7 @@ if str(repo_root) not in sys.path:
 
 import envs  # noqa: F401 — registers Crafter env
 from eval.metrics import CRAFTER_ACHIEVEMENTS
+from models.calibration import EventHeadCalibrator
 from models.curiosity import Plan2ExploreCuriosity
 from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
@@ -66,6 +67,7 @@ class CuriosityAugmentedPlanner:
     Wraps RecurrentMPCPlanner, replacing task reward with:
         r_total = lambda_task * r_task + lambda_cur * r_curiosity
     Curiosity bonus computed from Plan2ExploreCuriosity predictor disagreement.
+    Optionally consumes calibrated event probabilities via EventHeadCalibrator.
     """
 
     def __init__(
@@ -78,15 +80,31 @@ class CuriosityAugmentedPlanner:
         num_candidates: int = 64,
         cem_iterations: int = 2,
         num_actions: int = 17,
+        calibrator: Optional[Union[str, EventHeadCalibrator]] = None,
+        use_calibration: bool = True,
         device: str = "cpu",
     ):
         self.lambda_task = lambda_task
         self.lambda_cur = lambda_cur
         self.num_actions = num_actions
+        self.use_calibration = use_calibration
         self.device = torch.device(device)
 
         # Load v3 model
         self.model = _load_jepa_v3(model_checkpoint, device)
+        if use_calibration:
+            if isinstance(calibrator, (str, Path)) and Path(calibrator).exists():
+                self.model.load_calibrator(calibrator)
+                print(f"[Planner] Loaded EventHeadCalibrator from {calibrator}")
+            elif isinstance(calibrator, EventHeadCalibrator):
+                self.model.set_calibrator(calibrator)
+                print("[Planner] Attached EventHeadCalibrator instance")
+            elif calibrator is None:
+                default_cal = repo_root / "results" / "calibration" / "event_head_calibrator.json"
+                if default_cal.exists():
+                    self.model.load_calibrator(default_cal)
+                    print(f"[Planner] Loaded default EventHeadCalibrator from {default_cal}")
+
         self.curiosity = curiosity.to(self.device)
 
         self._base_planner = RecurrentMPCPlanner(
@@ -176,6 +194,8 @@ class CollectorV3:
         max_steps_per_ep: int = 1000,
         shard_every_transitions: int = SHARD_EVERY_TRANSITIONS,
         curiosity_lr: float = 3e-4,
+        calibrator: Optional[Union[str, Any]] = None,
+        use_calibration: bool = True,
         device: str = "cpu",
     ):
         self.model_checkpoint = model_checkpoint
@@ -186,6 +206,7 @@ class CollectorV3:
         self.lambda_cur = lambda_cur
         self.max_steps_per_ep = max_steps_per_ep
         self.shard_every = shard_every_transitions
+        self.use_calibration = use_calibration
         self.device = torch.device(device)
 
         # Config hash for checkpoint integrity
@@ -196,6 +217,7 @@ class CollectorV3:
             "lambda_cur": lambda_cur,
             "horizon": horizon,
             "num_candidates": num_candidates,
+            "use_calibration": use_calibration,
         }
         self.config_hash = hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()[:8]
 
@@ -225,6 +247,8 @@ class CollectorV3:
             horizon=horizon,
             num_candidates=num_candidates,
             cem_iterations=cem_iterations,
+            calibrator=calibrator,
+            use_calibration=use_calibration,
             device=device,
         )
 
