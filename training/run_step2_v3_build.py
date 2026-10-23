@@ -184,6 +184,15 @@ def train_v3_recurrent(
     t0 = time.time()
     model.train()
 
+    best_val_mse = float("inf")
+    cfg = {
+        "batch_size": batch_size,
+        "seq_len": seq_len,
+        "lr": lr,
+        "recurrent_dim": recurrent_dim,
+        "checkpoint_base": checkpoint_base,
+    }
+
     for step in range(1, total_steps + 1):
         batch = train_buf.sample_sequences(batch_size=batch_size, seq_len=seq_len, mode="event_balanced", device=dev)
         obs = batch["obs"]          # [B, T, 3, 64, 64]
@@ -292,18 +301,24 @@ def train_v3_recurrent(
             history["10_step_rollout_mse"].append(val_metrics["10_step_rollout_mse"])
             history["wood_pr_auc"].append(val_metrics["wood_pr_auc"])
 
-        # Periodic checkpoint save every 1,000 steps (Drive resilience)
+        # Periodic checkpoint save every 1,000 steps (Drive resilience: last + best variants)
         if step % 1000 == 0:
             Path(output_checkpoint).parent.mkdir(parents=True, exist_ok=True)
-            model.save_checkpoint(output_checkpoint, step=step)
-
+            model.save_checkpoint(output_checkpoint, step=step, optimizer=optimizer, config=cfg)
+            if "val_metrics" in locals() and val_metrics["10_step_rollout_mse"] < best_val_mse:
+                best_val_mse = val_metrics["10_step_rollout_mse"]
+                best_ckpt = str(Path(output_checkpoint).with_name(f"{Path(output_checkpoint).stem}_best.pt"))
+                model.save_checkpoint(best_ckpt, step=step, optimizer=optimizer, config=cfg)
 
     # Final audit
     final_metrics = evaluate_v3_metrics(model, val_buf, horizon=10, device=dev, num_batches=12)
 
-    # Save checkpoint
+    # Save final checkpoint (last and best)
     Path(output_checkpoint).parent.mkdir(parents=True, exist_ok=True)
-    model.save_checkpoint(output_checkpoint, step=total_steps)
+    model.save_checkpoint(output_checkpoint, step=total_steps, optimizer=optimizer, config=cfg)
+    if final_metrics["10_step_rollout_mse"] < best_val_mse:
+        best_ckpt = str(Path(output_checkpoint).with_name(f"{Path(output_checkpoint).stem}_best.pt"))
+        model.save_checkpoint(best_ckpt, step=total_steps, optimizer=optimizer, config=cfg)
     print(f"\n[Checkpoint] Saved v3 recurrent model to {output_checkpoint}")
 
     # Evaluate promotion gate

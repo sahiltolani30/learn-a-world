@@ -378,8 +378,14 @@ class JEPAv3(nn.Module):
             for t_p, o_p in zip(self.q_target_ensemble.parameters(), self.q_ensemble.parameters()):
                 t_p.data.mul_(decay_q).add_(o_p.data, alpha=1.0 - decay_q)
 
-    def save_checkpoint(self, path: str, step: int = 0) -> None:
-        """Saves complete v3 checkpoint."""
+    def save_checkpoint(
+        self,
+        path: str,
+        step: int = 0,
+        optimizer: Optional[torch.optim.Optimizer] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Saves complete v3 checkpoint with full training state (optimizer, RNG, config)."""
         ckpt = {
             "version": "v3",
             "step": step,
@@ -397,7 +403,12 @@ class JEPAv3(nn.Module):
                 "high": self.return_normalizer.high,
                 "initialized": self.return_normalizer.initialized,
             },
+            "rng_state": torch.get_rng_state(),
         }
+        if optimizer is not None:
+            ckpt["optimizer"] = optimizer.state_dict()
+        if config is not None:
+            ckpt["config"] = config
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         torch.save(ckpt, path)
 
