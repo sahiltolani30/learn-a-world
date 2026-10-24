@@ -354,6 +354,7 @@ def train_step1_value_phase(
         actions = batch["actions"]  # [B, T]
         rewards = batch["rewards"]  # [B, T]
         dones = batch["dones"]      # [B, T]
+        masks = batch["mask_before"]
         tte_targets = batch["tte_targets"]  # [B, T, 22]
         B, T = actions.shape
 
@@ -364,7 +365,10 @@ def train_step1_value_phase(
             s_seq = torch.cat([z_seq, h_seq], dim=-1)
 
             # Target Q-values for n-step=20 Bellman targets
-            target_q_min = model.q_target_ensemble.q_min(s_seq, actions)
+            bootstrap_acts = model.sample_prior_action(s_seq, masks, temperature=1.0)
+            target_q_min = model.q_min(s_seq, bootstrap_acts, use_target=True)
+            if hasattr(model, "return_normalizer") and model.return_normalizer.initialized:
+                target_q_min = model.return_normalizer.denormalize(target_q_min)
             bellman_targets = compute_n_step_bellman_targets(
                 rewards=rewards,
                 dones=dones,
@@ -372,9 +376,15 @@ def train_step1_value_phase(
                 gamma=gamma,
                 n_step=n_step,
             )
+            if hasattr(model, "return_normalizer"):
+                model.return_normalizer.update(bellman_targets)
+                q_fit_targets = model.return_normalizer.normalize(bellman_targets)
+            else:
+                q_fit_targets = bellman_targets
 
         # 1. Critic Loss
-        loss_q = model.q_ensemble.compute_loss(s_seq, actions, bellman_targets)
+        q_logits = model.q_ensemble(s_seq, actions)
+        loss_q = model.q_ensemble.compute_loss(q_logits, q_fit_targets)
 
         # 2. Time-To-Event Loss
         pred_tte = model.time_to_event_head(s_seq)
@@ -465,7 +475,10 @@ def train_step1_joint_phase(
 
         # 3. Value Loss with n-step=20 targets
         with torch.no_grad():
-            target_q_min = model.q_target_ensemble.q_min(s_seq, actions)
+            bootstrap_acts = model.sample_prior_action(s_seq, masks, temperature=1.0)
+            target_q_min = model.q_min(s_seq, bootstrap_acts, use_target=True)
+            if hasattr(model, "return_normalizer") and model.return_normalizer.initialized:
+                target_q_min = model.return_normalizer.denormalize(target_q_min)
             bellman_targets = compute_n_step_bellman_targets(
                 rewards=rewards,
                 dones=dones,
@@ -473,7 +486,14 @@ def train_step1_joint_phase(
                 gamma=gamma,
                 n_step=n_step,
             )
-        loss_q = model.q_ensemble.compute_loss(s_seq, actions, bellman_targets)
+            if hasattr(model, "return_normalizer"):
+                model.return_normalizer.update(bellman_targets)
+                q_fit_targets = model.return_normalizer.normalize(bellman_targets)
+            else:
+                q_fit_targets = bellman_targets
+
+        q_logits = model.q_ensemble(s_seq, actions)
+        loss_q = model.q_ensemble.compute_loss(q_logits, q_fit_targets)
 
         # 4. Latent Dynamics Loss
         with torch.no_grad():
