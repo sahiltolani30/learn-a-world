@@ -448,3 +448,46 @@ class GRUBeliefModule(nn.Module):
         return self.gru(inputs, h_prev)
 
 
+class TimeToEventHead(nn.Module):
+    """
+    Generic Time-To-Event Prediction Head.
+    Predicts future proximity / discounted time-to-event for all 22 achievements,
+    indexed strictly 0..21 (never by name, zero object-specific logic).
+    Target tau_i in [0, 1] is gamma^{Delta t_i} where Delta t_i is the forward steps
+    until achievement index i unlocks in the trajectory (0 if never occurs).
+    Operates on composite recurrent state s_t = [z_t, h_t].
+    """
+
+    def __init__(
+        self,
+        state_dim: int = 384,
+        num_achievements: int = NUM_ACHIEVEMENTS,
+        hidden_dim: int = 256,
+    ):
+        super().__init__()
+        self.state_dim = state_dim
+        self.num_achievements = num_achievements
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, num_achievements),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, s: torch.Tensor) -> torch.Tensor:
+        """
+        s: [..., state_dim]
+        Returns: [..., num_achievements] continuous proximity in [0, 1]
+        """
+        return self.net(s)
+
+    def compute_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Huber loss across all 22 heads by index."""
+        return F.smooth_l1_loss(pred, target)
+
+
+

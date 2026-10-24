@@ -27,6 +27,7 @@ from models.heads import (
     PolicyPrior,
     QEnsemble,
     ReturnNormalizer,
+    TimeToEventHead,
     NUM_ACHIEVEMENTS,
 )
 
@@ -252,6 +253,12 @@ class JEPAv3(nn.Module):
             hidden_dim=hidden_dim,
         )
 
+        self.time_to_event_head = TimeToEventHead(
+            state_dim=self.state_dim,
+            num_achievements=NUM_ACHIEVEMENTS,
+            hidden_dim=hidden_dim,
+        )
+
         self.q_ensemble = QEnsemble(
             latent_dim=self.state_dim,
             num_actions=num_actions,
@@ -409,6 +416,7 @@ class JEPAv3(nn.Module):
             "q_ensemble": self.q_ensemble.state_dict(),
             "q_target_ensemble": self.q_target_ensemble.state_dict(),
             "policy_prior": self.policy_prior.state_dict(),
+            "time_to_event_head": self.time_to_event_head.state_dict(),
             "normalizer": {
                 "low": self.return_normalizer.low,
                 "high": self.return_normalizer.high,
@@ -446,6 +454,8 @@ class JEPAv3(nn.Module):
             self.q_ensemble.load_state_dict(ckpt["q_ensemble"])
             self.q_target_ensemble.load_state_dict(ckpt["q_target_ensemble"])
             self.policy_prior.load_state_dict(ckpt["policy_prior"])
+            if "time_to_event_head" in ckpt:
+                self.time_to_event_head.load_state_dict(ckpt["time_to_event_head"])
             if "normalizer" in ckpt:
                 self.return_normalizer.low = ckpt["normalizer"]["low"]
                 self.return_normalizer.high = ckpt["normalizer"]["high"]
