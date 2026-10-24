@@ -38,9 +38,11 @@ IDX_SKELETON = ACH_TO_IDX.get("defeat_skeleton", 7)
 def analyze_archive_contents(drive_dir: Path, local_dir: Path) -> Dict[str, Any]:
     """
     Question 1: Archive contents — breakdown of saved states.
-    Specifically checks how many are 'pickaxe in hand' states.
+    Reads archive_summary_t2.json or t2_collection_summary.json.
     """
     summary_candidates = [
+        drive_dir / "results" / "archive_summary_t2.json",
+        local_dir / "results" / "archive_summary_t2.json",
         drive_dir / "results" / "t2_collection_summary.json",
         local_dir / "results" / "t2_collection_summary.json",
     ]
@@ -48,19 +50,22 @@ def analyze_archive_contents(drive_dir: Path, local_dir: Path) -> Dict[str, Any]
     for sc in summary_candidates:
         if sc.exists():
             try:
-                summary_data = json.loads(sc.read_text())
+                data = json.loads(sc.read_text())
+                if "archive_summary" in data:
+                    summary_data = data["archive_summary"]
+                else:
+                    summary_data = data
                 break
             except Exception:
                 pass
 
-    if summary_data is None or "archive_summary" not in summary_data:
+    if summary_data is None:
         return {
             "status": "summary_not_found",
-            "message": "t2_collection_summary.json not found yet (collection still running). Will analyze from shards."
+            "message": "archive_summary_t2.json not found yet.",
         }
 
-    arch_summary = summary_data["archive_summary"]
-    archived_achievements = arch_summary.get("archived_achievements", [])
+    archived_achievements = summary_data.get("archived_achievements", [])
 
     tier_counts = {
         "wood_only": 0,
@@ -92,9 +97,12 @@ def analyze_archive_contents(drive_dir: Path, local_dir: Path) -> Dict[str, Any]
             tier_counts["other"] += 1
 
     return {
-        "archive_size": arch_summary.get("size", len(archived_achievements)),
-        "max_size": arch_summary.get("max_size", 50),
-        "total_restarts_triggered": arch_summary.get("total_restarts_triggered", 0),
+        "archive_size": summary_data.get("size", len(archived_achievements)),
+        "max_size": summary_data.get("max_size", 50),
+        "total_restarts": summary_data.get("total_restarts", summary_data.get("total_restarts_triggered", 0)),
+        "total_random_restarts": summary_data.get("total_random_restarts", 0),
+        "total_stagnation_restarts": summary_data.get("total_stagnation_restarts", 0),
+        "mask_histogram": summary_data.get("mask_histogram", {}),
         "pickaxe_in_hand_count": pickaxe_states_count,
         "pickaxe_in_hand_pct": round((pickaxe_states_count / max(1, len(archived_achievements))) * 100, 1),
         "table_states_count": table_states_count,
@@ -105,8 +113,8 @@ def analyze_archive_contents(drive_dir: Path, local_dir: Path) -> Dict[str, Any]
 
 def analyze_bonus_breakdown(drive_dir: Path, local_dir: Path) -> Dict[str, Any]:
     """
-    Question 3: Steering bonus breakdown across all shards in manifest.
-    Task reward vs rarity vs latent curiosity disagreement.
+    Question 3: Steering bonus breakdown across shards in manifest.
+    Computes both post-patch weighted shares and cumulative raw sums.
     """
     manifest_candidates = [
         drive_dir / "results" / "dataset_index.json",
@@ -128,10 +136,34 @@ def analyze_bonus_breakdown(drive_dir: Path, local_dir: Path) -> Dict[str, Any]:
 
     shards = manifest_data.get("shards", [])
     t2_shards = [s for s in shards if s.get("tranche") == 2 or "t02" in s.get("shard_name", "")]
-
     if not t2_shards:
-        t2_shards = shards  # Fallback to all shards
+        t2_shards = shards
 
+    # Post-patch shards (containing weighted_shares or index >= 17)
+    post_patch = []
+    pre_patch = []
+    for s in t2_shards:
+        if "weighted_shares" in s or "weighted_task_sum" in s:
+            post_patch.append(s)
+        else:
+            sname = s.get("shard_name", "")
+            try:
+                sidx = int(sname.split("_")[-1].replace(".npz", ""))
+                if sidx >= 17:
+                    post_patch.append(s)
+                else:
+                    pre_patch.append(s)
+            except Exception:
+                pre_patch.append(s)
+
+    # Weighted shares over post-patch shards only
+    w_task = sum(float(s.get("weighted_task_sum", 0.0)) for s in post_patch)
+    w_cur = sum(float(s.get("weighted_cur_sum", 0.0)) for s in post_patch)
+    w_rare = sum(float(s.get("weighted_rare_sum", 0.0)) for s in post_patch)
+    w_unc = sum(float(s.get("weighted_unc_sum", 0.0)) for s in post_patch)
+    w_denom = max(1e-8, abs(w_task) + abs(w_cur) + abs(w_rare) + abs(w_unc))
+
+    # Raw sums over all T2 shards
     tot_task = sum(s.get("task_reward_sum", 0.0) for s in t2_shards)
     tot_cur = sum(s.get("curiosity_bonus_sum", 0.0) for s in t2_shards)
     tot_rare = sum(s.get("rarity_bonus_sum", 0.0) for s in t2_shards)
@@ -143,20 +175,29 @@ def analyze_bonus_breakdown(drive_dir: Path, local_dir: Path) -> Dict[str, Any]:
 
     return {
         "num_t2_shards_analyzed": len(t2_shards),
+        "num_post_patch_shards": len(post_patch),
+        "post_patch_shard_names": [s.get("shard_name", "") for s in post_patch],
         "total_transitions": tot_trans,
-        "task_reward_sum": round(tot_task, 2),
-        "curiosity_bonus_sum": round(tot_cur, 2),
-        "rarity_bonus_sum": round(tot_rare, 2),
-        "task_reward_share_pct": round((tot_task / total_steering) * 100, 2),
-        "curiosity_share_pct": round((tot_cur / total_steering) * 100, 2),
-        "rarity_share_pct": round((tot_rare / total_steering) * 100, 2),
-        "rarity_to_curiosity_ratio": round(tot_rare / max(0.01, tot_cur), 2),
-        "verdict": (
-            "✅ Rarity is dominating spatial curiosity"
-            if tot_rare > tot_cur
-            else "⚠️ Spatial curiosity is dominating rarity"
-        ),
+        "weighted_post_patch": {
+            "weighted_task_sum": round(w_task, 3),
+            "weighted_cur_sum": round(w_cur, 3),
+            "weighted_rare_sum": round(w_rare, 3),
+            "weighted_unc_sum": round(w_unc, 3),
+            "weighted_task_share_pct": round((abs(w_task) / w_denom) * 100, 2),
+            "weighted_curiosity_share_pct": round((abs(w_cur) / w_denom) * 100, 2),
+            "weighted_rarity_share_pct": round((abs(w_rare) / w_denom) * 100, 2),
+            "weighted_uncertainty_share_pct": round((abs(w_unc) / w_denom) * 100, 2),
+        },
+        "raw_cumulative_all_shards": {
+            "task_reward_sum": round(tot_task, 2),
+            "curiosity_bonus_sum": round(tot_cur, 2),
+            "rarity_bonus_sum": round(tot_rare, 2),
+            "task_reward_share_pct": round((tot_task / total_steering) * 100, 2),
+            "curiosity_share_pct": round((tot_cur / total_steering) * 100, 2),
+            "rarity_share_pct": round((tot_rare / total_steering) * 100, 2),
+        },
     }
+
 
 
 def analyze_episodes_forensics(shards_dir: Path) -> Dict[str, Any]:
@@ -309,11 +350,20 @@ def main():
     # 2. Bonus Breakdown
     bonus_data = analyze_bonus_breakdown(drive_p, local_p)
     print("\n[SECTION 2: STEERING BONUS BREAKDOWN]")
-    print(f"  Task Reward Sum:         {bonus_data.get('task_reward_sum', 0.0):,} ({bonus_data.get('task_reward_share_pct', 0)}%)")
-    print(f"  Curiosity (Latent):      {bonus_data.get('curiosity_bonus_sum', 0.0):,} ({bonus_data.get('curiosity_share_pct', 0)}%)")
-    print(f"  Rarity Bonus Sum:        {bonus_data.get('rarity_bonus_sum', 0.0):,} ({bonus_data.get('rarity_share_pct', 0)}%)")
-    print(f"  Rarity-to-Curiosity:     {bonus_data.get('rarity_to_curiosity_ratio', 0)}x")
-    print(f"  Verdict:                 {bonus_data.get('verdict', 'N/A')}")
+    if "weighted_post_patch" in bonus_data:
+        w_post = bonus_data["weighted_post_patch"]
+        print(f"  --- Post-Patch Weighted Shares ({bonus_data.get('num_post_patch_shards', 0)} shards) ---")
+        print(f"  Weighted Task Reward:    {w_post.get('weighted_task_sum', 0.0):>10.3f} ({w_post.get('weighted_task_share_pct', 0.0):>5.1f}%)")
+        print(f"  Weighted Curiosity:      {w_post.get('weighted_cur_sum', 0.0):>10.3f} ({w_post.get('weighted_curiosity_share_pct', 0.0):>5.1f}%)")
+        print(f"  Weighted Rarity:         {w_post.get('weighted_rare_sum', 0.0):>10.3f} ({w_post.get('weighted_rarity_share_pct', 0.0):>5.1f}%)")
+        print(f"  Weighted Uncertainty:    {w_post.get('weighted_unc_sum', 0.0):>10.3f} ({w_post.get('weighted_uncertainty_share_pct', 0.0):>5.1f}%)")
+        print(f"  POST-PATCH RARE SHARE:   {w_post.get('weighted_rarity_share_pct', 0.0):.2f}%")
+    if "raw_cumulative_all_shards" in bonus_data:
+        raw_b = bonus_data["raw_cumulative_all_shards"]
+        print(f"  --- Cumulative Raw Debug Sums ({bonus_data.get('num_t2_shards_analyzed', 0)} shards) ---")
+        print(f"  Raw Task Reward:         {raw_b.get('task_reward_sum', 0.0):,} ({raw_b.get('task_reward_share_pct', 0)}%)")
+        print(f"  Raw Curiosity:           {raw_b.get('curiosity_bonus_sum', 0.0):,} ({raw_b.get('curiosity_share_pct', 0)}%)")
+        print(f"  Raw Rarity:              {raw_b.get('rarity_bonus_sum', 0.0):,} ({raw_b.get('rarity_share_pct', 0)}%)")
 
     # 3 & 4. Pickaxe and Stone Episode Stories
     forensics = analyze_episodes_forensics(shards_dir)
