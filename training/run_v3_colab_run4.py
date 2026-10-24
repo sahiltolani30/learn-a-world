@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import sys
 import time
@@ -141,8 +142,10 @@ def _extract_global_counts_from_manifests(
                     if shards and isinstance(shards[0], dict):
                         for s in shards:
                             name = s.get("shard_name", "")
-                            if name and name not in seen_shards:
-                                seen_shards.add(name)
+                            seed_range = tuple(s.get("seed_range", []))
+                            key = (name, seed_range) if seed_range else name
+                            if key and key not in seen_shards:
+                                seen_shards.add(key)
                                 all_shard_entries.append(s)
                                 counts = s.get("per_achievement_event_counts", [])
                                 if len(counts) == num_achievements:
@@ -217,6 +220,7 @@ class T2CuriosityCollector:
         num_candidates: int = 64,
         max_steps_per_ep: int = 1000,
         shard_every: int = SHARD_EVERY_TRANSITIONS,
+        prior_t2_shard_count: int = 0,
         device: str = "cpu",
     ):
         self.model = model
@@ -228,6 +232,7 @@ class T2CuriosityCollector:
         self.tranche_id = tranche_id
         self.max_steps_per_ep = max_steps_per_ep
         self.shard_every = shard_every
+        self.prior_t2_shard_count = int(prior_t2_shard_count)
         self.device = torch.device(device)
 
         # Set up output directories
@@ -484,12 +489,20 @@ class T2CuriosityCollector:
                 except Exception:
                     pass
 
-            existing_names = {s["shard_name"] for s in existing_shards}
+            existing_keys = {
+                (s["shard_name"], tuple(s.get("seed_range", [])))
+                if s.get("seed_range") else s["shard_name"]
+                for s in existing_shards
+            }
             combined = list(existing_shards)
             for entry in new_entries:
-                if entry["shard_name"] not in existing_names:
+                key = (
+                    (entry["shard_name"], tuple(entry.get("seed_range", [])))
+                    if entry.get("seed_range") else entry["shard_name"]
+                )
+                if key not in existing_keys:
                     combined.append(entry)
-                    existing_names.add(entry["shard_name"])
+                    existing_keys.add(key)
 
             tot_trans = sum(s.get("transition_count", 0) for s in combined)
             tot_eps = sum(s.get("episode_count", 0) for s in combined)
@@ -525,8 +538,22 @@ class T2CuriosityCollector:
         print(f"Device:             {self.device}")
         print("=" * 70)
 
-        existing_t2_shards = sorted(self.local_shards_dir.glob("shard_curiosity_v3_t02_*.npz"))
-        shard_idx = len(existing_t2_shards)
+        # Determine starting shard index across Drive, local, and prior count
+        existing_indices = set()
+        for sdir in [self.drive_shards_dir, self.local_shards_dir]:
+            if sdir.exists():
+                for f in sdir.glob(f"shard_curiosity_v3_t{self.tranche_id:02d}_*.npz"):
+                    m = re.search(r"_(\d+)\.npz$", f.name)
+                    if m:
+                        existing_indices.add(int(m.group(1)))
+
+        shard_idx = max(existing_indices) + 1 if existing_indices else 0
+        if self.prior_t2_shard_count > shard_idx:
+            shard_idx = self.prior_t2_shard_count
+
+        while (self.drive_shards_dir / f"shard_curiosity_v3_t{self.tranche_id:02d}_{shard_idx:04d}.npz").exists() or \
+              (self.local_shards_dir / f"shard_curiosity_v3_t{self.tranche_id:02d}_{shard_idx:04d}.npz").exists():
+            shard_idx += 1
 
         new_transitions = 0
         total_episodes = 0
@@ -724,6 +751,9 @@ class T2CuriosityCollector:
 
                 # ── Shard Flushing ───────────────────────────────────────────
                 if current_shard_buf.total_transitions >= self.shard_every:
+                    while (self.drive_shards_dir / f"shard_curiosity_v3_t{self.tranche_id:02d}_{shard_idx:04d}.npz").exists() or \
+                          (self.local_shards_dir / f"shard_curiosity_v3_t{self.tranche_id:02d}_{shard_idx:04d}.npz").exists():
+                        shard_idx += 1
                     entry = self._flush_shard(
                         shard_buffer=current_shard_buf,
                         shard_idx=shard_idx,
@@ -896,6 +926,9 @@ def main():
     horizon = 2 if args.smoke_test else 10
     num_candidates = 4 if args.smoke_test else 64
 
+    t2_shards = [s for s in prior_shards if s.get("tranche") == 2 or "t02" in s.get("shard_name", "")]
+    prior_t2_shard_count = len(t2_shards)
+
     collector = T2CuriosityCollector(
         model=model,
         curiosity=curiosity,
@@ -912,6 +945,7 @@ def main():
         horizon=horizon,
         num_candidates=num_candidates,
         shard_every=shard_size,
+        prior_t2_shard_count=prior_t2_shard_count,
         device=args.device,
     )
 
