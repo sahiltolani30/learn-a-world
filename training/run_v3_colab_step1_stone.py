@@ -568,6 +568,32 @@ def evaluate_self_slice_calibration(
     }
 
 
+def ensure_drive_mounted(drive_dir: Union[str, Path]) -> bool:
+    drive_p = Path(drive_dir)
+    if drive_p.exists():
+        return True
+    try:
+        from google.colab import drive  # type: ignore
+        print("[Drive] Google Colab detected. Mounting Google Drive...")
+        drive.mount("/content/drive")
+        return drive_p.exists()
+    except Exception as e:
+        print(f"[Drive] Note: Could not auto-mount Drive ({e}).")
+        return False
+
+
+def resolve_curiosity_dir(drive_dir: Path) -> Path:
+    candidates = [
+        drive_dir / "data" / "curiosity_shards",
+        drive_dir / "curiosity_shards",
+        REPO_ROOT / "data" / "curiosity_shards",
+    ]
+    for c in candidates:
+        if c.exists() and len(list(c.glob("*.npz"))) > 0:
+            return c
+    return candidates[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 3 Step 1: Stone Progression Fine-Tune (REVIEW-ONLY)")
     parser.add_argument("--drive-dir", type=str, default="/content/drive/MyDrive/learn-a-world")
@@ -595,9 +621,10 @@ def main():
     print("\n[EXECUTION AUTHORIZED] --execute-training flag detected.")
     print("Beginning Step 1 Data Loading & Training Pipeline...")
 
-    # 1. Resolve Shard Paths
+    # 1. Mount Drive & Resolve Shard Paths
+    ensure_drive_mounted(drive_p)
     base_shards = find_drive_base_shards(args.drive_dir)
-    curiosity_dir = str(drive_p / "data" / "curiosity_shards") if drive_p.exists() else str(REPO_ROOT / "data" / "curiosity_shards")
+    curiosity_dir = str(resolve_curiosity_dir(drive_p))
 
     # 2. Build 1,000,000-capacity buffer with anti-eviction assert
     buffer, per_source_counts = build_step1_buffer(
@@ -614,7 +641,7 @@ def main():
     # 4. Load Starting Checkpoint (T2 Final)
     base_ckpt = drive_p / "checkpoints" / "jepa_crafter_v3_t2_final.pt"
     local_ckpt = _ensure_local_checkpoint(str(base_ckpt), drive_p)
-    model = JEPAv3.load_checkpoint(str(local_ckpt), device=args.device)
+    model = JEPAv3.from_checkpoint(str(local_ckpt), device=args.device)
     print(f"[Model] Successfully initialized JEPAv3 from {local_ckpt}")
 
     # 5. Execute Phase A: Frozen-encoder value & TTE warmup (5,000 steps)
