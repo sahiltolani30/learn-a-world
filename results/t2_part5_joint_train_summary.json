@@ -1,0 +1,33 @@
+{
+  "phase_a": {
+    "final_loss": 2.8277601909637453,
+    "calibration": {
+      "pearson_r": 0.5305435061454773,
+      "mae": 0.28419527411460876,
+      "q_pred_mean": 0.3384036719799042,
+      "realized_return_mean": 0.24125654995441437,
+      "mean_disagreement": 0.07002658396959305
+    }
+  },
+  "phase_b": {
+    "final_loss": 2.2387682819366455,
+    "calibration": {
+      "pearson_r": 0.5542892813682556,
+      "mae": 0.3109727203845978,
+      "q_pred_mean": 0.3942481577396393,
+      "realized_return_mean": 0.27337750792503357,
+      "mean_disagreement": 0.0798526406288147
+    }
+  },
+  "buffer_composition": {
+    "structured_random_transitions": 150000,
+    "teacher_hybrid_transitions": 150000,
+    "planner_v2_transitions": 30000,
+    "task_transitions": 330000,
+    "curiosity_transitions": 355469,
+    "curiosity_shards_count": 170,
+    "total_transitions": 649967,
+    "total_episodes": 3758
+  },
+  "timestamp": "2026-10-24T20:50:24Z"
+}
