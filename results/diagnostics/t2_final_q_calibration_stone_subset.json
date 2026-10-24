@@ -1,0 +1,18 @@
+{
+  "evaluated_stone_transitions": 6091,
+  "pearson_r_stone_subset": 0.19331908226013184,
+  "pearson_p_value": 2.2938333454474277e-52,
+  "spearman_rho_stone_subset": 0.1293952658536613,
+  "mae_stone_subset": 0.5674309134483337,
+  "rmse_stone_subset": 0.6670519709587097,
+  "q_pred_mean_stone": 0.104950450360775,
+  "q_pred_std_stone": 0.27107417583465576,
+  "realized_return_mean_stone": -0.14816568791866302,
+  "realized_return_std_stone": 0.6093199253082275,
+  "baseline_comparison": {
+    "overall_pearson_r": 0.3665,
+    "overall_mae": 0.8661,
+    "delta_pearson_r": -0.17318090796470642,
+    "delta_mae": -0.29866908655166624
+  }
+}
