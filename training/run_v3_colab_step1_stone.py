@@ -511,6 +511,63 @@ def train_step1_joint_phase(
     }
 
 
+def evaluate_self_slice_calibration(
+    model: JEPAv3,
+    sampler: EventCenteredSampler,
+    num_batches: int = 25,
+    batch_size: int = 16,
+    gamma: float = 0.99,
+    device: str = "cuda",
+) -> Dict[str, float]:
+    """
+    Evaluates Pearson r and MAE between predicted Q-values and realized returns
+    on held-out / sampled windows from the active buffer.
+    """
+    dev = torch.device(device)
+    model.eval()
+    all_q_pred = []
+    all_realized = []
+
+    with torch.no_grad():
+        for _ in range(num_batches):
+            batch = sampler.sample_batch(batch_size=batch_size, event_ratio=0.5, device=dev)
+            obs = batch["obs"]
+            actions = batch["actions"]
+            rewards = batch["rewards"]
+            dones = batch["dones"]
+            B, T = actions.shape
+
+            obs_flat = obs.view(B * T, 3, 64, 64)
+            z = model.encode(obs_flat, use_target=True).view(B, T, -1)
+            h_seq = model.recurrent_core.unroll_sequence(z, actions, reset_masks=dones)
+            s_seq = torch.cat([z, h_seq], dim=-1)
+
+            q_pred = model.q_mean(s_seq, actions)
+            if hasattr(model, "return_normalizer") and model.return_normalizer.initialized:
+                q_pred = model.return_normalizer.denormalize(q_pred)
+
+            realized = torch.zeros_like(rewards)
+            running = torch.zeros(B, device=dev)
+            for t in reversed(range(T)):
+                running = rewards[:, t] + gamma * (1.0 - dones[:, t].float()) * running
+                realized[:, t] = running
+
+            all_q_pred.extend(q_pred.cpu().numpy().flatten().tolist())
+            all_realized.extend(realized.cpu().numpy().flatten().tolist())
+
+    q_arr = np.array(all_q_pred, dtype=np.float32)
+    ret_arr = np.array(all_realized, dtype=np.float32)
+    corr, _ = stats.pearsonr(q_arr, ret_arr)
+    mae = float(np.mean(np.abs(q_arr - ret_arr)))
+
+    return {
+        "pearson_r": float(corr),
+        "mae": mae,
+        "q_pred_mean": float(np.mean(q_arr)),
+        "realized_return_mean": float(np.mean(ret_arr)),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 3 Step 1: Stone Progression Fine-Tune (REVIEW-ONLY)")
     parser.add_argument("--drive-dir", type=str, default="/content/drive/MyDrive/learn-a-world")
@@ -535,7 +592,121 @@ def main():
         print("the code is fully audited and the Part A stone-enriched result is in.")
         return
 
-    # If authorized, training runs here...
+    print("\n[EXECUTION AUTHORIZED] --execute-training flag detected.")
+    print("Beginning Step 1 Data Loading & Training Pipeline...")
+
+    # 1. Resolve Shard Paths
+    base_shards = find_drive_base_shards(args.drive_dir)
+    curiosity_dir = str(drive_p / "data" / "curiosity_shards") if drive_p.exists() else str(REPO_ROOT / "data" / "curiosity_shards")
+
+    # 2. Build 1,000,000-capacity buffer with anti-eviction assert
+    buffer, per_source_counts = build_step1_buffer(
+        structured_random_final=base_shards["structured_random_final"],
+        teacher_hybrid_final=base_shards["teacher_hybrid_final"],
+        planner_v2_final=base_shards["planner_v2_final"],
+        curiosity_dir=curiosity_dir,
+        capacity_transitions=1_000_000,
+    )
+
+    # 3. Build Event-Centered Sampler
+    sampler = EventCenteredSampler(buffer=buffer, seq_len=32)
+
+    # 4. Load Starting Checkpoint (T2 Final)
+    base_ckpt = drive_p / "checkpoints" / "jepa_crafter_v3_t2_final.pt"
+    local_ckpt = _ensure_local_checkpoint(str(base_ckpt), drive_p)
+    model = JEPAv3.load_checkpoint(str(local_ckpt), device=args.device)
+    print(f"[Model] Successfully initialized JEPAv3 from {local_ckpt}")
+
+    # 5. Execute Phase A: Frozen-encoder value & TTE warmup (5,000 steps)
+    phase_a_results = train_step1_value_phase(
+        model=model,
+        sampler=sampler,
+        total_steps=5000,
+        batch_size=16,
+        seq_len=32,
+        lr=1e-4,
+        n_step=20,
+        gamma=0.99,
+        device=args.device,
+    )
+
+    # 6. Gate Check: Self-Slice Q-Calibration
+    calib_phase_a = evaluate_self_slice_calibration(model, sampler, device=args.device)
+    r_val = calib_phase_a["pearson_r"]
+    print("\n" + "=" * 80)
+    print("STEP 1 PHASE A GATE AUDIT:")
+    print(f"  Self-Slice Pearson r : {r_val:.4f} (Target: > 0.30)")
+    print(f"  Self-Slice MAE       : {calib_phase_a['mae']:.4f}")
+    print(f"  Phase A Gate Status  : {'✅ PASSED' if r_val > 0.30 else '⚠️ WARNING: r below 0.30 threshold'}")
+    print("=" * 80)
+
+    # Save Phase A checkpoint
+    ckpt_phase_a_local = REPO_ROOT / "checkpoints" / "jepa_crafter_v3_step1_phase_a.pt"
+    ckpt_phase_a_local.parent.mkdir(parents=True, exist_ok=True)
+    model.save_checkpoint(str(ckpt_phase_a_local))
+    if drive_p.exists():
+        drive_ckpt_a = drive_p / "checkpoints" / "jepa_crafter_v3_step1_phase_a.pt"
+        drive_ckpt_a.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(ckpt_phase_a_local), str(drive_ckpt_a))
+        print(f"[Drive] Mirrored Phase A checkpoint to: {drive_ckpt_a}")
+
+    # 7. Execute Phase B: Full Joint Fine-Tuning (10,000 steps)
+    phase_b_results = train_step1_joint_phase(
+        model=model,
+        sampler=sampler,
+        total_steps=10000,
+        batch_size=16,
+        seq_len=32,
+        lr=1e-4,
+        n_step=20,
+        gamma=0.99,
+        device=args.device,
+    )
+
+    # 8. Post-Phase B Gate Audit
+    calib_phase_b = evaluate_self_slice_calibration(model, sampler, device=args.device)
+    print("\n" + "=" * 80)
+    print("STEP 1 FINAL GATE AUDIT:")
+    print(f"  Final Pearson r : {calib_phase_b['pearson_r']:.4f}")
+    print(f"  Final MAE       : {calib_phase_b['mae']:.4f}")
+    print("=" * 80)
+
+    # Save Final Step 1 Checkpoint
+    ckpt_step1_local = REPO_ROOT / "checkpoints" / "jepa_crafter_v3_step1_stone.pt"
+    model.save_checkpoint(str(ckpt_step1_local))
+    print(f"[Model] Saved Step 1 final checkpoint to: {ckpt_step1_local}")
+    if drive_p.exists():
+        drive_ckpt_final = drive_p / "checkpoints" / "jepa_crafter_v3_step1_stone.pt"
+        shutil.copy2(str(ckpt_step1_local), str(drive_ckpt_final))
+        print(f"[Drive] Mirrored Step 1 final checkpoint to: {drive_ckpt_final}")
+
+    # Save Results JSON
+    results_payload = {
+        "starting_checkpoint": str(local_ckpt),
+        "buffer_composition": per_source_counts,
+        "phase_a": {
+            "steps": 5000,
+            "final_loss": phase_a_results["final_loss"],
+            "effective_stone_rate": phase_a_results["effective_stone_rate"],
+            "calibration": calib_phase_a,
+        },
+        "phase_b": {
+            "steps": 10000,
+            "final_loss": phase_b_results["final_loss"],
+            "effective_stone_rate": phase_b_results["effective_stone_rate"],
+            "calibration": calib_phase_b,
+        },
+    }
+    results_path = REPO_ROOT / "results" / "step1_stone_finetune_results.json"
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(results_path, "w") as f:
+        json.dump(results_payload, f, indent=2)
+    print(f"[Results] Saved Step 1 results to: {results_path}")
+    if drive_p.exists():
+        drive_res = drive_p / "results" / "step1_stone_finetune_results.json"
+        drive_res.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(results_path), str(drive_res))
+        print(f"[Drive] Mirrored results to: {drive_res}")
 
 
 if __name__ == "__main__":
