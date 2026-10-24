@@ -757,6 +757,21 @@ def main():
     print("STEP 0 DIAGNOSTICS BATTERY COMPLETE")
     print("=" * 80)
 
+    print("\n" + "=" * 80)
+    print("=== RAW JSON DUMPS FOR STEP 0 (COPY & PASTE TO CHAT) ===")
+    print("=" * 80)
+    print("\n--- BEGIN t2_final_head_audit.json ---")
+    print(json.dumps(eyes_res, indent=2))
+    print("--- END t2_final_head_audit.json ---\n")
+
+    print("\n--- BEGIN t2_planner_stone_probe.json ---")
+    print(json.dumps(planner_res, indent=2))
+    print("--- END t2_planner_stone_probe.json ---\n")
+
+    print("\n--- BEGIN t2_final_q_calibration_stone_subset.json ---")
+    print(json.dumps(judge_res, indent=2))
+    print("--- END t2_final_q_calibration_stone_subset.json ---\n")
+
 
 if __name__ == "__main__":
     main()
