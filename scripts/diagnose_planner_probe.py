@@ -77,6 +77,8 @@ def run_planner_probe(
     max_states_to_probe: int = 120,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     drive_dir: str = "/content/drive/MyDrive/learn-a-world",
+    denormalize_q: bool = False,
+    tte_weight: float = 0.0,
 ) -> Dict[str, Any]:
     drive_p = Path(drive_dir)
     ensure_drive_mounted(drive_p)
@@ -84,9 +86,10 @@ def run_planner_probe(
 
     print("=" * 80)
     print("STEP 1: PLANNER STONE PROBE RE-RUN (120 PICKAXE STATES)")
-    print(f"  Checkpoint : {ckpt_file}")
-    print(f"  Device     : {device}")
-    print(f"  Max States : {max_states_to_probe}")
+    print(f"  Checkpoint    : {ckpt_file}")
+    print(f"  Device        : {device}")
+    print(f"  Max States    : {max_states_to_probe}")
+    print(f"  Denormalize Q : {denormalize_q} | TTE Weight: {tte_weight}")
     print("=" * 80)
 
     model = JEPAv3.from_checkpoint(str(ckpt_file), device=device)
@@ -98,6 +101,8 @@ def run_planner_probe(
         horizon=10,
         num_candidates=64,
         cem_iterations=2,
+        denormalize_q=denormalize_q,
+        tte_weight=tte_weight,
         device=device,
     )
     dev = torch.device(device)
@@ -330,6 +335,8 @@ def main() -> None:
     parser.add_argument("--max_states", type=int, default=120)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--drive_dir", type=str, default="/content/drive/MyDrive/learn-a-world")
+    parser.add_argument("--denormalize_q", action="store_true", help="Denormalize terminal Q to raw return scale.")
+    parser.add_argument("--tte_weight", type=float, default=0.0, help="Weight for learned time-to-event proximity gain.")
     args = parser.parse_args()
 
     run_planner_probe(
@@ -338,6 +345,8 @@ def main() -> None:
         max_states_to_probe=args.max_states,
         device=args.device,
         drive_dir=args.drive_dir,
+        denormalize_q=args.denormalize_q,
+        tte_weight=args.tte_weight,
     )
 
 

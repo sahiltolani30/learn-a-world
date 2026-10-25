@@ -70,6 +70,8 @@ def run_screening(
     device: str = "cpu",
     output_json: str = "results/screen_v3_50eps_results.json",
     drive_dir: Optional[str] = None,
+    denormalize_q: bool = False,
+    tte_weight: float = 0.0,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -78,6 +80,7 @@ def run_screening(
     print(f"      Checkpoint: {checkpoint_path}")
     print(f"      Episodes: {num_episodes} | Seeds: {seed_start}..{seed_start + num_episodes - 1}")
     print(f"      Planner: Recurrent MPC (H={horizon}, C={num_candidates}, CEM={cem_iterations})")
+    print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight}")
     print(f"      Device: {dev}")
     print("=" * 80)
 
@@ -108,6 +111,8 @@ def run_screening(
         novelty_weight=novelty_weight,
         prior_mix=prior_mix,
         num_actions=17,
+        denormalize_q=denormalize_q,
+        tte_weight=tte_weight,
         device=dev,
     )
     belief = AgentBeliefV3(recurrent_dim=256)
@@ -255,6 +260,8 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output_json", type=str, default="results/screen_v3_step1_results.json")
     parser.add_argument("--drive_dir", type=str, default=None)
+    parser.add_argument("--denormalize_q", action="store_true", help="Denormalize terminal Q to raw return scale.")
+    parser.add_argument("--tte_weight", type=float, default=0.0, help="Weight for learned time-to-event proximity gain.")
     args = parser.parse_args()
 
     resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
@@ -270,4 +277,6 @@ if __name__ == "__main__":
         device=args.device,
         output_json=args.output_json,
         drive_dir=args.drive_dir,
+        denormalize_q=args.denormalize_q,
+        tte_weight=args.tte_weight,
     )

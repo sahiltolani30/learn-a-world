@@ -38,6 +38,8 @@ class RecurrentMPCPlanner:
         prior_mix: float = 0.5,
         num_actions: int = 17,
         use_calibration: bool = True,
+        denormalize_q: bool = False,
+        tte_weight: float = 0.0,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -51,6 +53,8 @@ class RecurrentMPCPlanner:
         self.prior_mix = prior_mix
         self.num_actions = num_actions
         self.use_calibration = use_calibration
+        self.denormalize_q = denormalize_q
+        self.tte_weight = tte_weight
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
     def plan(
@@ -147,11 +151,25 @@ class RecurrentMPCPlanner:
                 q_term = self.model.q_min(s_t, a_terminal, use_target=True)
                 q_std_term = self.model.q_std(s_t, a_terminal, use_target=True)
 
+                if self.denormalize_q and hasattr(self.model, "return_normalizer") and self.model.return_normalizer.initialized:
+                    q_term = self.model.return_normalizer.denormalize(q_term)
+                    norm = self.model.return_normalizer
+                    scale = max(norm.high - norm.low, 1.0)
+                    q_std_term = q_std_term / (norm.target_max * 0.8) * scale
+
                 terminal_value = (self.gamma ** self.horizon) * q_term
                 uncertainty_penalty = self.uncertainty_weight * q_std_term
                 novelty = torch.norm(z_t - z_0, dim=-1)
 
-                scores = cumulative_reward + terminal_value - uncertainty_penalty + self.novelty_weight * novelty
+                tte_gain = torch.zeros_like(terminal_value)
+                if self.tte_weight > 0.0 and hasattr(self.model, "time_to_event_head"):
+                    tau_0 = self.model.time_to_event_head(s_0)  # [1, 22]
+                    tau_H = self.model.time_to_event_head(s_t)  # [C, 22]
+                    unachieved_mask = (1.0 - m_0).expand(C, -1)
+                    prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
+                    tte_gain = self.tte_weight * prog
+
+                scores = cumulative_reward + terminal_value - uncertainty_penalty + self.novelty_weight * novelty + tte_gain
 
                 # 6. Elite selection and CEM refitting
                 num_elites = max(1, int(round(C * self.elite_ratio)))
@@ -169,6 +187,7 @@ class RecurrentMPCPlanner:
                     "reward_sum": float(cumulative_reward[best_idx].item()),
                     "terminal_value": float(terminal_value[best_idx].item()),
                     "uncertainty_penalty": float(uncertainty_penalty[best_idx].item()),
+                    "tte_gain": float(tte_gain[best_idx].item()),
                     "best_score": float(scores[best_idx].item()),
                     "mean_q_std": float(q_std_term.mean().item()),
                 }
