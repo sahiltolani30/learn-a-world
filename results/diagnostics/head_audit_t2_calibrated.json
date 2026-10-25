@@ -1,0 +1,259 @@
+{
+  "total_transitions": 60359,
+  "macro_pr_auc_active_heads": 0.6401331281632373,
+  "health_head_mae": 0.05104554429334676,
+  "worst_5_active_heads": [
+    {
+      "name": "defeat_zombie",
+      "pr_auc": 0.059031038439690806,
+      "roc_auc": 0.9944094306674481,
+      "pos_count": 22,
+      "recall_at_0.5": 0.0,
+      "base_rate": 0.00036448582647161153
+    },
+    {
+      "name": "eat_cow",
+      "pr_auc": 0.08550311357121676,
+      "roc_auc": 0.9984042817610896,
+      "pos_count": 10,
+      "recall_at_0.5": 0.0,
+      "base_rate": 0.00016567537566891433
+    },
+    {
+      "name": "collect_sapling",
+      "pr_auc": 0.09146557631965208,
+      "roc_auc": 0.9050336169940582,
+      "pos_count": 1098,
+      "recall_at_0.5": 0.0,
+      "base_rate": 0.018191156248446794
+    },
+    {
+      "name": "collect_stone",
+      "pr_auc": 0.6220238095238095,
+      "roc_auc": 0.9999254312559034,
+      "pos_count": 12,
+      "recall_at_0.5": 0.25,
+      "base_rate": 0.0001988104508026972
+    },
+    {
+      "name": "collect_wood",
+      "pr_auc": 0.6241815777657941,
+      "roc_auc": 0.9950305477224538,
+      "pos_count": 568,
+      "recall_at_0.5": 0.323943661971831,
+      "base_rate": 0.009410361337994335
+    }
+  ],
+  "zero_data_frontier_heads": [
+    "collect_diamond",
+    "collect_iron",
+    "defeat_skeleton",
+    "eat_plant",
+    "make_iron_pickaxe",
+    "make_iron_sword",
+    "make_stone_pickaxe",
+    "make_stone_sword",
+    "place_furnace",
+    "place_stone"
+  ],
+  "per_achievement": {
+    "collect_coal": {
+      "pr_auc": 1.0,
+      "roc_auc": 1.0,
+      "positive_samples": 3,
+      "base_rate": 4.97026127006743e-05,
+      "mean_pred_prob": 0.00046402408042922616,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "collect_diamond": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.00022137179621495306,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "collect_drink": {
+      "pr_auc": 0.7778738135885359,
+      "roc_auc": 0.9971857792940836,
+      "positive_samples": 683,
+      "base_rate": 0.011315628158186848,
+      "mean_pred_prob": 0.013656764291226864,
+      "recall_at_0.5": 0.7320644216691069,
+      "precision_at_0.5": 0.6613756613756614
+    },
+    "collect_iron": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.0002380821533733979,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "collect_sapling": {
+      "pr_auc": 0.09146557631965208,
+      "roc_auc": 0.9050336169940582,
+      "positive_samples": 1098,
+      "base_rate": 0.018191156248446794,
+      "mean_pred_prob": 0.019109811633825302,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "collect_stone": {
+      "pr_auc": 0.6220238095238095,
+      "roc_auc": 0.9999254312559034,
+      "positive_samples": 12,
+      "base_rate": 0.0001988104508026972,
+      "mean_pred_prob": 0.0009800138650462031,
+      "recall_at_0.5": 0.25,
+      "precision_at_0.5": 0.5
+    },
+    "collect_wood": {
+      "pr_auc": 0.6241815777657941,
+      "roc_auc": 0.9950305477224538,
+      "positive_samples": 568,
+      "base_rate": 0.009410361337994335,
+      "mean_pred_prob": 0.008753728121519089,
+      "recall_at_0.5": 0.323943661971831,
+      "precision_at_0.5": 0.6237288135593221
+    },
+    "defeat_skeleton": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.0001333420950686559,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "defeat_zombie": {
+      "pr_auc": 0.059031038439690806,
+      "roc_auc": 0.9944094306674481,
+      "positive_samples": 22,
+      "base_rate": 0.00036448582647161153,
+      "mean_pred_prob": 0.0007919317577034235,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "eat_cow": {
+      "pr_auc": 0.08550311357121676,
+      "roc_auc": 0.9984042817610896,
+      "positive_samples": 10,
+      "base_rate": 0.00016567537566891433,
+      "mean_pred_prob": 0.00034746649907901883,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "eat_plant": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 9.99260664684698e-05,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_iron_pickaxe": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.00020726385992020369,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_iron_sword": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.00021473821834661067,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_stone_pickaxe": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.00021291241864673793,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_stone_sword": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.0002416724746581167,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_wood_pickaxe": {
+      "pr_auc": 1.0,
+      "roc_auc": 1.0,
+      "positive_samples": 3,
+      "base_rate": 4.97026127006743e-05,
+      "mean_pred_prob": 0.0007595476345159113,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "make_wood_sword": {
+      "pr_auc": 0.75,
+      "roc_auc": 0.9999751470466407,
+      "positive_samples": 4,
+      "base_rate": 6.627015026756573e-05,
+      "mean_pred_prob": 0.0004390023823361844,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "place_furnace": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.00022607030405197293,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "place_plant": {
+      "pr_auc": 0.9337711354691978,
+      "roc_auc": 0.9997391261589649,
+      "positive_samples": 266,
+      "base_rate": 0.004406964992793121,
+      "mean_pred_prob": 0.0039669605903327465,
+      "recall_at_0.5": 0.8157894736842105,
+      "precision_at_0.5": 0.8714859437751004
+    },
+    "place_stone": {
+      "pr_auc": 0.0,
+      "roc_auc": 0.5,
+      "positive_samples": 0,
+      "base_rate": 0.0,
+      "mean_pred_prob": 0.0001071070073521696,
+      "recall_at_0.5": 0.0,
+      "precision_at_0.5": 0.0
+    },
+    "place_table": {
+      "pr_auc": 0.7396653256661145,
+      "roc_auc": 0.9997908778523985,
+      "positive_samples": 54,
+      "base_rate": 0.0008946470286121373,
+      "mean_pred_prob": 0.0014399334322661161,
+      "recall_at_0.5": 0.8888888888888888,
+      "precision_at_0.5": 0.676056338028169
+    },
+    "wake_up": {
+      "pr_auc": 0.9980821476148359,
+      "roc_auc": 0.99999228488345,
+      "positive_samples": 222,
+      "base_rate": 0.0036779933398498983,
+      "mean_pred_prob": 0.0034439361188560724,
+      "recall_at_0.5": 0.9369369369369369,
+      "precision_at_0.5": 1.0
+    }
+  }
+}
