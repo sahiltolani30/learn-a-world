@@ -1,0 +1,464 @@
+{
+  "checkpoint": "checkpoints/jepa_crafter_v3_t2_final.pt",
+  "calibrator_path": "results/calibration/event_head_calibrator.json",
+  "num_states": 120,
+  "default_screening_config": {
+    "horizon": 10,
+    "num_candidates": 64,
+    "cem_iterations": 2,
+    "elite_ratio": 0.15,
+    "gamma": 0.99,
+    "uncertainty_weight": 0.5,
+    "novelty_weight": 0.02,
+    "prior_mix": 0.5,
+    "prior_temperature": 1.0,
+    "action_persistence": 0.0,
+    "denormalize_q": false,
+    "tte_weight": 0.0,
+    "num_actions": 17
+  },
+  "aggregate": {
+    "total_states_analyzed": 120,
+    "total_candidates_analyzed": 7680,
+    "score_components": {
+      "cumulative_reward": {
+        "mean": -0.30383813090976824,
+        "std": 1.0588938704995148,
+        "min": -7.401951789855957,
+        "p25": -0.17585241794586182,
+        "median": -0.028713872656226158,
+        "p75": 0.02307845465838909,
+        "max": 1.7527399063110352
+      },
+      "terminal_value": {
+        "mean": 0.9348759952791927,
+        "std": 1.2769975941985516,
+        "min": 0.015972306951880455,
+        "p25": 0.40888796001672745,
+        "median": 0.4157651960849762,
+        "p75": 0.8984939157962799,
+        "max": 10.829076766967773
+      },
+      "uncertainty_penalty": {
+        "mean": 0.03910754633395849,
+        "std": 0.07911057562858341,
+        "min": 1.1603900929912925e-05,
+        "p25": 0.0012115465942770243,
+        "median": 0.005370195489376783,
+        "p75": 0.041209982708096504,
+        "max": 1.120943546295166
+      },
+      "novelty": {
+        "mean": 0.1748135972865081,
+        "std": 0.06953294331749275,
+        "min": 0.06812816113233566,
+        "p25": 0.11967715620994568,
+        "median": 0.1619126871228218,
+        "p75": 0.2181098349392414,
+        "max": 0.4102785289287567
+      },
+      "tte_gain": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "p25": 0.0,
+        "median": 0.0,
+        "p75": 0.0,
+        "max": 0.0
+      },
+      "total_score": {
+        "mean": 0.766743925101279,
+        "std": 1.7066066933358188,
+        "min": -6.9853034019470215,
+        "p25": 0.3966488242149353,
+        "median": 0.6078744530677795,
+        "p75": 0.9568266868591309,
+        "max": 11.691216468811035
+      }
+    },
+    "terminal_value_share": {
+      "mean_ratio": 1.2243773240527824,
+      "net_share": 1.2192806029153804,
+      "absolute_component_share": 0.5962930383147808,
+      "description": "Terminal value contribution to overall planner candidate evaluation"
+    },
+    "mask_flip_rates": {
+      "collect_coal": {
+        "achievement_index": 0,
+        "trials": 7552,
+        "calibrated_flips": 20,
+        "calibrated_flip_rate_pct": 0.265,
+        "raw_flips": 10,
+        "raw_flip_rate_pct": 0.132
+      },
+      "collect_diamond": {
+        "achievement_index": 1,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "collect_drink": {
+        "achievement_index": 2,
+        "trials": 4608,
+        "calibrated_flips": 49,
+        "calibrated_flip_rate_pct": 1.063,
+        "raw_flips": 36,
+        "raw_flip_rate_pct": 0.781
+      },
+      "collect_iron": {
+        "achievement_index": 3,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "collect_sapling": {
+        "achievement_index": 4,
+        "trials": 128,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "collect_stone": {
+        "achievement_index": 5,
+        "trials": 7680,
+        "calibrated_flips": 135,
+        "calibrated_flip_rate_pct": 1.758,
+        "raw_flips": 141,
+        "raw_flip_rate_pct": 1.836
+      },
+      "collect_wood": {
+        "achievement_index": 6,
+        "trials": 0,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "defeat_skeleton": {
+        "achievement_index": 7,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "defeat_zombie": {
+        "achievement_index": 8,
+        "trials": 7104,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 1,
+        "raw_flip_rate_pct": 0.014
+      },
+      "eat_cow": {
+        "achievement_index": 9,
+        "trials": 7232,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "eat_plant": {
+        "achievement_index": 10,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_iron_pickaxe": {
+        "achievement_index": 11,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_iron_sword": {
+        "achievement_index": 12,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_stone_pickaxe": {
+        "achievement_index": 13,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_stone_sword": {
+        "achievement_index": 14,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_wood_pickaxe": {
+        "achievement_index": 15,
+        "trials": 0,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "make_wood_sword": {
+        "achievement_index": 16,
+        "trials": 7232,
+        "calibrated_flips": 5,
+        "calibrated_flip_rate_pct": 0.069,
+        "raw_flips": 5,
+        "raw_flip_rate_pct": 0.069
+      },
+      "place_furnace": {
+        "achievement_index": 17,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "place_plant": {
+        "achievement_index": 18,
+        "trials": 192,
+        "calibrated_flips": 44,
+        "calibrated_flip_rate_pct": 22.917,
+        "raw_flips": 44,
+        "raw_flip_rate_pct": 22.917
+      },
+      "place_stone": {
+        "achievement_index": 19,
+        "trials": 7680,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "place_table": {
+        "achievement_index": 20,
+        "trials": 0,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      },
+      "wake_up": {
+        "achievement_index": 21,
+        "trials": 5568,
+        "calibrated_flips": 0,
+        "calibrated_flip_rate_pct": 0.0,
+        "raw_flips": 0,
+        "raw_flip_rate_pct": 0.0
+      }
+    },
+    "event_probabilities_raw_vs_calibrated": {
+      "collect_coal": {
+        "achievement_index": 0,
+        "raw_mean_max_prob": 0.004195266128584546,
+        "raw_max_prob": 0.7921242713928223,
+        "calibrated_mean_max_prob": 0.005238120369563342,
+        "calibrated_max_prob": 0.8853427171707153,
+        "delta_mean_prob": 0.0010428542409787961,
+        "delta_max_prob": 0.09321844577789307
+      },
+      "collect_diamond": {
+        "achievement_index": 1,
+        "raw_mean_max_prob": 0.0005700931970432211,
+        "raw_max_prob": 0.07372226566076279,
+        "calibrated_mean_max_prob": 0.0004572913239974813,
+        "calibrated_max_prob": 0.06636614352464676,
+        "delta_mean_prob": -0.00011280187304573975,
+        "delta_max_prob": -0.007356122136116028
+      },
+      "collect_drink": {
+        "achievement_index": 2,
+        "raw_mean_max_prob": 0.037319159385289485,
+        "raw_max_prob": 0.8268147706985474,
+        "calibrated_mean_max_prob": 0.027359825731646113,
+        "calibrated_max_prob": 0.9565448760986328,
+        "delta_mean_prob": -0.009959333653643373,
+        "delta_max_prob": 0.12973010540008545
+      },
+      "collect_iron": {
+        "achievement_index": 3,
+        "raw_mean_max_prob": 0.0005838799288435363,
+        "raw_max_prob": 0.06372443586587906,
+        "calibrated_mean_max_prob": 0.00048387180236763243,
+        "calibrated_max_prob": 0.059451427310705185,
+        "delta_mean_prob": -0.00010000812647590387,
+        "delta_max_prob": -0.004273008555173874
+      },
+      "collect_sapling": {
+        "achievement_index": 4,
+        "raw_mean_max_prob": 0.09436825969830398,
+        "raw_max_prob": 0.8262854218482971,
+        "calibrated_mean_max_prob": 0.027051879532467623,
+        "calibrated_max_prob": 0.7952591180801392,
+        "delta_mean_prob": -0.06731638016583635,
+        "delta_max_prob": -0.03102630376815796
+      },
+      "collect_stone": {
+        "achievement_index": 5,
+        "raw_mean_max_prob": 0.020652683838085193,
+        "raw_max_prob": 0.9455613493919373,
+        "calibrated_mean_max_prob": 0.020583494426392224,
+        "calibrated_max_prob": 0.9876707792282104,
+        "delta_mean_prob": -6.918941169296866e-05,
+        "delta_max_prob": 0.04210942983627319
+      },
+      "collect_wood": {
+        "achievement_index": 6,
+        "raw_mean_max_prob": 0.014170289099321743,
+        "raw_max_prob": 0.6913133859634399,
+        "calibrated_mean_max_prob": 0.005629850191723262,
+        "calibrated_max_prob": 0.796230673789978,
+        "delta_mean_prob": -0.00854043890759848,
+        "delta_max_prob": 0.10491728782653809
+      },
+      "defeat_skeleton": {
+        "achievement_index": 7,
+        "raw_mean_max_prob": 0.00043563530379086743,
+        "raw_max_prob": 0.0965384840965271,
+        "calibrated_mean_max_prob": 0.000392479101997961,
+        "calibrated_max_prob": 0.12969782948493958,
+        "delta_mean_prob": -4.315620179290642e-05,
+        "delta_max_prob": 0.033159345388412476
+      },
+      "defeat_zombie": {
+        "achievement_index": 8,
+        "raw_mean_max_prob": 0.02427065869103389,
+        "raw_max_prob": 0.5215749144554138,
+        "calibrated_mean_max_prob": 0.004977351446409592,
+        "calibrated_max_prob": 0.3142409324645996,
+        "delta_mean_prob": -0.0192933072446243,
+        "delta_max_prob": -0.2073339819908142
+      },
+      "eat_cow": {
+        "achievement_index": 9,
+        "raw_mean_max_prob": 0.010667361349360964,
+        "raw_max_prob": 0.3632892668247223,
+        "calibrated_mean_max_prob": 0.0011113655174244917,
+        "calibrated_max_prob": 0.1331203281879425,
+        "delta_mean_prob": -0.009555995831936472,
+        "delta_max_prob": -0.23016893863677979
+      },
+      "eat_plant": {
+        "achievement_index": 10,
+        "raw_mean_max_prob": 0.0002709120451197177,
+        "raw_max_prob": 0.029557611793279648,
+        "calibrated_mean_max_prob": 0.00022780362487401972,
+        "calibrated_max_prob": 0.03717166930437088,
+        "delta_mean_prob": -4.3108420245697976e-05,
+        "delta_max_prob": 0.007614057511091232
+      },
+      "make_iron_pickaxe": {
+        "achievement_index": 11,
+        "raw_mean_max_prob": 0.0005390386124670879,
+        "raw_max_prob": 0.056901127099990845,
+        "calibrated_mean_max_prob": 0.00045469872172131164,
+        "calibrated_max_prob": 0.07291336357593536,
+        "delta_mean_prob": -8.43398907457763e-05,
+        "delta_max_prob": 0.01601223647594452
+      },
+      "make_iron_sword": {
+        "achievement_index": 12,
+        "raw_mean_max_prob": 0.0006534591328231206,
+        "raw_max_prob": 0.07238347828388214,
+        "calibrated_mean_max_prob": 0.0005360646649230687,
+        "calibrated_max_prob": 0.07228580117225647,
+        "delta_mean_prob": -0.00011739446790005187,
+        "delta_max_prob": -9.767711162567139e-05
+      },
+      "make_stone_pickaxe": {
+        "achievement_index": 13,
+        "raw_mean_max_prob": 0.0005060899745742811,
+        "raw_max_prob": 0.055343929678201675,
+        "calibrated_mean_max_prob": 0.0004210154155787798,
+        "calibrated_max_prob": 0.06362000852823257,
+        "delta_mean_prob": -8.507455899550134e-05,
+        "delta_max_prob": 0.008276078850030899
+      },
+      "make_stone_sword": {
+        "achievement_index": 14,
+        "raw_mean_max_prob": 0.0005166583483456898,
+        "raw_max_prob": 0.060818109661340714,
+        "calibrated_mean_max_prob": 0.00041998002635914254,
+        "calibrated_max_prob": 0.06062103062868118,
+        "delta_mean_prob": -9.667832198654723e-05,
+        "delta_max_prob": -0.00019707903265953064
+      },
+      "make_wood_pickaxe": {
+        "achievement_index": 15,
+        "raw_mean_max_prob": 0.0032446288388677425,
+        "raw_max_prob": 0.7664159536361694,
+        "calibrated_mean_max_prob": 0.0037864271675116926,
+        "calibrated_max_prob": 0.5541556477546692,
+        "delta_mean_prob": 0.0005417983286439502,
+        "delta_max_prob": -0.21226030588150024
+      },
+      "make_wood_sword": {
+        "achievement_index": 16,
+        "raw_mean_max_prob": 0.002396178344983728,
+        "raw_max_prob": 0.7550061345100403,
+        "calibrated_mean_max_prob": 0.002949094102513707,
+        "calibrated_max_prob": 0.6703981757164001,
+        "delta_mean_prob": 0.000552915757529979,
+        "delta_max_prob": -0.08460795879364014
+      },
+      "place_furnace": {
+        "achievement_index": 17,
+        "raw_mean_max_prob": 0.0013413171174438965,
+        "raw_max_prob": 0.09359781444072723,
+        "calibrated_mean_max_prob": 0.0012780593836154662,
+        "calibrated_max_prob": 0.20061926543712616,
+        "delta_mean_prob": -6.325773382843025e-05,
+        "delta_max_prob": 0.10702145099639893
+      },
+      "place_plant": {
+        "achievement_index": 18,
+        "raw_mean_max_prob": 0.0312913015769429,
+        "raw_max_prob": 0.8810371160507202,
+        "calibrated_mean_max_prob": 0.02561657335476074,
+        "calibrated_max_prob": 0.9808825850486755,
+        "delta_mean_prob": -0.0056747282221821585,
+        "delta_max_prob": 0.09984546899795532
+      },
+      "place_stone": {
+        "achievement_index": 19,
+        "raw_mean_max_prob": 0.0010012734833932263,
+        "raw_max_prob": 0.2968626320362091,
+        "calibrated_mean_max_prob": 0.0010006816249569148,
+        "calibrated_max_prob": 0.14807845652103424,
+        "delta_mean_prob": -5.918584363114911e-07,
+        "delta_max_prob": -0.14878417551517487
+      },
+      "place_table": {
+        "achievement_index": 20,
+        "raw_mean_max_prob": 0.012410116077162242,
+        "raw_max_prob": 0.8561518788337708,
+        "calibrated_mean_max_prob": 0.010372638960992631,
+        "calibrated_max_prob": 0.9331076741218567,
+        "delta_mean_prob": -0.0020374771161696115,
+        "delta_max_prob": 0.07695579528808594
+      },
+      "wake_up": {
+        "achievement_index": 21,
+        "raw_mean_max_prob": 0.0057356241436393954,
+        "raw_max_prob": 0.27152952551841736,
+        "calibrated_mean_max_prob": 5.3308433466860596e-05,
+        "calibrated_max_prob": 0.06860078871250153,
+        "delta_mean_prob": -0.005682315710172535,
+        "delta_max_prob": -0.20292873680591583
+      }
+    }
+  }
+}
