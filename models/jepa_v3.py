@@ -329,19 +329,22 @@ class JEPAv3(nn.Module):
         s: torch.Tensor,
         action: torch.Tensor,
         mask_before: torch.Tensor,
+        m_soft: Optional[torch.Tensor] = None,
         return_decomposition: bool = False,
         use_calibration: bool = True,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]]:
         """
-        Predicts expected reward from composite state s = [z, h]:
-        r_hat = sum_i(p_i * (1 - m_i)) + h_hat
+        Predicts expected reward from composite state s = [z, h] using dual masks:
+        r_hat = sum_i(clamp(p_i - m_soft_i, min=0)) + h_hat
+        where p is computed using the binary mask m_bin (mask_before) fed to EventHead.
         """
         p = self.event_head.predict_proba(s, action, mask_before, use_calibration=use_calibration)
         h = self.health_head(s, action)
 
-        unlocked_mask = mask_before.float()
-        locked_weight = 1.0 - unlocked_mask
-        achievement_reward = (p * locked_weight).sum(dim=-1)
+        if m_soft is None:
+            m_soft = mask_before.float()
+
+        achievement_reward = torch.clamp(p - m_soft.float(), min=0.0).sum(dim=-1)
         total_reward = achievement_reward + h
 
         if return_decomposition:
@@ -385,6 +388,48 @@ class JEPAv3(nn.Module):
         from models.calibration import EventHeadCalibrator
         cal = EventHeadCalibrator.load(calibrator_path)
         self.set_calibrator(cal)
+
+    def load_default_calibrator(self, calibrator_rel_path: str = "results/calibration/event_head_calibrator.json") -> bool:
+        """
+        Loads the event-head calibrator from results/calibration/event_head_calibrator.json
+        (resolved relative to the repo root or Drive, exactly as the autopsy script does)
+        and attaches it with set_calibrator.
+        If the file is missing, prints a loud warning, does not crash, and does not continue silently.
+        Logs whether it loaded.
+        """
+        repo_root = Path(__file__).resolve().parent.parent
+        drive_dir = Path("/content/drive/MyDrive/learn-a-world")
+        candidates = [
+            Path(calibrator_rel_path),
+            repo_root / calibrator_rel_path,
+            drive_dir / calibrator_rel_path,
+        ]
+
+        resolved: Optional[Path] = None
+        for c in candidates:
+            if c.exists():
+                resolved = c.resolve()
+                break
+
+        if resolved is not None:
+            try:
+                from models.calibration import EventHeadCalibrator
+                cal = EventHeadCalibrator.load(str(resolved))
+                self.set_calibrator(cal)
+                print(f"[JEPAv3] Event-head calibrator successfully loaded from {resolved} and attached.")
+                return True
+            except Exception as e:
+                print("!" * 80)
+                print(f"[LOUD WARNING] Failed to parse EventHeadCalibrator from {resolved}: {e}")
+                print("[LOUD WARNING] The event-head calibrator was NOT loaded! Continuing uncalibrated.")
+                print("!" * 80, flush=True)
+                return False
+        else:
+            print("!" * 80)
+            print(f"[LOUD WARNING] Event-head calibrator was NOT loaded! File not found at {calibrator_rel_path} "
+                  f"(checked repo root: {repo_root}, drive: {drive_dir}). Continuing uncalibrated.")
+            print("!" * 80, flush=True)
+            return False
 
     def update_target_networks(self, decay_encoder: float = 0.99, decay_q: float = 0.995) -> None:
         """Momentum update of target encoder and target Q ensemble."""
@@ -433,13 +478,13 @@ class JEPAv3(nn.Module):
 
     @classmethod
     def from_checkpoint(cls, path: str, device: Optional[Union[str, torch.device]] = None) -> "JEPAv3":
-        """Instantiates and loads a JEPAv3 model directly from checkpoint."""
+        """Instantiates and loads a JEPAv3 model directly from checkpoint, attaching the calibrator."""
         model = cls()
         model.load_checkpoint(path, device=device)
         return model
 
     def load_checkpoint(self, path: str, device: Optional[Union[str, torch.device]] = None) -> None:
-        """Loads v3 checkpoint or transfers weights from v2 base."""
+        """Loads v3 checkpoint or transfers weights from v2 base, and attaches the calibrator."""
         dev = torch.device(device) if device is not None else torch.device("cpu")
         self.to(dev)
         ckpt = torch.load(path, map_location=dev)
@@ -476,3 +521,7 @@ class JEPAv3(nn.Module):
                 print(f"[JEPAv3] Transferred {len(encoder_dict)} encoder weights from legacy checkpoint {path}")
             else:
                 print(f"[JEPAv3] Initializing from base weights.")
+
+        # Resolve and load event-head calibrator (Fix 1)
+        self.load_default_calibrator()
+

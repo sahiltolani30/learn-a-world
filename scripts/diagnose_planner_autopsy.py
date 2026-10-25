@@ -241,7 +241,8 @@ def run_state_autopsy(
         s_0 = torch.cat([z_0, h_0], dim=-1)  # [1, 384]
 
         mask_np = ep["masks_before"][t] if ep["masks_before"] is not None else np.zeros(22, dtype=np.float32)
-        m_0 = torch.from_numpy(mask_np).float().to(device).unsqueeze(0)  # [1, 22]
+        m_0_bin = torch.from_numpy(mask_np).float().to(device).unsqueeze(0)  # [1, 22]
+        m_0_soft = m_0_bin.clone()
 
         C = num_candidates
         N_prior = int(round(C * prior_mix))
@@ -251,7 +252,7 @@ def run_state_autopsy(
             # 1. Root-state event probabilities across all 17 discrete actions
             all_actions_t = torch.arange(num_actions, device=device)
             s_0_exp = s_0.repeat(num_actions, 1)
-            m_0_exp = m_0.repeat(num_actions, 1)
+            m_0_exp = m_0_bin.repeat(num_actions, 1)
             root_event_probs = model.event_head.predict_proba(s_0_exp, all_actions_t, m_0_exp, use_calibration=use_calib)
             root_probs_np = root_event_probs.cpu().numpy()  # [17, 22]
             root_probs_mean_action = np.mean(root_probs_np, axis=0).tolist()
@@ -270,13 +271,13 @@ def run_state_autopsy(
                 z_roll = z_0.expand(N_prior, -1)
                 h_roll = h_0.expand(N_prior, -1)
                 s_roll = s_0.expand(N_prior, -1)
-                m_roll = m_0.expand(N_prior, -1).clone()
+                m_bin_roll = m_0_bin.expand(N_prior, -1).clone()
 
                 for h_step in range(horizon):
-                    a_h = model.sample_prior_action(s_roll, m_roll, temperature=prior_temperature)
+                    a_h = model.sample_prior_action(s_roll, m_bin_roll, temperature=prior_temperature)
                     prior_actions[:, h_step] = a_h
-                    p_h = model.event_head.predict_proba(s_roll, a_h, m_roll, use_calibration=use_calib)
-                    m_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=device), m_roll)
+                    p_h = model.event_head.predict_proba(s_roll, a_h, m_bin_roll, use_calibration=use_calib)
+                    m_bin_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=device), m_bin_roll)
                     z_roll, h_roll, s_roll = model.predict_next_step(z_roll, h_roll, a_h)
 
                 # 3. Sample N_cem candidates from CEM categorical distribution
@@ -298,31 +299,40 @@ def run_state_autopsy(
                 z_t = z_0.expand(C, -1)
                 h_t = h_0.expand(C, -1)
                 s_t = s_0.expand(C, -1)
-                m_t = m_0.expand(C, -1).clone()
+                m_bin_t = m_0_bin.expand(C, -1).clone()
+                m_soft_t = m_0_soft.expand(C, -1).clone()
+                m_soft_init = m_soft_t.clone()
                 cumulative_reward = torch.zeros(C, device=device)
 
-                mask_flips = torch.zeros((C, 22), dtype=torch.bool, device=device)
                 max_event_probs = torch.zeros((C, 22), dtype=torch.float, device=device)
 
                 for step_idx in range(horizon):
                     a_t = actions_seq[:, step_idx]
                     r_hat, decomp = model.predict_reward(
-                        s_t, a_t, m_t, return_decomposition=True, use_calibration=use_calib
+                        s_t,
+                        a_t,
+                        m_bin_t,
+                        m_soft=m_soft_t,
+                        return_decomposition=True,
+                        use_calibration=use_calib,
                     )
                     p_t = decomp["event_probs"]  # [C, 22]
-
-                    # Mask flip: was 0 in m_0 and event prob > 0.5 during rollout
-                    flipped_step = (p_t > 0.5) & (m_t < 0.5)
-                    mask_flips = mask_flips | flipped_step
 
                     max_event_probs = torch.maximum(max_event_probs, p_t)
                     cumulative_reward = cumulative_reward + (gamma ** step_idx) * r_hat
 
-                    m_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=device), m_t)
+                    # Simulated belief progression:
+                    # Soft mask updated by running maximum of predicted probability (for reward)
+                    m_soft_t = torch.maximum(m_soft_t, p_t)
+                    # Binary mask updated with 0.5 threshold (for model input)
+                    m_bin_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=device), m_bin_t)
                     z_t, h_t, s_t = model.predict_next_step(z_t, h_t, a_t)
 
+                m_soft_final = m_soft_t
+                m_soft_increase = torch.clamp(m_soft_final - m_soft_init, min=0.0)
+
                 # Terminal evaluation
-                a_terminal = model.sample_prior_action(s_t, m_t, temperature=prior_temperature)
+                a_terminal = model.sample_prior_action(s_t, m_bin_t, temperature=prior_temperature)
                 q_term = model.q_min(s_t, a_terminal, use_target=True)
                 q_std_term = model.q_std(s_t, a_terminal, use_target=True)
 
@@ -340,7 +350,7 @@ def run_state_autopsy(
                 if tte_weight > 0.0 and hasattr(model, "time_to_event_head"):
                     tau_0 = model.time_to_event_head(s_0)
                     tau_H = model.time_to_event_head(s_t)
-                    unachieved_mask = (1.0 - m_0).expand(C, -1)
+                    unachieved_mask = (1.0 - m_0_soft).expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
                     tte_gain_val = tte_weight * prog
 
@@ -366,7 +376,8 @@ def run_state_autopsy(
                     nov_np = novelty_val.cpu().numpy()
                     tte_np = tte_gain_val.cpu().numpy()
                     tot_np = scores.cpu().numpy()
-                    flips_np = mask_flips.cpu().numpy()
+                    final_soft_np = m_soft_final.cpu().numpy()
+                    inc_np = m_soft_increase.cpu().numpy()
                     max_p_np = max_event_probs.cpu().numpy()
 
                     for c_idx in range(C):
@@ -381,7 +392,8 @@ def run_state_autopsy(
                             "tte_gain": float(tte_np[c_idx]),
                             "total_score": float(tot_np[c_idx]),
                             "highest_event_probs": [float(v) for v in max_p_np[c_idx]],
-                            "mask_flips": [bool(v) for v in flips_np[c_idx]],
+                            "final_soft_mask": [float(v) for v in final_soft_np[c_idx]],
+                            "soft_mask_increase": [float(v) for v in inc_np[c_idx]],
                         })
 
             best_idx = int(torch.argmax(final_scores).item())
@@ -416,17 +428,17 @@ def compute_autopsy_aggregates(
     terminal_shares = []
     abs_terminal_shares = []
 
-    # Flips per achievement (index 0..21)
-    ach_trials = np.zeros(22, dtype=np.int64)
-    ach_flips_calib = np.zeros(22, dtype=np.int64)
-    ach_flips_raw = np.zeros(22, dtype=np.int64)
+    # Soft mask progress per achievement (index 0..21)
+    calib_final_masks = [[] for _ in range(22)]
+    calib_mask_increases = [[] for _ in range(22)]
+    raw_final_masks = [[] for _ in range(22)]
+    raw_mask_increases = [[] for _ in range(22)]
 
     # Rollout max event probs per achievement
     calib_max_probs = [[] for _ in range(22)]
     raw_max_probs = [[] for _ in range(22)]
 
     for st in state_results:
-        m_0 = st["initial_mask"]
         cal_cands = st["calibrated"]["candidates"]
         raw_cands = st["raw"]["candidates"]
 
@@ -453,16 +465,14 @@ def compute_autopsy_aggregates(
                 abs_terminal_shares.append(abs(c["terminal_value"]) / abs_sum)
 
             for ach_idx in range(22):
-                if m_0[ach_idx] == 0:
-                    ach_trials[ach_idx] += 1
-                    if c["mask_flips"][ach_idx]:
-                        ach_flips_calib[ach_idx] += 1
+                calib_final_masks[ach_idx].append(c["final_soft_mask"][ach_idx])
+                calib_mask_increases[ach_idx].append(c["soft_mask_increase"][ach_idx])
                 calib_max_probs[ach_idx].append(c["highest_event_probs"][ach_idx])
 
         for c_idx, c in enumerate(raw_cands):
             for ach_idx in range(22):
-                if m_0[ach_idx] == 0 and c["mask_flips"][ach_idx]:
-                    ach_flips_raw[ach_idx] += 1
+                raw_final_masks[ach_idx].append(c["final_soft_mask"][ach_idx])
+                raw_mask_increases[ach_idx].append(c["soft_mask_increase"][ach_idx])
                 raw_max_probs[ach_idx].append(c["highest_event_probs"][ach_idx])
 
     def stats_dict(arr: List[float]) -> Dict[str, float]:
@@ -477,19 +487,19 @@ def compute_autopsy_aggregates(
             "max": float(np.max(a)),
         }
 
-    # Mask flip rates
-    mask_flip_summary = {}
+    # Soft mask progress summary (replaces flip-rate metric)
+    soft_mask_progress_summary = {}
     for ach_idx, ach_name in enumerate(CRAFTER_ACHIEVEMENTS):
-        trials = int(ach_trials[ach_idx])
-        f_cal = int(ach_flips_calib[ach_idx])
-        f_raw = int(ach_flips_raw[ach_idx])
-        mask_flip_summary[ach_name] = {
+        c_fm = np.array(calib_final_masks[ach_idx])
+        c_inc = np.array(calib_mask_increases[ach_idx])
+        r_fm = np.array(raw_final_masks[ach_idx])
+        r_inc = np.array(raw_mask_increases[ach_idx])
+        soft_mask_progress_summary[ach_name] = {
             "achievement_index": ach_idx,
-            "trials": trials,
-            "calibrated_flips": f_cal,
-            "calibrated_flip_rate_pct": round((f_cal / max(trials, 1)) * 100.0, 3),
-            "raw_flips": f_raw,
-            "raw_flip_rate_pct": round((f_raw / max(trials, 1)) * 100.0, 3),
+            "calibrated_mean_final_soft_mask": float(np.mean(c_fm)),
+            "calibrated_mean_mask_increase": float(np.mean(c_inc)),
+            "raw_mean_final_soft_mask": float(np.mean(r_fm)),
+            "raw_mean_mask_increase": float(np.mean(r_inc)),
         }
 
     # Event probabilities Raw vs Calibrated
@@ -528,7 +538,7 @@ def compute_autopsy_aggregates(
             "absolute_component_share": float(np.mean(abs_terminal_shares)),
             "description": "Terminal value contribution to overall planner candidate evaluation",
         },
-        "mask_flip_rates": mask_flip_summary,
+        "soft_mask_progress": soft_mask_progress_summary,
         "event_probabilities_raw_vs_calibrated": event_prob_comparison,
     }
 
@@ -684,14 +694,22 @@ def run_planner_autopsy(
     print(f"  Net Contribution Share   : {tv_share['net_share'] * 100:6.2f}%")
     print(f"  Mean Ratio (Term / Tot)  : {tv_share['mean_ratio'] * 100:6.2f}%")
 
-    print("\nTop 8 Achievements by Mask Flip Rate (Imagined Rollouts):")
-    sorted_flips = sorted(
-        aggregates["mask_flip_rates"].items(),
-        key=lambda kv: kv[1]["calibrated_flip_rate_pct"],
+    print("\nTop 8 Achievements by Calibrated Mean Final Soft Mask (Imagined Rollouts):")
+    sorted_progress = sorted(
+        aggregates["soft_mask_progress"].items(),
+        key=lambda kv: kv[1]["calibrated_mean_final_soft_mask"],
         reverse=True,
     )
-    for name, data in sorted_flips[:8]:
-        print(f"  {name:<22}: Calibrated {data['calibrated_flip_rate_pct']:5.2f}% | Raw {data['raw_flip_rate_pct']:5.2f}% (Trials: {data['trials']})")
+    for name, data in sorted_progress[:8]:
+        print(f"  {name:<22}: Calibrated Final {data['calibrated_mean_final_soft_mask']:.4f} (Inc: {data['calibrated_mean_mask_increase']:.4f}) | Raw Final {data['raw_mean_final_soft_mask']:.4f} (Inc: {data['raw_mean_mask_increase']:.4f})")
+
+    print("\nKey Achievements Soft-Mask Progress:")
+    for k in ["collect_wood", "place_table", "make_wood_pickaxe", "collect_stone", "make_wood_sword", "collect_drink"]:
+        p_data = aggregates["soft_mask_progress"].get(k, {})
+        print(
+            f"  {k:<20} | Calibrated Final: {p_data.get('calibrated_mean_final_soft_mask', 0.0):.4f}, Inc: {p_data.get('calibrated_mean_mask_increase', 0.0):.4f} | "
+            f"Raw Final: {p_data.get('raw_mean_final_soft_mask', 0.0):.4f}, Inc: {p_data.get('raw_mean_mask_increase', 0.0):.4f}"
+        )
 
     print("\nEvent Probabilities: Raw vs Calibrated (Selected Key Achievements):")
     key_achs = ["collect_wood", "place_table", "make_wood_pickaxe", "collect_stone", "make_wood_sword", "collect_drink"]

@@ -94,7 +94,12 @@ class RecurrentMPCPlanner:
         with torch.no_grad():
             z_0 = self.model.encode(obs_t, use_target=False)  # [1, 128]
             h_0 = belief.get_h_tensor(device=self.device).unsqueeze(0)  # [1, 256]
-            m_0 = belief.get_mask_tensor(device=self.device).unsqueeze(0)  # [1, 22]
+            m_bin_0 = belief.get_mask_tensor(device=self.device).unsqueeze(0)  # [1, 22]
+            m_soft_0 = (
+                belief.get_soft_mask_tensor(device=self.device).unsqueeze(0)
+                if hasattr(belief, "get_soft_mask_tensor")
+                else m_bin_0.clone()
+            )  # [1, 22]
             s_0 = torch.cat([z_0, h_0], dim=-1)  # [1, 384]
 
             C = self.num_candidates
@@ -113,13 +118,13 @@ class RecurrentMPCPlanner:
                 z_roll = z_0.expand(N_prior, -1)
                 h_roll = h_0.expand(N_prior, -1)
                 s_roll = s_0.expand(N_prior, -1)
-                m_roll = m_0.expand(N_prior, -1).clone()
+                m_bin_roll = m_bin_0.expand(N_prior, -1).clone()
 
                 for h_step in range(self.horizon):
-                    a_h = self.model.sample_prior_action(s_roll, m_roll, temperature=self.prior_temperature)
+                    a_h = self.model.sample_prior_action(s_roll, m_bin_roll, temperature=self.prior_temperature)
                     prior_actions[:, h_step] = a_h
-                    p_h = self.model.event_head.predict_proba(s_roll, a_h, m_roll, use_calibration=self.use_calibration)
-                    m_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=self.device), m_roll)
+                    p_h = self.model.event_head.predict_proba(s_roll, a_h, m_bin_roll, use_calibration=self.use_calibration)
+                    m_bin_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=self.device), m_bin_roll)
                     z_roll, h_roll, s_roll = self.model.predict_next_step(z_roll, h_roll, a_h)
 
                 # 3. Sample N_cem candidates from CEM categorical distribution (with temporal persistence)
@@ -141,24 +146,33 @@ class RecurrentMPCPlanner:
                 z_t = z_0.expand(C, -1)
                 h_t = h_0.expand(C, -1)
                 s_t = s_0.expand(C, -1)
-                m_t = m_0.expand(C, -1).clone()
+                m_bin_t = m_bin_0.expand(C, -1).clone()
+                m_soft_t = m_soft_0.expand(C, -1).clone()
                 cumulative_reward = torch.zeros(C, device=self.device)
 
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
                     r_hat, decomp = self.model.predict_reward(
-                        s_t, a_t, m_t, return_decomposition=True, use_calibration=self.use_calibration
+                        s_t,
+                        a_t,
+                        m_bin_t,
+                        m_soft=m_soft_t,
+                        return_decomposition=True,
+                        use_calibration=self.use_calibration,
                     )
                     p_t = decomp["event_probs"]
 
                     cumulative_reward = cumulative_reward + (self.gamma ** t) * r_hat
 
-                    # Simulated belief progression
-                    m_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=self.device), m_t)
+                    # Simulated belief progression:
+                    # Soft mask updated by running maximum of predicted probability (used for reward)
+                    m_soft_t = torch.maximum(m_soft_t, p_t)
+                    # Binary mask updated with 0.5 threshold (for model input)
+                    m_bin_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=self.device), m_bin_t)
                     z_t, h_t, s_t = self.model.predict_next_step(z_t, h_t, a_t)
 
                 # 5. Terminal Clipped Double-Q evaluation at horizon H
-                a_terminal = self.model.sample_prior_action(s_t, m_t, temperature=self.prior_temperature)
+                a_terminal = self.model.sample_prior_action(s_t, m_bin_t, temperature=self.prior_temperature)
                 q_term = self.model.q_min(s_t, a_terminal, use_target=True)
                 q_std_term = self.model.q_std(s_t, a_terminal, use_target=True)
 
@@ -176,7 +190,7 @@ class RecurrentMPCPlanner:
                 if self.tte_weight > 0.0 and hasattr(self.model, "time_to_event_head"):
                     tau_0 = self.model.time_to_event_head(s_0)  # [1, 22]
                     tau_H = self.model.time_to_event_head(s_t)  # [C, 22]
-                    unachieved_mask = (1.0 - m_0).expand(C, -1)
+                    unachieved_mask = (1.0 - m_soft_0).expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
                     tte_gain = self.tte_weight * prog
 

@@ -23,13 +23,24 @@ class AgentBeliefV3:
 
     def __init__(self, recurrent_dim: int = 256):
         self.recurrent_dim = recurrent_dim
-        self.mask = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
+        self.m_bin = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
+        self.m_soft = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.h = np.zeros(recurrent_dim, dtype=np.float32)
         self.history = []
 
+    @property
+    def mask(self) -> np.ndarray:
+        """Binary mask property for backward compatibility."""
+        return self.m_bin
+
+    @mask.setter
+    def mask(self, val: np.ndarray) -> None:
+        self.m_bin = np.array(val, dtype=np.float32)
+
     def reset(self) -> None:
-        """Resets belief mask and recurrent hidden state at episode start."""
-        self.mask.fill(0.0)
+        """Resets belief masks and recurrent hidden state at episode start."""
+        self.m_bin.fill(0.0)
+        self.m_soft.fill(0.0)
         self.h.fill(0.0)
         self.history.clear()
 
@@ -40,7 +51,7 @@ class AgentBeliefV3:
         next_h: Optional[Union[np.ndarray, torch.Tensor]] = None,
     ) -> None:
         """
-        Updates belief mask and advances recurrent hidden state:
+        Updates belief masks and advances recurrent hidden state:
         event_probs: [22] probabilities from EventHead
         reward: scalar reward received from environment
         next_h: [recurrent_dim] updated hidden state from RecurrentCore
@@ -58,38 +69,59 @@ class AgentBeliefV3:
             else:
                 self.h = np.array(next_h, dtype=np.float32).reshape(-1)
 
-        locked_indices = np.where(self.mask < 0.5)[0]
+        # 1. Soft mask: running maximum of predicted probability (used for reward)
+        self.m_soft = np.maximum(self.m_soft, p)
+
+        # 2. Binary mask: thresholded at 0.5 for model input
+        locked_indices = np.where(self.m_bin < 0.5)[0]
         newly_unlocked = []
 
         if len(locked_indices) > 0:
-            # 1. Primary rule: mark unlocked if p_i > 0.5
             for idx in locked_indices:
                 if p[idx] > 0.5:
-                    self.mask[idx] = 1.0
+                    self.m_bin[idx] = 1.0
                     newly_unlocked.append(idx)
 
-            # 2. Fallback rule: reward fired (>= 0.9) but no event probability exceeded threshold
+            # 3. Fallback rule: reward fired (>= 0.9) but no event probability exceeded threshold
+            # Pins BOTH masks to 1.0 for that head as ground truth from the environment
             if float(reward) >= 0.9 and len(newly_unlocked) == 0:
                 locked_probs = p[locked_indices]
                 best_locked_idx = locked_indices[int(np.argmax(locked_probs))]
-                self.mask[best_locked_idx] = 1.0
+                self.m_bin[best_locked_idx] = 1.0
+                self.m_soft[best_locked_idx] = 1.0
                 newly_unlocked.append(best_locked_idx)
 
         self.history.append({
             "event_probs": p.copy(),
             "reward": float(reward),
             "newly_unlocked": newly_unlocked,
-            "mask": self.mask.copy(),
+            "m_bin": self.m_bin.copy(),
+            "m_soft": self.m_soft.copy(),
+            "mask": self.m_bin.copy(),
         })
 
-    def set_mask(self, mask: Union[np.ndarray, torch.Tensor]) -> None:
-        """Sets belief mask directly (used for true mask updates or snapshot restoration)."""
+    def set_mask(
+        self,
+        mask: Union[np.ndarray, torch.Tensor],
+        soft_mask: Optional[Union[np.ndarray, torch.Tensor]] = None,
+    ) -> None:
+        """Sets belief masks directly (used for true mask updates or snapshot restoration)."""
         if isinstance(mask, torch.Tensor):
             m = mask.detach().cpu().numpy().astype(np.float32).reshape(-1)
         else:
             m = np.array(mask, dtype=np.float32).reshape(-1)
         assert len(m) == NUM_ACHIEVEMENTS, f"Expected {NUM_ACHIEVEMENTS} elements, got {len(m)}"
-        self.mask = m.copy()
+        self.m_bin = m.copy()
+
+        if soft_mask is not None:
+            if isinstance(soft_mask, torch.Tensor):
+                s_arr = soft_mask.detach().cpu().numpy().astype(np.float32).reshape(-1)
+            else:
+                s_arr = np.array(soft_mask, dtype=np.float32).reshape(-1)
+            assert len(s_arr) == NUM_ACHIEVEMENTS, f"Expected {NUM_ACHIEVEMENTS} elements, got {len(s_arr)}"
+            self.m_soft = s_arr.copy()
+        else:
+            self.m_soft = np.maximum(self.m_soft, m)
 
     def set_h(self, h: Union[np.ndarray, torch.Tensor]) -> None:
         """Sets recurrent memory state h directly (used for snapshot restoration)."""
@@ -101,15 +133,34 @@ class AgentBeliefV3:
         self.h = h_arr.copy()
 
     def get_mask(self) -> np.ndarray:
-        """Returns copy of unlocked mask [22]."""
-        return self.mask.copy()
+        """Returns copy of binary unlocked mask [22] (for model input)."""
+        return self.m_bin.copy()
 
     def get_mask_tensor(self, device: Optional[Union[str, torch.device]] = None) -> torch.Tensor:
-        """Returns mask as PyTorch tensor."""
-        t = torch.from_numpy(self.mask).float()
+        """Returns binary mask as PyTorch tensor (for model input)."""
+        t = torch.from_numpy(self.m_bin).float()
         if device is not None:
             t = t.to(device)
         return t
+
+    def get_soft_mask(self) -> np.ndarray:
+        """Returns copy of soft belief mask [22] (running maximum for reward)."""
+        return self.m_soft.copy()
+
+    def get_soft_mask_tensor(self, device: Optional[Union[str, torch.device]] = None) -> torch.Tensor:
+        """Returns soft mask as PyTorch tensor (for reward / TTE)."""
+        t = torch.from_numpy(self.m_soft).float()
+        if device is not None:
+            t = t.to(device)
+        return t
+
+    def get_binary_mask(self) -> np.ndarray:
+        """Alias for get_mask()."""
+        return self.m_bin.copy()
+
+    def get_binary_mask_tensor(self, device: Optional[Union[str, torch.device]] = None) -> torch.Tensor:
+        """Alias for get_mask_tensor()."""
+        return self.get_mask_tensor(device=device)
 
     def get_h(self) -> np.ndarray:
         """Returns copy of recurrent hidden state [recurrent_dim]."""
