@@ -40,6 +40,8 @@ class RecurrentMPCPlanner:
         use_calibration: bool = True,
         denormalize_q: bool = False,
         tte_weight: float = 0.0,
+        recurring_vitals: bool = False,
+        hierarchical_tte: bool = False,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -55,6 +57,8 @@ class RecurrentMPCPlanner:
         self.use_calibration = use_calibration
         self.denormalize_q = denormalize_q
         self.tte_weight = tte_weight
+        self.recurring_vitals = recurring_vitals
+        self.hierarchical_tte = hierarchical_tte
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
     def plan(
@@ -165,7 +169,30 @@ class RecurrentMPCPlanner:
                 if self.tte_weight > 0.0 and hasattr(self.model, "time_to_event_head"):
                     tau_0 = self.model.time_to_event_head(s_0)  # [1, 22]
                     tau_H = self.model.time_to_event_head(s_t)  # [C, 22]
-                    unachieved_mask = (1.0 - m_0).expand(C, -1)
+
+                    goal_mask = (1.0 - m_0).clone()
+                    if self.recurring_vitals:
+                        # Biological vitals recur cyclically throughout life:
+                        # 2: collect_drink, 9: eat_cow, 10: eat_plant
+                        goal_mask[:, 2] = 1.0
+                        goal_mask[:, 9] = 0.5
+                        goal_mask[:, 10] = 0.5
+
+                    if self.hierarchical_tte:
+                        # Direct neural attention toward the next technological bottleneck:
+                        # 15: make_wood_pickaxe, 5: collect_stone, 13: make_stone_pickaxe, 17: place_furnace
+                        weights = torch.ones(22, device=self.device)
+                        has_pick = bool(m_0[0, 15].item() > 0.5)
+                        has_stone = bool(m_0[0, 5].item() > 0.5)
+                        if has_pick and not has_stone:
+                            weights[5] = 3.0   # Laser focus on stone once pickaxe is crafted!
+                            weights[19] = 2.0  # place_stone
+                        elif has_stone:
+                            weights[13] = 3.0  # make_stone_pickaxe
+                            weights[17] = 2.0  # place_furnace
+                        goal_mask = goal_mask * weights.unsqueeze(0)
+
+                    unachieved_mask = goal_mask.expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
                     tte_gain = self.tte_weight * prog
 

@@ -183,6 +183,8 @@ def evaluate_config_on_probe(
         prior_mix=cfg.get("prior_mix", 0.5),
         denormalize_q=cfg.get("denormalize_q", False),
         tte_weight=cfg.get("tte_weight", 0.0),
+        recurring_vitals=cfg.get("recurring_vitals", False),
+        hierarchical_tte=cfg.get("hierarchical_tte", False),
         device=dev,
     )
 
@@ -259,6 +261,8 @@ def run_screening_for_config(
         prior_mix=cfg.get("prior_mix", 0.5),
         denormalize_q=cfg.get("denormalize_q", False),
         tte_weight=cfg.get("tte_weight", 0.0),
+        recurring_vitals=cfg.get("recurring_vitals", False),
+        hierarchical_tte=cfg.get("hierarchical_tte", False),
         device=dev,
     )
     belief = AgentBeliefV3(recurrent_dim=256)
@@ -372,11 +376,17 @@ def main() -> None:
         {"name": "BC_TTE0.5_Focused", "denormalize_q": False, "tte_weight": 0.5, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.5},
         {"name": "BD_TTE0.5_Prior75", "denormalize_q": False, "tte_weight": 0.5, "uncertainty_weight": 0.5, "novelty_weight": 0.02, "prior_mix": 0.75},
         {"name": "CD_Focused_Prior75", "denormalize_q": False, "tte_weight": 0.0, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.75},
-        # Triples & Quad (ABC, ABD, ACD, BCD, ABCD)
+        # Triples & Quad (ABC, ABD, ACD, ABCD)
         {"name": "ABC_Denorm_TTE0.5_Foc", "denormalize_q": True, "tte_weight": 0.5, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.5},
         {"name": "ABD_Denorm_TTE0.5_Pr75", "denormalize_q": True, "tte_weight": 0.5, "uncertainty_weight": 0.5, "novelty_weight": 0.02, "prior_mix": 0.75},
         {"name": "ACD_Denorm_Foc_Pr75", "denormalize_q": True, "tte_weight": 0.0, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.75},
         {"name": "ABCD_AllCombined", "denormalize_q": True, "tte_weight": 0.5, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.75},
+        # Senior ML Grand Master Levers: Continuous Survival & Tech-Tree Alignment
+        {"name": "E_RecurringVitals", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "uncertainty_weight": 0.5, "novelty_weight": 0.02, "prior_mix": 0.5},
+        {"name": "F_HierarchicalStone", "denormalize_q": True, "tte_weight": 0.5, "hierarchical_tte": True, "uncertainty_weight": 0.5, "novelty_weight": 0.02, "prior_mix": 0.5},
+        {"name": "EF_Survival_Stone", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "hierarchical_tte": True, "uncertainty_weight": 0.5, "novelty_weight": 0.02, "prior_mix": 0.5},
+        {"name": "Grand_Master_Planner", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "hierarchical_tte": True, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.65},
+        {"name": "Grand_DeepVision_H15", "horizon": 15, "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "hierarchical_tte": True, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.65},
     ]
 
     print(f"\n[Sweep] Evaluating {len(CONFIGS)} combinatorial configurations on 120 states...")
