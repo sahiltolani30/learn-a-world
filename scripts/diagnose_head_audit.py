@@ -39,11 +39,13 @@ from models.jepa_v2 import JEPAv2
 from models.jepa_v3 import JEPAv3
 
 
-def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
-    """Loads all transition shards from directory."""
+def load_heldout_data(shards_dir: str, max_shards: Optional[int] = None) -> Dict[str, np.ndarray]:
+    """Loads transition shards from directory."""
     shard_paths = sorted(glob.glob(os.path.join(shards_dir, "*.npz")))
     if not shard_paths:
         raise FileNotFoundError(f"No .npz shards found in {shards_dir}")
+    if max_shards is not None:
+        shard_paths = shard_paths[:max_shards]
 
     all_obs = []
     all_actions = []
@@ -52,6 +54,7 @@ def load_heldout_data(shards_dir: str) -> Dict[str, np.ndarray]:
     all_rewards = []
     all_lengths = []
 
+    print(f"[Head-Audit] Loading {len(shard_paths)} shards...")
     for p in shard_paths:
         data = np.load(p, allow_pickle=True)
         all_obs.append(data["obs"])
@@ -269,6 +272,7 @@ def main():
     parser = argparse.ArgumentParser(description="Audit event and health prediction heads on held-out data.")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v2_best.pt")
     parser.add_argument("--shards_dir", type=str, default="data/sequences")
+    parser.add_argument("--max_shards", type=int, default=None, help="Maximum number of shards to audit (default: all)")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--output_json", type=str, default="results/diagnostics/head_audit.json")
     parser.add_argument("--output_png", type=str, default="results/diagnostics/head_audit.png")
@@ -284,7 +288,7 @@ def main():
     model.to(args.device)
 
     print(f"[Head-Audit] Loading held-out data from {args.shards_dir}...")
-    data = load_heldout_data(args.shards_dir)
+    data = load_heldout_data(args.shards_dir, max_shards=args.max_shards)
 
     print("[Head-Audit] Auditing heads...")
     audit = audit_heads(model, data, device=args.device)
