@@ -72,6 +72,7 @@ def run_screening(
     drive_dir: Optional[str] = None,
     denormalize_q: bool = False,
     tte_weight: float = 0.0,
+    standardize_scores: bool = True,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -80,7 +81,7 @@ def run_screening(
     print(f"      Checkpoint: {checkpoint_path}")
     print(f"      Episodes: {num_episodes} | Seeds: {seed_start}..{seed_start + num_episodes - 1}")
     print(f"      Planner: Recurrent MPC (H={horizon}, C={num_candidates}, CEM={cem_iterations})")
-    print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight}")
+    print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight} | Standardize Scores: {standardize_scores}")
     print(f"      Device: {dev}")
     print("=" * 80)
 
@@ -113,6 +114,7 @@ def run_screening(
         num_actions=17,
         denormalize_q=denormalize_q,
         tte_weight=tte_weight,
+        standardize_scores=standardize_scores,
         device=dev,
     )
     belief = AgentBeliefV3(recurrent_dim=256)
@@ -205,6 +207,7 @@ def run_screening(
         "mean_achievements_per_ep": score_stats["mean_achievements_per_ep"],
         "unlocked_achievement_count": score_stats["unlocked_count"],
         "unlock_percentages": score_stats["unlock_percentages"],
+        "standardize_scores": standardize_scores,
         "episodes": episode_records,
     }
 
@@ -262,6 +265,21 @@ if __name__ == "__main__":
     parser.add_argument("--drive_dir", type=str, default=None)
     parser.add_argument("--denormalize_q", action="store_true", help="Denormalize terminal Q to raw return scale.")
     parser.add_argument("--tte_weight", type=float, default=0.0, help="Weight for learned time-to-event proximity gain.")
+    parser.add_argument(
+        "--standardize-scores",
+        "--standardize_scores",
+        dest="standardize_scores",
+        action="store_true",
+        default=True,
+        help="Live per-step standardization of planner score terms (default: on).",
+    )
+    parser.add_argument(
+        "--no-standardize-scores",
+        "--no_standardize_scores",
+        dest="standardize_scores",
+        action="store_false",
+        help="Disable score standardization and use legacy weighted sums.",
+    )
     args = parser.parse_args()
 
     resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
@@ -279,4 +297,5 @@ if __name__ == "__main__":
         drive_dir=args.drive_dir,
         denormalize_q=args.denormalize_q,
         tte_weight=args.tte_weight,
+        standardize_scores=args.standardize_scores,
     )

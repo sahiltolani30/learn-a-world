@@ -42,6 +42,7 @@ class RecurrentMPCPlanner:
         use_calibration: bool = True,
         denormalize_q: bool = False,
         tte_weight: float = 0.0,
+        standardize_scores: bool = True,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -59,6 +60,7 @@ class RecurrentMPCPlanner:
         self.use_calibration = use_calibration
         self.denormalize_q = denormalize_q
         self.tte_weight = tte_weight
+        self.standardize_scores = standardize_scores
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
     def plan(
@@ -183,18 +185,36 @@ class RecurrentMPCPlanner:
                     q_std_term = q_std_term / (norm.target_max * 0.8) * scale
 
                 terminal_value = (self.gamma ** self.horizon) * q_term
-                uncertainty_penalty = self.uncertainty_weight * q_std_term
-                novelty = torch.norm(z_t - z_0, dim=-1)
+                raw_uncertainty = q_std_term
+                raw_novelty = torch.norm(z_t - z_0, dim=-1)
 
-                tte_gain = torch.zeros_like(terminal_value)
-                if self.tte_weight > 0.0 and hasattr(self.model, "time_to_event_head"):
+                raw_tte = torch.zeros_like(terminal_value)
+                if hasattr(self.model, "time_to_event_head") and self.model.time_to_event_head is not None:
                     tau_0 = self.model.time_to_event_head(s_0)  # [1, 22]
                     tau_H = self.model.time_to_event_head(s_t)  # [C, 22]
                     unachieved_mask = (1.0 - m_soft_0).expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
-                    tte_gain = self.tte_weight * prog
+                    raw_tte = prog
 
-                scores = cumulative_reward + terminal_value - uncertainty_penalty + self.novelty_weight * novelty + tte_gain
+                if self.standardize_scores:
+                    def _standardize(term: torch.Tensor) -> torch.Tensor:
+                        std = term.std()
+                        if std < 1e-8:
+                            return torch.zeros_like(term)
+                        return (term - term.mean()) / std
+
+                    z_reward = _standardize(cumulative_reward)
+                    z_term = _standardize(terminal_value)
+                    z_unc = _standardize(raw_uncertainty)
+                    z_nov = _standardize(raw_novelty)
+                    z_tte = _standardize(raw_tte)
+
+                    scores = z_reward + z_term - z_unc + z_nov + z_tte
+                else:
+                    uncertainty_penalty = self.uncertainty_weight * raw_uncertainty
+                    novelty = self.novelty_weight * raw_novelty
+                    tte_gain = self.tte_weight * raw_tte
+                    scores = cumulative_reward + terminal_value - uncertainty_penalty + novelty + tte_gain
 
                 # 6. Elite selection and CEM refitting
                 num_elites = max(1, int(round(C * self.elite_ratio)))
@@ -211,10 +231,18 @@ class RecurrentMPCPlanner:
                 best_debug = {
                     "reward_sum": float(cumulative_reward[best_idx].item()),
                     "terminal_value": float(terminal_value[best_idx].item()),
-                    "uncertainty_penalty": float(uncertainty_penalty[best_idx].item()),
-                    "tte_gain": float(tte_gain[best_idx].item()),
+                    "uncertainty_penalty": float(raw_uncertainty[best_idx].item() if self.standardize_scores else uncertainty_penalty[best_idx].item()),
+                    "tte_gain": float(raw_tte[best_idx].item() if self.standardize_scores else tte_gain[best_idx].item()),
                     "best_score": float(scores[best_idx].item()),
                     "mean_q_std": float(q_std_term.mean().item()),
                 }
+                if self.standardize_scores:
+                    best_debug.update({
+                        "z_reward": float(z_reward[best_idx].item()),
+                        "z_terminal": float(z_term[best_idx].item()),
+                        "z_uncertainty": float(z_unc[best_idx].item()),
+                        "z_novelty": float(z_nov[best_idx].item()),
+                        "z_tte": float(z_tte[best_idx].item()),
+                    })
 
         return best_action, best_debug

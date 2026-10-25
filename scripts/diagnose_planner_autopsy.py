@@ -216,6 +216,7 @@ def run_state_autopsy(
     action_persistence: float = 0.0,
     denormalize_q: bool = False,
     tte_weight: float = 0.0,
+    standardize_scores: bool = True,
     num_actions: int = 17,
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -343,18 +344,36 @@ def run_state_autopsy(
                     q_std_term = q_std_term / (norm.target_max * 0.8) * scale
 
                 terminal_value = (gamma ** horizon) * q_term
-                uncertainty_pen = uncertainty_weight * q_std_term
-                novelty_val = novelty_weight * torch.norm(z_t - z_0, dim=-1)
+                raw_uncertainty = q_std_term
+                raw_novelty = torch.norm(z_t - z_0, dim=-1)
 
-                tte_gain_val = torch.zeros_like(terminal_value)
-                if tte_weight > 0.0 and hasattr(model, "time_to_event_head"):
+                raw_tte = torch.zeros_like(terminal_value)
+                if hasattr(model, "time_to_event_head") and model.time_to_event_head is not None:
                     tau_0 = model.time_to_event_head(s_0)
                     tau_H = model.time_to_event_head(s_t)
                     unachieved_mask = (1.0 - m_0_soft).expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
-                    tte_gain_val = tte_weight * prog
+                    raw_tte = prog
 
-                scores = cumulative_reward + terminal_value - uncertainty_pen + novelty_val + tte_gain_val
+                if standardize_scores:
+                    def _standardize(term: torch.Tensor) -> Tuple[torch.Tensor, float]:
+                        std = term.std()
+                        if std < 1e-8:
+                            return torch.zeros_like(term), float(std.item())
+                        return (term - term.mean()) / std, float(std.item())
+
+                    z_reward, std_reward = _standardize(cumulative_reward)
+                    z_term, std_term = _standardize(terminal_value)
+                    z_unc, std_unc = _standardize(raw_uncertainty)
+                    z_nov, std_nov = _standardize(raw_novelty)
+                    z_tte, std_tte = _standardize(raw_tte)
+
+                    scores = z_reward + z_term - z_unc + z_nov + z_tte
+                else:
+                    uncertainty_pen = uncertainty_weight * raw_uncertainty
+                    novelty_val = novelty_weight * raw_novelty
+                    tte_gain_val = tte_weight * raw_tte
+                    scores = cumulative_reward + terminal_value - uncertainty_pen + novelty_val + tte_gain_val
 
                 # Refit CEM distribution for next iteration
                 num_elites = max(1, int(round(C * elite_ratio)))
@@ -372,29 +391,64 @@ def run_state_autopsy(
 
                     cum_np = cumulative_reward.cpu().numpy()
                     term_np = terminal_value.cpu().numpy()
-                    unc_np = uncertainty_pen.cpu().numpy()
-                    nov_np = novelty_val.cpu().numpy()
-                    tte_np = tte_gain_val.cpu().numpy()
+                    raw_unc_np = raw_uncertainty.cpu().numpy()
+                    raw_nov_np = raw_novelty.cpu().numpy()
+                    raw_tte_np = raw_tte.cpu().numpy()
                     tot_np = scores.cpu().numpy()
                     final_soft_np = m_soft_final.cpu().numpy()
                     inc_np = m_soft_increase.cpu().numpy()
                     max_p_np = max_event_probs.cpu().numpy()
 
+                    if standardize_scores:
+                        z_cum_np = z_reward.cpu().numpy()
+                        z_term_np = z_term.cpu().numpy()
+                        z_unc_np = z_unc.cpu().numpy()
+                        z_nov_np = z_nov.cpu().numpy()
+                        z_tte_np = z_tte.cpu().numpy()
+                        cand_spread_reward = float(z_reward.std().item()) if std_reward >= 1e-8 else 0.0
+                        cand_spread_term = float(z_term.std().item()) if std_term >= 1e-8 else 0.0
+                        cand_spread_unc = float(z_unc.std().item()) if std_unc >= 1e-8 else 0.0
+                        cand_spread_nov = float(z_nov.std().item()) if std_nov >= 1e-8 else 0.0
+                        cand_spread_tte = float(z_tte.std().item()) if std_tte >= 1e-8 else 0.0
+                    else:
+                        unc_np = uncertainty_pen.cpu().numpy()
+                        nov_np = novelty_val.cpu().numpy()
+                        tte_np = tte_gain_val.cpu().numpy()
+
                     for c_idx in range(C):
-                        candidates_data.append({
+                        cand_entry = {
                             "candidate_idx": c_idx,
                             "source": sources[c_idx],
                             "action": int(actions_seq[c_idx, 0].item()),
+                            "raw_cumulative_reward": float(cum_np[c_idx]),
+                            "raw_terminal_value": float(term_np[c_idx]),
+                            "raw_uncertainty": float(raw_unc_np[c_idx]),
+                            "raw_novelty": float(raw_nov_np[c_idx]),
+                            "raw_tte_gain": float(raw_tte_np[c_idx]),
                             "cumulative_reward": float(cum_np[c_idx]),
                             "terminal_value": float(term_np[c_idx]),
-                            "uncertainty_penalty": float(unc_np[c_idx]),
-                            "novelty": float(nov_np[c_idx]),
-                            "tte_gain": float(tte_np[c_idx]),
+                            "uncertainty_penalty": float(raw_unc_np[c_idx] if standardize_scores else unc_np[c_idx]),
+                            "novelty": float(raw_nov_np[c_idx] if standardize_scores else nov_np[c_idx]),
+                            "tte_gain": float(raw_tte_np[c_idx] if standardize_scores else tte_np[c_idx]),
                             "total_score": float(tot_np[c_idx]),
                             "highest_event_probs": [float(v) for v in max_p_np[c_idx]],
                             "final_soft_mask": [float(v) for v in final_soft_np[c_idx]],
                             "soft_mask_increase": [float(v) for v in inc_np[c_idx]],
-                        })
+                        }
+                        if standardize_scores:
+                            cand_entry.update({
+                                "z_cumulative_reward": float(z_cum_np[c_idx]),
+                                "z_terminal_value": float(z_term_np[c_idx]),
+                                "z_uncertainty": float(z_unc_np[c_idx]),
+                                "z_novelty": float(z_nov_np[c_idx]),
+                                "z_tte_gain": float(z_tte_np[c_idx]),
+                                "spread_cumulative_reward": cand_spread_reward,
+                                "spread_terminal_value": cand_spread_term,
+                                "spread_uncertainty": cand_spread_unc,
+                                "spread_novelty": cand_spread_nov,
+                                "spread_tte_gain": cand_spread_tte,
+                            })
+                        candidates_data.append(cand_entry)
 
             best_idx = int(torch.argmax(final_scores).item())
             best_action = int(final_actions_seq[best_idx, 0].item())
@@ -417,13 +471,27 @@ def run_state_autopsy(
 
 def compute_autopsy_aggregates(
     state_results: List[Dict[str, Any]],
+    standardize_scores: bool = True,
 ) -> Dict[str, Any]:
     """Computes full cross-candidate and cross-state aggregate statistics."""
-    all_cum_rewards = []
-    all_term_values = []
-    all_unc_penalties = []
-    all_novelties = []
-    all_tte_gains = []
+    all_raw_cum_rewards = []
+    all_raw_term_values = []
+    all_raw_unc_penalties = []
+    all_raw_novelties = []
+    all_raw_tte_gains = []
+
+    all_z_cum_rewards = []
+    all_z_term_values = []
+    all_z_uncs = []
+    all_z_novs = []
+    all_z_ttes = []
+
+    all_spread_cum_rewards = []
+    all_spread_term_values = []
+    all_spread_uncs = []
+    all_spread_novs = []
+    all_spread_ttes = []
+
     all_total_scores = []
     terminal_shares = []
     abs_terminal_shares = []
@@ -443,26 +511,53 @@ def compute_autopsy_aggregates(
         raw_cands = st["raw"]["candidates"]
 
         for c_idx, c in enumerate(cal_cands):
-            all_cum_rewards.append(c["cumulative_reward"])
-            all_term_values.append(c["terminal_value"])
-            all_unc_penalties.append(c["uncertainty_penalty"])
-            all_novelties.append(c["novelty"])
-            all_tte_gains.append(c["tte_gain"])
+            all_raw_cum_rewards.append(c.get("raw_cumulative_reward", c["cumulative_reward"]))
+            all_raw_term_values.append(c.get("raw_terminal_value", c["terminal_value"]))
+            all_raw_unc_penalties.append(c.get("raw_uncertainty", c["uncertainty_penalty"]))
+            all_raw_novelties.append(c.get("raw_novelty", c["novelty"]))
+            all_raw_tte_gains.append(c.get("raw_tte_gain", c["tte_gain"]))
             all_total_scores.append(c["total_score"])
 
-            tot = c["total_score"]
-            if abs(tot) > 1e-6:
-                terminal_shares.append(c["terminal_value"] / tot)
+            if standardize_scores and "z_cumulative_reward" in c:
+                all_z_cum_rewards.append(c["z_cumulative_reward"])
+                all_z_term_values.append(c["z_terminal_value"])
+                all_z_uncs.append(c["z_uncertainty"])
+                all_z_novs.append(c["z_novelty"])
+                all_z_ttes.append(c["z_tte_gain"])
 
-            abs_sum = (
-                abs(c["cumulative_reward"])
-                + abs(c["terminal_value"])
-                + abs(c["uncertainty_penalty"])
-                + abs(c["novelty"])
-                + abs(c["tte_gain"])
-            )
-            if abs_sum > 1e-6:
-                abs_terminal_shares.append(abs(c["terminal_value"]) / abs_sum)
+                all_spread_cum_rewards.append(c["spread_cumulative_reward"])
+                all_spread_term_values.append(c["spread_terminal_value"])
+                all_spread_uncs.append(c["spread_uncertainty"])
+                all_spread_novs.append(c["spread_novelty"])
+                all_spread_ttes.append(c["spread_tte_gain"])
+
+                tot = c["total_score"]
+                if abs(tot) > 1e-6:
+                    terminal_shares.append(c["z_terminal_value"] / tot)
+
+                abs_sum = (
+                    abs(c["z_cumulative_reward"])
+                    + abs(c["z_terminal_value"])
+                    + abs(c["z_uncertainty"])
+                    + abs(c["z_novelty"])
+                    + abs(c["z_tte_gain"])
+                )
+                if abs_sum > 1e-6:
+                    abs_terminal_shares.append(abs(c["z_terminal_value"]) / abs_sum)
+            else:
+                tot = c["total_score"]
+                if abs(tot) > 1e-6:
+                    terminal_shares.append(c["terminal_value"] / tot)
+
+                abs_sum = (
+                    abs(c["cumulative_reward"])
+                    + abs(c["terminal_value"])
+                    + abs(c["uncertainty_penalty"])
+                    + abs(c["novelty"])
+                    + abs(c["tte_gain"])
+                )
+                if abs_sum > 1e-6:
+                    abs_terminal_shares.append(abs(c["terminal_value"]) / abs_sum)
 
             for ach_idx in range(22):
                 calib_final_masks[ach_idx].append(c["final_soft_mask"][ach_idx])
@@ -477,6 +572,8 @@ def compute_autopsy_aggregates(
 
     def stats_dict(arr: List[float]) -> Dict[str, float]:
         a = np.array(arr)
+        if len(a) == 0:
+            return {"mean": 0.0, "std": 0.0, "min": 0.0, "p25": 0.0, "median": 0.0, "p75": 0.0, "max": 0.0}
         return {
             "mean": float(np.mean(a)),
             "std": float(np.std(a)),
@@ -517,30 +614,55 @@ def compute_autopsy_aggregates(
             "delta_max_prob": float(np.max(c_p) - np.max(r_p)),
         }
 
-    mean_tot = float(np.mean(all_total_scores))
-    mean_term = float(np.mean(all_term_values))
+    mean_tot = float(np.mean(all_total_scores)) if all_total_scores else 0.0
+    mean_term = float(np.mean(all_z_term_values if (standardize_scores and all_z_term_values) else all_raw_term_values)) if all_raw_term_values else 0.0
     net_term_share = (mean_term / mean_tot) if abs(mean_tot) > 1e-6 else 0.0
 
-    return {
+    score_components = {
+        "raw_cumulative_reward": stats_dict(all_raw_cum_rewards),
+        "raw_terminal_value": stats_dict(all_raw_term_values),
+        "raw_uncertainty": stats_dict(all_raw_unc_penalties),
+        "raw_novelty": stats_dict(all_raw_novelties),
+        "raw_tte_gain": stats_dict(all_raw_tte_gains),
+        "cumulative_reward": stats_dict(all_raw_cum_rewards),
+        "terminal_value": stats_dict(all_raw_term_values),
+        "uncertainty_penalty": stats_dict(all_raw_unc_penalties),
+        "novelty": stats_dict(all_raw_novelties),
+        "tte_gain": stats_dict(all_raw_tte_gains),
+        "total_score": stats_dict(all_total_scores),
+    }
+    if standardize_scores and all_z_cum_rewards:
+        score_components.update({
+            "z_cumulative_reward": stats_dict(all_z_cum_rewards),
+            "z_terminal_value": stats_dict(all_z_term_values),
+            "z_uncertainty": stats_dict(all_z_uncs),
+            "z_novelty": stats_dict(all_z_novs),
+            "z_tte_gain": stats_dict(all_z_ttes),
+        })
+
+    ret = {
         "total_states_analyzed": len(state_results),
         "total_candidates_analyzed": len(all_total_scores),
-        "score_components": {
-            "cumulative_reward": stats_dict(all_cum_rewards),
-            "terminal_value": stats_dict(all_term_values),
-            "uncertainty_penalty": stats_dict(all_unc_penalties),
-            "novelty": stats_dict(all_novelties),
-            "tte_gain": stats_dict(all_tte_gains),
-            "total_score": stats_dict(all_total_scores),
-        },
+        "score_components": score_components,
         "terminal_value_share": {
-            "mean_ratio": float(np.mean(terminal_shares)),
+            "mean_ratio": float(np.mean(terminal_shares)) if terminal_shares else 0.0,
             "net_share": net_term_share,
-            "absolute_component_share": float(np.mean(abs_terminal_shares)),
+            "absolute_component_share": float(np.mean(abs_terminal_shares)) if abs_terminal_shares else 0.0,
             "description": "Terminal value contribution to overall planner candidate evaluation",
         },
         "soft_mask_progress": soft_mask_progress_summary,
         "event_probabilities_raw_vs_calibrated": event_prob_comparison,
     }
+    if standardize_scores and all_spread_cum_rewards:
+        ret["standardized_term_spreads"] = {
+            "cumulative_reward": stats_dict(all_spread_cum_rewards),
+            "terminal_value": stats_dict(all_spread_term_values),
+            "uncertainty": stats_dict(all_spread_uncs),
+            "novelty": stats_dict(all_spread_novs),
+            "tte_gain": stats_dict(all_spread_ttes),
+            "description": "Spread (std) of each standardized score component across candidates at each step (target ~1.0 for active terms)",
+        }
+    return ret
 
 
 def run_planner_autopsy(
@@ -548,6 +670,7 @@ def run_planner_autopsy(
     calibrator_path: str = "results/calibration/event_head_calibrator.json",
     output_json: str = "results/diagnostics/planner_autopsy_t2_final.json",
     max_states: int = 120,
+    standardize_scores: bool = True,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     drive_dir: str = "/content/drive/MyDrive/learn-a-world",
 ) -> Dict[str, Any]:
@@ -561,6 +684,7 @@ def run_planner_autopsy(
     print(f"      Calibrator  : {cal_file}")
     print(f"      Device      : {dev}")
     print(f"      Max States  : {max_states}")
+    print(f"      Standardize : {standardize_scores}")
     print(f"      Output Path : {output_json}")
     print("=" * 80, flush=True)
 
@@ -600,6 +724,7 @@ def run_planner_autopsy(
             action_persistence=0.0,
             denormalize_q=False,
             tte_weight=0.0,
+            standardize_scores=standardize_scores,
             num_actions=17,
             device=dev,
         )
@@ -633,7 +758,7 @@ def run_planner_autopsy(
     print(f"\n[Autopsy] Completed 120 states in {total_time:.1f}s ({total_time / len(sampled_states):.2f}s/state).")
     print("[Autopsy] Computing aggregate cross-candidate and cross-state statistics...", flush=True)
 
-    aggregates = compute_autopsy_aggregates(state_results)
+    aggregates = compute_autopsy_aggregates(state_results, standardize_scores=standardize_scores)
 
     final_document = {
         "checkpoint": str(ckpt_file),
@@ -652,6 +777,7 @@ def run_planner_autopsy(
             "action_persistence": 0.0,
             "denormalize_q": False,
             "tte_weight": 0.0,
+            "standardize_scores": standardize_scores,
             "num_actions": 17,
         },
         "total_runtime_seconds": round(total_time, 2),
@@ -678,19 +804,45 @@ def run_planner_autopsy(
     # Print Official Terminal Summary Report
     print("\n" + "=" * 80)
     print("                    PLANNER AUTOPSY SUMMARY REPORT")
+    print(f"               (Standardize Scores: {standardize_scores})")
     print("=" * 80)
     sc = aggregates["score_components"]
-    print("Five Score Parts Across All Candidates (Mean +/- Std):")
-    print(f"  1. Cumulative Reward   : {sc['cumulative_reward']['mean']:+9.4f} +/- {sc['cumulative_reward']['std']:.4f} [min: {sc['cumulative_reward']['min']:+.4f}, max: {sc['cumulative_reward']['max']:+.4f}]")
-    print(f"  2. Terminal Value      : {sc['terminal_value']['mean']:+9.4f} +/- {sc['terminal_value']['std']:.4f} [min: {sc['terminal_value']['min']:+.4f}, max: {sc['terminal_value']['max']:+.4f}]")
-    print(f"  3. Uncertainty Penalty : {sc['uncertainty_penalty']['mean']:+9.4f} +/- {sc['uncertainty_penalty']['std']:.4f} [min: {sc['uncertainty_penalty']['min']:+.4f}, max: {sc['uncertainty_penalty']['max']:+.4f}]")
-    print(f"  4. Novelty             : {sc['novelty']['mean']:+9.4f} +/- {sc['novelty']['std']:.4f} [min: {sc['novelty']['min']:+.4f}, max: {sc['novelty']['max']:+.4f}]")
-    print(f"  5. TTE Gain            : {sc['tte_gain']['mean']:+9.4f} +/- {sc['tte_gain']['std']:.4f} [min: {sc['tte_gain']['min']:+.4f}, max: {sc['tte_gain']['max']:+.4f}]")
-    print(f"  -> Total Score         : {sc['total_score']['mean']:+9.4f} +/- {sc['total_score']['std']:.4f}")
+    if standardize_scores and "raw_cumulative_reward" in sc:
+        print("Raw Score Parts Across All Candidates (Mean +/- Std):")
+        print(f"  1. Cumulative Reward   : {sc['raw_cumulative_reward']['mean']:+9.4f} +/- {sc['raw_cumulative_reward']['std']:.4f} [min: {sc['raw_cumulative_reward']['min']:+.4f}, max: {sc['raw_cumulative_reward']['max']:+.4f}]")
+        print(f"  2. Terminal Value      : {sc['raw_terminal_value']['mean']:+9.4f} +/- {sc['raw_terminal_value']['std']:.4f} [min: {sc['raw_terminal_value']['min']:+.4f}, max: {sc['raw_terminal_value']['max']:+.4f}]")
+        print(f"  3. Uncertainty (Q std) : {sc['raw_uncertainty']['mean']:+9.4f} +/- {sc['raw_uncertainty']['std']:.4f} [min: {sc['raw_uncertainty']['min']:+.4f}, max: {sc['raw_uncertainty']['max']:+.4f}]")
+        print(f"  4. Novelty (latent norm: {sc['raw_novelty']['mean']:+9.4f} +/- {sc['raw_novelty']['std']:.4f} [min: {sc['raw_novelty']['min']:+.4f}, max: {sc['raw_novelty']['max']:+.4f}]")
+        print(f"  5. TTE Gain (proximity): {sc['raw_tte_gain']['mean']:+9.4f} +/- {sc['raw_tte_gain']['std']:.4f} [min: {sc['raw_tte_gain']['min']:+.4f}, max: {sc['raw_tte_gain']['max']:+.4f}]")
+
+        print("\nStandardized Score Parts (z-score) Across All Candidates (Mean +/- Std):")
+        print(f"  1. z(Cumulative Reward): {sc['z_cumulative_reward']['mean']:+9.4f} +/- {sc['z_cumulative_reward']['std']:.4f} [min: {sc['z_cumulative_reward']['min']:+.4f}, max: {sc['z_cumulative_reward']['max']:+.4f}]")
+        print(f"  2. z(Terminal Value)   : {sc['z_terminal_value']['mean']:+9.4f} +/- {sc['z_terminal_value']['std']:.4f} [min: {sc['z_terminal_value']['min']:+.4f}, max: {sc['z_terminal_value']['max']:+.4f}]")
+        print(f"  3. z(Uncertainty)      : {sc['z_uncertainty']['mean']:+9.4f} +/- {sc['z_uncertainty']['std']:.4f} [min: {sc['z_uncertainty']['min']:+.4f}, max: {sc['z_uncertainty']['max']:+.4f}]")
+        print(f"  4. z(Novelty)          : {sc['z_novelty']['mean']:+9.4f} +/- {sc['z_novelty']['std']:.4f} [min: {sc['z_novelty']['min']:+.4f}, max: {sc['z_novelty']['max']:+.4f}]")
+        print(f"  5. z(TTE Gain)         : {sc['z_tte_gain']['mean']:+9.4f} +/- {sc['z_tte_gain']['std']:.4f} [min: {sc['z_tte_gain']['min']:+.4f}, max: {sc['z_tte_gain']['max']:+.4f}]")
+        print(f"  -> Total Score         : {sc['total_score']['mean']:+9.4f} +/- {sc['total_score']['std']:.4f}")
+
+        if "standardized_term_spreads" in aggregates:
+            sp = aggregates["standardized_term_spreads"]
+            print("\nStandardized Term Spreads Across Candidates (Target ~1.0 for active terms):")
+            print(f"  1. Cumulative Reward Spread : {sp['cumulative_reward']['mean']:.4f} +/- {sp['cumulative_reward']['std']:.4f}")
+            print(f"  2. Terminal Value Spread    : {sp['terminal_value']['mean']:.4f} +/- {sp['terminal_value']['std']:.4f}")
+            print(f"  3. Uncertainty Spread       : {sp['uncertainty']['mean']:.4f} +/- {sp['uncertainty']['std']:.4f}")
+            print(f"  4. Novelty Spread           : {sp['novelty']['mean']:.4f} +/- {sp['novelty']['std']:.4f}")
+            print(f"  5. TTE Gain Spread          : {sp['tte_gain']['mean']:.4f} +/- {sp['tte_gain']['std']:.4f}")
+    else:
+        print("Five Score Parts Across All Candidates (Mean +/- Std):")
+        print(f"  1. Cumulative Reward   : {sc['cumulative_reward']['mean']:+9.4f} +/- {sc['cumulative_reward']['std']:.4f} [min: {sc['cumulative_reward']['min']:+.4f}, max: {sc['cumulative_reward']['max']:+.4f}]")
+        print(f"  2. Terminal Value      : {sc['terminal_value']['mean']:+9.4f} +/- {sc['terminal_value']['std']:.4f} [min: {sc['terminal_value']['min']:+.4f}, max: {sc['terminal_value']['max']:+.4f}]")
+        print(f"  3. Uncertainty Penalty : {sc['uncertainty_penalty']['mean']:+9.4f} +/- {sc['uncertainty_penalty']['std']:.4f} [min: {sc['uncertainty_penalty']['min']:+.4f}, max: {sc['uncertainty_penalty']['max']:+.4f}]")
+        print(f"  4. Novelty             : {sc['novelty']['mean']:+9.4f} +/- {sc['novelty']['std']:.4f} [min: {sc['novelty']['min']:+.4f}, max: {sc['novelty']['max']:+.4f}]")
+        print(f"  5. TTE Gain            : {sc['tte_gain']['mean']:+9.4f} +/- {sc['tte_gain']['std']:.4f} [min: {sc['tte_gain']['min']:+.4f}, max: {sc['tte_gain']['max']:+.4f}]")
+        print(f"  -> Total Score         : {sc['total_score']['mean']:+9.4f} +/- {sc['total_score']['std']:.4f}")
 
     tv_share = aggregates["terminal_value_share"]
     print("\nTerminal Value Contribution:")
-    print(f"  Absolute Component Share : {tv_share['absolute_component_share'] * 100:6.2f}%")
+    print(f"  Absolute Component Share : {tv_share['absolute_component_share'] * 100:6.2f}% (Expected ~20% with standardization, down from ~60%)")
     print(f"  Net Contribution Share   : {tv_share['net_share'] * 100:6.2f}%")
     print(f"  Mean Ratio (Term / Tot)  : {tv_share['mean_ratio'] * 100:6.2f}%")
 
@@ -747,6 +899,21 @@ def main() -> None:
     parser.add_argument("--max_states", type=int, default=120, help="Number of probe states to autopsy (default 120)")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--drive_dir", type=str, default="/content/drive/MyDrive/learn-a-world")
+    parser.add_argument(
+        "--standardize-scores",
+        "--standardize_scores",
+        dest="standardize_scores",
+        action="store_true",
+        default=True,
+        help="Live per-step standardization of planner score terms (default: on).",
+    )
+    parser.add_argument(
+        "--no-standardize-scores",
+        "--no_standardize_scores",
+        dest="standardize_scores",
+        action="store_false",
+        help="Disable score standardization and use legacy weighted sums.",
+    )
     args = parser.parse_args()
 
     run_planner_autopsy(
@@ -754,6 +921,7 @@ def main() -> None:
         calibrator_path=args.calibrator,
         output_json=args.output_json,
         max_states=args.max_states,
+        standardize_scores=args.standardize_scores,
         device=args.device,
         drive_dir=args.drive_dir,
     )
