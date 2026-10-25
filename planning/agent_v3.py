@@ -21,12 +21,31 @@ class AgentBeliefV3:
     Tracks unlocked achievements and temporal hidden state strictly from transitions.
     """
 
-    def __init__(self, recurrent_dim: int = 256):
+    def __init__(
+        self,
+        recurrent_dim: int = 256,
+        frontier_threshold: float = 0.25,
+        common_threshold: float = 0.50,
+        event_thresholds: Optional[Union[float, np.ndarray, torch.Tensor]] = None,
+    ):
         self.recurrent_dim = recurrent_dim
         self.m_bin = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.m_soft = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.h = np.zeros(recurrent_dim, dtype=np.float32)
         self.history = []
+
+        # Adaptive Frontier Thresholds (per achievement)
+        if event_thresholds is not None:
+            if isinstance(event_thresholds, (int, float)):
+                self.thresholds = np.full(NUM_ACHIEVEMENTS, float(event_thresholds), dtype=np.float32)
+            elif isinstance(event_thresholds, torch.Tensor):
+                self.thresholds = event_thresholds.detach().cpu().numpy().astype(np.float32).reshape(-1)
+            else:
+                self.thresholds = np.array(event_thresholds, dtype=np.float32).reshape(-1)
+        else:
+            self.thresholds = np.full(NUM_ACHIEVEMENTS, common_threshold, dtype=np.float32)
+            frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
+            self.thresholds[frontier_indices] = frontier_threshold
 
     @property
     def mask(self) -> np.ndarray:
@@ -72,13 +91,13 @@ class AgentBeliefV3:
         # 1. Soft mask: running maximum of predicted probability (used for reward)
         self.m_soft = np.maximum(self.m_soft, p)
 
-        # 2. Binary mask: thresholded at 0.5 for model input
+        # 2. Binary mask: thresholded with adaptive frontier thresholds
         locked_indices = np.where(self.m_bin < 0.5)[0]
         newly_unlocked = []
 
         if len(locked_indices) > 0:
             for idx in locked_indices:
-                if p[idx] > 0.5:
+                if p[idx] > self.thresholds[idx]:
                     self.m_bin[idx] = 1.0
                     newly_unlocked.append(idx)
 

@@ -72,7 +72,9 @@ def run_screening(
     drive_dir: Optional[str] = None,
     denormalize_q: bool = False,
     tte_weight: float = 0.0,
-    standardize_scores: bool = True,
+    standardize_scores: bool = False,
+    frontier_threshold: float = 0.25,
+    common_threshold: float = 0.50,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -81,6 +83,7 @@ def run_screening(
     print(f"      Checkpoint: {checkpoint_path}")
     print(f"      Episodes: {num_episodes} | Seeds: {seed_start}..{seed_start + num_episodes - 1}")
     print(f"      Planner: Recurrent MPC (H={horizon}, C={num_candidates}, CEM={cem_iterations})")
+    print(f"      Frontier Threshold: {frontier_threshold} | Common Threshold: {common_threshold}")
     print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight} | Standardize Scores: {standardize_scores}")
     print(f"      Device: {dev}")
     print("=" * 80)
@@ -100,7 +103,7 @@ def run_screening(
     model.to(dev)
     model.eval()
 
-    # 2. Build Planner & Belief
+    # 2. Build Planner & Belief with Adaptive Frontier Thresholds
     planner = RecurrentMPCPlanner(
         model=model,
         horizon=horizon,
@@ -115,9 +118,15 @@ def run_screening(
         denormalize_q=denormalize_q,
         tte_weight=tte_weight,
         standardize_scores=standardize_scores,
+        frontier_threshold=frontier_threshold,
+        common_threshold=common_threshold,
         device=dev,
     )
-    belief = AgentBeliefV3(recurrent_dim=256)
+    belief = AgentBeliefV3(
+        recurrent_dim=256,
+        frontier_threshold=frontier_threshold,
+        common_threshold=common_threshold,
+    )
 
     # 3. Environment
     env = gym.make("Crafter-v0", render_size=64, max_steps=max_steps)
@@ -265,21 +274,23 @@ if __name__ == "__main__":
     parser.add_argument("--drive_dir", type=str, default=None)
     parser.add_argument("--denormalize_q", action="store_true", help="Denormalize terminal Q to raw return scale.")
     parser.add_argument("--tte_weight", type=float, default=0.0, help="Weight for learned time-to-event proximity gain.")
+    parser.add_argument("--frontier_threshold", type=float, default=0.25, help="Activation threshold for rare frontier achievements.")
+    parser.add_argument("--common_threshold", type=float, default=0.50, help="Activation threshold for common survival achievements.")
     parser.add_argument(
         "--standardize-scores",
         "--standardize_scores",
         dest="standardize_scores",
         action="store_true",
-        default=True,
-        help="Live per-step standardization of planner score terms (default: on).",
+        help="Live per-step standardization of planner score terms.",
     )
     parser.add_argument(
         "--no-standardize-scores",
         "--no_standardize_scores",
         dest="standardize_scores",
         action="store_false",
-        help="Disable score standardization and use legacy weighted sums.",
+        help="Disable score standardization and use absolute reward weights.",
     )
+    parser.set_defaults(standardize_scores=False)
     args = parser.parse_args()
 
     resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
@@ -298,4 +309,6 @@ if __name__ == "__main__":
         denormalize_q=args.denormalize_q,
         tte_weight=args.tte_weight,
         standardize_scores=args.standardize_scores,
+        frontier_threshold=args.frontier_threshold,
+        common_threshold=args.common_threshold,
     )

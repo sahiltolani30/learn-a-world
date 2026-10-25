@@ -483,45 +483,144 @@ class JEPAv3(nn.Module):
         model.load_checkpoint(path, device=device)
         return model
 
-    def load_checkpoint(self, path: str, device: Optional[Union[str, torch.device]] = None) -> None:
-        """Loads v3 checkpoint or transfers weights from v2 base, and attaches the calibrator."""
+    def verify_integrity(self) -> Dict[str, Any]:
+        """
+        Audits parameter norms and initialization state across all sub-modules.
+        Returns a dictionary of module norms and status flags.
+        """
+        modules = {
+            "encoder": self.encoder,
+            "target_encoder": self.target_encoder,
+            "recurrent_core": self.recurrent_core,
+            "predictor": self.predictor,
+            "event_head": self.event_head,
+            "health_head": self.health_head,
+            "q_ensemble": self.q_ensemble,
+            "q_target_ensemble": self.q_target_ensemble,
+            "policy_prior": self.policy_prior,
+        }
+        if hasattr(self, "time_to_event_head") and self.time_to_event_head is not None:
+            modules["time_to_event_head"] = self.time_to_event_head
+
+        status: Dict[str, Any] = {}
+        for name, mod in modules.items():
+            total_norm = 0.0
+            param_count = 0
+            for p in mod.parameters():
+                param_count += p.numel()
+                total_norm += float(p.detach().norm(2).item() ** 2)
+            total_norm = float(total_norm ** 0.5)
+            status[name] = {
+                "num_params": param_count,
+                "l2_norm": round(total_norm, 4),
+                "is_healthy": bool(total_norm > 1e-4 and not np.isnan(total_norm)),
+            }
+        status["all_healthy"] = all(v["is_healthy"] for v in status.values())
+        return status
+
+    def load_checkpoint(
+        self,
+        path: str,
+        device: Optional[Union[str, torch.device]] = None,
+        strict_v3: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Loads v3 checkpoint or transfers weights from legacy checkpoints with schema normalization.
+        Attaches calibrator and verifies parameter integrity.
+        """
         dev = torch.device(device) if device is not None else torch.device("cpu")
         self.to(dev)
         ckpt = torch.load(path, map_location=dev)
 
-        if ckpt.get("version") == "v3":
-            self.encoder.load_state_dict(ckpt["encoder"])
-            self.target_encoder.load_state_dict(ckpt["target_encoder"])
-            self.recurrent_core.load_state_dict(ckpt["recurrent_core"])
-            self.predictor.load_state_dict(ckpt["predictor"])
-            self.event_head.load_state_dict(ckpt["event_head"])
-            self.health_head.load_state_dict(ckpt["health_head"])
-            self.q_ensemble.load_state_dict(ckpt["q_ensemble"])
-            self.q_target_ensemble.load_state_dict(ckpt["q_target_ensemble"])
-            self.policy_prior.load_state_dict(ckpt["policy_prior"])
-            if "time_to_event_head" in ckpt:
-                self.time_to_event_head.load_state_dict(ckpt["time_to_event_head"])
-            if "normalizer" in ckpt:
-                self.return_normalizer.low = ckpt["normalizer"]["low"]
-                self.return_normalizer.high = ckpt["normalizer"]["high"]
-                self.return_normalizer.initialized = ckpt["normalizer"]["initialized"]
-            self.to(dev)
-            print(f"[JEPAv3] Successfully loaded v3 checkpoint from {path} (device: {dev})")
-        else:
-            # Transfer base encoder weights from v1/v2 checkpoint
-            base_state = ckpt.get("base_model_state", ckpt.get("model_state", {}))
-            encoder_dict = {
-                k.replace("encoder.", ""): v
-                for k, v in base_state.items()
-                if k.startswith("encoder.")
-            }
-            if encoder_dict:
-                self.encoder.load_state_dict(encoder_dict, strict=False)
-                self.target_encoder.load_state_dict(encoder_dict, strict=False)
-                print(f"[JEPAv3] Transferred {len(encoder_dict)} encoder weights from legacy checkpoint {path}")
-            else:
-                print(f"[JEPAv3] Initializing from base weights.")
+        loaded_components = []
+        skipped_components = []
 
-        # Resolve and load event-head calibrator (Fix 1)
+        is_native_v3 = ckpt.get("version") == "v3"
+
+        # Direct component name mapping: target_attr -> list of possible checkpoint keys
+        key_mappings = {
+            "encoder": ["encoder", "base_model_state"],
+            "target_encoder": ["target_encoder"],
+            "recurrent_core": ["recurrent_core", "gru_belief_state"],
+            "predictor": ["predictor"],
+            "event_head": ["event_head", "event_head_state"],
+            "health_head": ["health_head", "health_head_state"],
+            "q_ensemble": ["q_ensemble", "q_ensemble_state"],
+            "q_target_ensemble": ["q_target_ensemble", "q_target_ensemble_state"],
+            "policy_prior": ["policy_prior", "policy_prior_state"],
+            "time_to_event_head": ["time_to_event_head", "tte_head_state"],
+        }
+
+        for attr, possible_keys in key_mappings.items():
+            target_mod = getattr(self, attr, None)
+            if target_mod is None:
+                continue
+
+            found_state = None
+            found_key = None
+            for k in possible_keys:
+                if k in ckpt and isinstance(ckpt[k], (dict, torch.nn.modules.container.Sequential)):
+                    found_state = ckpt[k]
+                    found_key = k
+                    break
+
+            if found_state is not None:
+                # If loading encoder from base_model_state, strip prefix
+                if found_key == "base_model_state" and attr in ("encoder", "target_encoder"):
+                    found_state = {
+                        k.replace("encoder.", ""): v
+                        for k, v in found_state.items()
+                        if k.startswith("encoder.")
+                    }
+
+                try:
+                    target_mod.load_state_dict(found_state, strict=True)
+                    loaded_components.append(attr)
+                except Exception as e_strict:
+                    # Try non-strict load if strict fails
+                    try:
+                        incompatible = target_mod.load_state_dict(found_state, strict=False)
+                        missing = len(incompatible.missing_keys)
+                        unexpected = len(incompatible.unexpected_keys)
+                        if missing > 0 or unexpected > 0:
+                            print(
+                                f"[JEPAv3 Partial Load] '{attr}' loaded partially from '{found_key}' "
+                                f"(missing: {missing}, unexpected: {unexpected})."
+                            )
+                        loaded_components.append(f"{attr} (partial)")
+                    except Exception as e_nonstrict:
+                        skipped_components.append(f"{attr} (incompatible: {e_nonstrict})")
+                        if strict_v3:
+                            raise ValueError(
+                                f"[JEPAv3 Strict Error] Failed loading component '{attr}' from '{found_key}': {e_nonstrict}"
+                            )
+            else:
+                skipped_components.append(f"{attr} (not in checkpoint)")
+                if strict_v3 and is_native_v3:
+                    raise KeyError(f"[JEPAv3 Strict Error] Expected key for '{attr}' not found in {path}")
+
+        # Normalizer
+        if "normalizer" in ckpt:
+            self.return_normalizer.low = ckpt["normalizer"].get("low", 0.0)
+            self.return_normalizer.high = ckpt["normalizer"].get("high", 1.0)
+            self.return_normalizer.initialized = ckpt["normalizer"].get("initialized", True)
+            loaded_components.append("normalizer")
+
+        self.to(dev)
+
+        # Integrity verification
+        audit = self.verify_integrity()
+        print(f"[JEPAv3 Checkpoint Audit] Loaded from: {path} (version: {ckpt.get('version', 'legacy')})")
+        print(f"  -> Successfully Loaded ({len(loaded_components)}): {', '.join(loaded_components)}")
+        if skipped_components:
+            print(f"  -> Skipped / Fresh ({len(skipped_components)}): {', '.join(skipped_components)}")
+
+        # Attach calibrator
         self.load_default_calibrator()
+
+        return {
+            "loaded_components": loaded_components,
+            "skipped_components": skipped_components,
+            "audit": audit,
+        }
 

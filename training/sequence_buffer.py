@@ -47,6 +47,9 @@ class EpisodeBuffer:
         self._total_transitions = 0
         self._cached_windows: Optional[List[Tuple[int, int]]] = None
         self._cached_event_windows: Optional[List[Tuple[int, int]]] = None
+        self._cached_event_probs: Optional[np.ndarray] = None
+        self._cached_frontier_windows: Optional[List[Tuple[int, int]]] = None
+        self._cached_frontier_probs: Optional[np.ndarray] = None
         self._cached_seq_len: Optional[int] = None
 
     @property
@@ -63,6 +66,9 @@ class EpisodeBuffer:
     def _invalidate_window_cache(self) -> None:
         self._cached_windows = None
         self._cached_event_windows = None
+        self._cached_event_probs = None
+        self._cached_frontier_windows = None
+        self._cached_frontier_probs = None
         self._cached_seq_len = None
 
     def add_episode(
@@ -121,6 +127,11 @@ class EpisodeBuffer:
         windows: List[Tuple[int, int]] = []
         event_windows: List[Tuple[int, int]] = []
         event_weights: List[float] = []
+        frontier_windows: List[Tuple[int, int]] = []
+        frontier_weights: List[float] = []
+
+        # Frontier achievement index set: tools, mining, combat, crafting
+        frontier_indices_set = {0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20}
 
         # Generic per-event-type counts across entire buffer (no hardcoded names)
         num_event_types = self.episodes[0]["events"].shape[-1] if self.episodes else NUM_ACHIEVEMENTS
@@ -144,15 +155,31 @@ class EpisodeBuffer:
                     w_weight = float(np.sum(1.0 / np.maximum(event_type_counts[active_types], 1.0)))
                     event_weights.append(w_weight)
 
+                    # Frontier windows: subset with rare crafting, tool, or mining events
+                    active_frontier = [t for t in active_types if t in frontier_indices_set]
+                    if active_frontier:
+                        frontier_windows.append(win)
+                        f_weight = float(np.sum(1.0 / np.maximum(event_type_counts[active_frontier], 1.0)))
+                        frontier_weights.append(f_weight)
+
         self._cached_windows = windows
         self._cached_event_windows = event_windows
+        self._cached_frontier_windows = frontier_windows
+
         if event_weights:
             total_w = sum(event_weights)
             self._cached_event_probs = np.array([w / total_w for w in event_weights], dtype=np.float64)
-            # Normalize to guarantee exact sum of 1.0
             self._cached_event_probs /= np.sum(self._cached_event_probs)
         else:
             self._cached_event_probs = None
+
+        if frontier_weights:
+            total_fw = sum(frontier_weights)
+            self._cached_frontier_probs = np.array([w / total_fw for w in frontier_weights], dtype=np.float64)
+            self._cached_frontier_probs /= np.sum(self._cached_frontier_probs)
+        else:
+            self._cached_frontier_probs = None
+
         self._cached_seq_len = seq_len
 
     def sample_sequences(
@@ -181,7 +208,37 @@ class EpisodeBuffer:
             raise ValueError(f"No valid sequence windows found of length {seq_len} in buffer.")
 
         chosen_windows: List[Tuple[int, int]] = []
-        if mode == "event_balanced" and self._cached_event_windows and self._cached_event_probs is not None:
+        if mode == "frontier_stratified" and self._cached_frontier_windows and self._cached_frontier_probs is not None:
+            n_frontier = min(batch_size // 4, len(self._cached_frontier_windows))
+            n_event = min(batch_size // 4, len(self._cached_event_windows)) if self._cached_event_windows else 0
+            n_uniform = batch_size - n_frontier - n_event
+
+            if n_frontier > 0:
+                f_indices = np.random.choice(
+                    len(self._cached_frontier_windows),
+                    size=n_frontier,
+                    replace=True,
+                    p=self._cached_frontier_probs,
+                )
+                for idx in f_indices:
+                    chosen_windows.append(self._cached_frontier_windows[idx])
+
+            if n_event > 0 and self._cached_event_probs is not None:
+                e_indices = np.random.choice(
+                    len(self._cached_event_windows),
+                    size=n_event,
+                    replace=True,
+                    p=self._cached_event_probs,
+                )
+                for idx in e_indices:
+                    chosen_windows.append(self._cached_event_windows[idx])
+
+            if n_uniform > 0:
+                u_indices = np.random.choice(len(self._cached_windows), size=n_uniform, replace=True)
+                for idx in u_indices:
+                    chosen_windows.append(self._cached_windows[idx])
+
+        elif mode == "event_balanced" and self._cached_event_windows and self._cached_event_probs is not None:
             n_event = min(batch_size // 2, len(self._cached_event_windows))
             n_uniform = batch_size - n_event
 

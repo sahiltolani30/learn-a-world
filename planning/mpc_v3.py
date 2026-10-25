@@ -43,6 +43,9 @@ class RecurrentMPCPlanner:
         denormalize_q: bool = False,
         tte_weight: float = 0.0,
         standardize_scores: bool = True,
+        frontier_threshold: float = 0.25,
+        common_threshold: float = 0.50,
+        event_thresholds: Optional[Union[float, torch.Tensor]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -62,6 +65,21 @@ class RecurrentMPCPlanner:
         self.tte_weight = tte_weight
         self.standardize_scores = standardize_scores
         self.device = torch.device(device) if device is not None else torch.device("cpu")
+
+        # Adaptive Frontier Event Thresholds
+        # Common survival achievements (sapling, wood, drink, cow, plant, sleep) use common_threshold (0.50)
+        # Sparse frontier achievements (table, pickaxe, sword, stone, furnace, iron, etc.) use frontier_threshold (0.25)
+        if event_thresholds is not None:
+            if isinstance(event_thresholds, (int, float)):
+                t = torch.full((1, 22), float(event_thresholds), device=self.device)
+            else:
+                t = event_thresholds.to(self.device).float().reshape(1, 22)
+            self.event_thresholds = t
+        else:
+            t = torch.full((1, 22), common_threshold, device=self.device)
+            frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
+            t[0, frontier_indices] = frontier_threshold
+            self.event_thresholds = t
 
     def plan(
         self,
@@ -126,7 +144,7 @@ class RecurrentMPCPlanner:
                     a_h = self.model.sample_prior_action(s_roll, m_bin_roll, temperature=self.prior_temperature)
                     prior_actions[:, h_step] = a_h
                     p_h = self.model.event_head.predict_proba(s_roll, a_h, m_bin_roll, use_calibration=self.use_calibration)
-                    m_bin_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=self.device), m_bin_roll)
+                    m_bin_roll = torch.where(p_h > self.event_thresholds, torch.tensor(1.0, device=self.device), m_bin_roll)
                     z_roll, h_roll, s_roll = self.model.predict_next_step(z_roll, h_roll, a_h)
 
                 # 3. Sample N_cem candidates from CEM categorical distribution (with temporal persistence)
@@ -164,13 +182,20 @@ class RecurrentMPCPlanner:
                     )
                     p_t = decomp["event_probs"]
 
-                    cumulative_reward = cumulative_reward + (self.gamma ** t) * r_hat
+                    # Compute newly unlocked achievements in imagination using adaptive thresholds
+                    newly_unlocked = (p_t > self.event_thresholds) & (m_bin_t < 0.5)
+                    discrete_ach_reward = newly_unlocked.float().sum(dim=-1)
+                    soft_ach_reward = torch.clamp(p_t - m_soft_t.float(), min=0.0).sum(dim=-1)
+                    effective_ach_reward = torch.maximum(discrete_ach_reward, soft_ach_reward)
+                    step_reward = effective_ach_reward + decomp["health_reward"]
+
+                    cumulative_reward = cumulative_reward + (self.gamma ** t) * step_reward
 
                     # Simulated belief progression:
                     # Soft mask updated by running maximum of predicted probability (used for reward)
                     m_soft_t = torch.maximum(m_soft_t, p_t)
-                    # Binary mask updated with 0.5 threshold (for model input)
-                    m_bin_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=self.device), m_bin_t)
+                    # Binary mask updated with adaptive frontier thresholds (for model input)
+                    m_bin_t = torch.where(p_t > self.event_thresholds, torch.tensor(1.0, device=self.device), m_bin_t)
                     z_t, h_t, s_t = self.model.predict_next_step(z_t, h_t, a_t)
 
                 # 5. Terminal Clipped Double-Q evaluation at horizon H
