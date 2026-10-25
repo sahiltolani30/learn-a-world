@@ -54,9 +54,10 @@ def load_heldout_data(shards_dir: str, max_shards: Optional[int] = None) -> Dict
     all_rewards = []
     all_lengths = []
 
-    print(f"[Head-Audit] Loading {len(shard_paths)} shards...")
-    for p in shard_paths:
+    print(f"[Head-Audit] Loading {len(shard_paths)} shards...", flush=True)
+    for i, p in enumerate(shard_paths):
         data = np.load(p, allow_pickle=True)
+        print(f"  [{i+1}/{len(shard_paths)}] Loaded {Path(p).name} ({len(data['obs'])} transitions)", flush=True)
         all_obs.append(data["obs"])
         all_actions.append(data["actions"])
         all_events.append(data["events"])
