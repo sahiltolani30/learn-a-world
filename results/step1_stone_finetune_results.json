@@ -1,6 +1,7 @@
 {
   "starting_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_phase_a.pt",
   "final_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_stone.pt",
+  "note": "Phase A numbers below are recorded constants from the first Phase A execution prior to the resume path (5000/5000 steps, loss=3.0746, r=0.8074, MAE=0.2444), carried forward when executing Phase B via --skip-phase-a.",
   "buffer_composition": {
     "structured_random": 150000,
     "teacher_hybrid": 150000,

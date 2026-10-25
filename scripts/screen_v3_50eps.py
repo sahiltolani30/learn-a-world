@@ -14,9 +14,10 @@ Outputs:
 import argparse
 import json
 from pathlib import Path
+import shutil
 import sys
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -33,6 +34,28 @@ from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
 
 
+def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
+    p = Path(ckpt_path)
+    if p.exists():
+        return str(p)
+    candidates = [
+        REPO_ROOT / ckpt_path,
+        REPO_ROOT / "checkpoints" / p.name,
+    ]
+    if drive_dir:
+        dp = Path(drive_dir)
+        candidates.extend([
+            dp / ckpt_path,
+            dp / "checkpoints" / p.name,
+            Path("/content") / "checkpoints" / p.name,
+            Path("/content") / p.name,
+        ])
+    for cand in candidates:
+        if cand.exists():
+            return str(cand)
+    return str(ckpt_path)
+
+
 def run_screening(
     checkpoint_path: str = "checkpoints/jepa_crafter_v3_phase2.pt",
     num_episodes: int = 50,
@@ -46,6 +69,7 @@ def run_screening(
     novelty_weight: float = 0.02,
     device: str = "cpu",
     output_json: str = "results/screen_v3_50eps_results.json",
+    drive_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -195,29 +219,48 @@ def run_screening(
         bar = "#" * int(round(pct / 5))
         print(f"  {ach:<22}: {pct:5.1f}% | {bar}")
 
-    Path(output_json).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_json, "w") as f:
+    out_p = Path(output_json)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_p, "w") as f:
         json.dump(summary, f, indent=2)
-    print(f"\n--> Full screening results saved to: {output_json}")
+    print(f"\n--> Full screening results saved to: {out_p}")
+
+    if drive_dir:
+        dp = Path(drive_dir)
+        if dp.exists():
+            drive_out = dp / "results" / out_p.name
+            drive_out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(out_p), str(drive_out))
+            print(f"[Drive] Mirrored screening results to: {drive_out}")
+
+    print("\n" + "=" * 80)
+    print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")
+    print("=" * 80)
+    print(f"--- BEGIN {out_p.name} ---")
+    print(json.dumps(summary, indent=2))
+    print(f"--- END {out_p.name} ---\n")
 
     return summary
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 50-episode screening of JEPA v3.")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_step1_stone.pt")
     parser.add_argument("--num_episodes", type=int, default=50)
     parser.add_argument("--seed_start", type=int, default=2050)
     parser.add_argument("--max_steps", type=int, default=1000)
     parser.add_argument("--horizon", type=int, default=10)
     parser.add_argument("--num_candidates", type=int, default=64)
     parser.add_argument("--cem_iterations", type=int, default=2)
-    parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--output_json", type=str, default="results/screen_v3_50eps_results.json")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--output_json", type=str, default="results/screen_v3_step1_results.json")
+    parser.add_argument("--drive_dir", type=str, default=None)
     args = parser.parse_args()
 
+    resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
+
     run_screening(
-        checkpoint_path=args.checkpoint,
+        checkpoint_path=resolved_ckpt,
         num_episodes=args.num_episodes,
         seed_start=args.seed_start,
         max_steps=args.max_steps,
@@ -226,4 +269,5 @@ if __name__ == "__main__":
         cem_iterations=args.cem_iterations,
         device=args.device,
         output_json=args.output_json,
+        drive_dir=args.drive_dir,
     )

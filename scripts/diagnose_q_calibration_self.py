@@ -95,6 +95,9 @@ def generate_self_play_episodes(
         reward_list = []
         done_list = []
 
+        pickaxe_list = []
+        stone_list = []
+
         ep_reward = 0.0
         steps = 0
 
@@ -108,10 +111,16 @@ def generate_self_play_episodes(
             done = bool(terminated or truncated)
             ep_reward += float(reward)
 
+            inv = info.get("inventory", {}) if isinstance(info, dict) else {}
+            has_pick = bool(inv.get("wood_pickaxe", 0) > 0)
+            has_st = bool(inv.get("stone", 0) > 0)
+
             obs_list.append(obs)
             action_list.append(action)
             reward_list.append(float(reward))
             done_list.append(done)
+            pickaxe_list.append(has_pick)
+            stone_list.append(has_st)
 
             # Update belief state
             with torch.no_grad():
@@ -135,6 +144,8 @@ def generate_self_play_episodes(
             "actions": np.array(action_list, dtype=np.int64),
             "rewards": np.array(reward_list, dtype=np.float32),
             "dones": np.array(done_list, dtype=bool),
+            "has_pickaxe": np.array(pickaxe_list, dtype=bool),
+            "has_stone": np.array(stone_list, dtype=bool),
             "seed": seed,
             "length": steps,
             "reward": ep_reward,
@@ -204,15 +215,54 @@ def evaluate_self_q_calibration(
             all_q_std.extend(q_std.cpu().numpy().tolist())
             all_returns.extend(returns.tolist())
 
+            # Stone subset: pickaxe-in-hand or within 16 steps of stone
+            ep_len = len(rewards)
+            ep_stone_mask = np.zeros(ep_len, dtype=bool)
+            if "has_pickaxe" in ep:
+                has_pick = ep["has_pickaxe"]
+                ep_stone_mask |= has_pick
+            if "has_stone" in ep:
+                has_st = ep["has_stone"]
+                st_steps = np.where(has_st)[0]
+                for s_step in st_steps:
+                    ep_stone_mask[max(0, s_step - 16) : s_step + 1] = True
+            stone_mask_all.extend(ep_stone_mask.tolist())
+
     q_pred_arr = np.array(all_q_pred, dtype=np.float32)
     q_std_arr = np.array(all_q_std, dtype=np.float32)
     returns_arr = np.array(all_returns, dtype=np.float32)
+    stone_mask = np.array(stone_mask_all, dtype=bool) if stone_mask_all else np.zeros(len(q_pred_arr), dtype=bool)
 
     # Statistical correlation metrics
     r_pearson, p_pearson = stats.pearsonr(q_pred_arr, returns_arr)
     rho_spearman, p_spearman = stats.spearmanr(q_pred_arr, returns_arr)
     mae = float(np.mean(np.abs(q_pred_arr - returns_arr)))
     rmse = float(np.sqrt(np.mean((q_pred_arr - returns_arr) ** 2)))
+
+    stone_indices = np.where(stone_mask)[0]
+    if len(stone_indices) >= 5:
+        q_stone = q_pred_arr[stone_indices]
+        ret_stone = returns_arr[stone_indices]
+        r_stone, p_stone = stats.pearsonr(q_stone, ret_stone)
+        rho_stone, _ = stats.spearmanr(q_stone, ret_stone)
+        mae_stone = float(np.mean(np.abs(q_stone - ret_stone)))
+        stone_subset_metrics = {
+            "num_transitions": int(len(stone_indices)),
+            "pearson_r": float(r_stone),
+            "pearson_p_value": float(p_stone),
+            "spearman_rho": float(rho_stone),
+            "mae": float(mae_stone),
+            "q_pred_mean": float(np.mean(q_stone)),
+            "realized_return_mean": float(np.mean(ret_stone)),
+        }
+    else:
+        stone_subset_metrics = {
+            "num_transitions": int(len(stone_indices)),
+            "pearson_r": 0.0,
+            "spearman_rho": 0.0,
+            "mae": 0.0,
+            "note": "Fewer than 5 stone-adjacent transitions observed in self-play slice",
+        }
 
     metrics = {
         "num_episodes": len(episodes),
@@ -233,6 +283,15 @@ def evaluate_self_q_calibration(
         "realized_return_max": float(np.max(returns_arr)),
         "mean_ensemble_disagreement": float(np.mean(q_std_arr)),
         "max_ensemble_disagreement": float(np.max(q_std_arr)),
+        "stone_subset": stone_subset_metrics,
+        "baseline_comparison": {
+            "step0_overall_pearson_r": 0.3665,
+            "step0_overall_mae": 0.8661,
+            "step0_stone_subset_pearson_r": 0.1933,
+            "step0_stone_subset_mae": 0.5674,
+            "delta_overall_pearson_r": float(r_pearson - 0.3665),
+            "delta_stone_subset_pearson_r": float(stone_subset_metrics.get("pearson_r", 0.0) - 0.1933),
+        },
     }
 
     return metrics, q_pred_arr, returns_arr, q_std_arr
@@ -379,20 +438,24 @@ def run_self_calibration_diagnostic(
     s_ret_std = metrics["realized_return_std"]
     s_dis = metrics["mean_ensemble_disagreement"]
 
-    print("\n" + "=" * 80)
-    print("      D1 Q-CALIBRATION: TEACHER SLICE vs SELF-PLAY SLICE")
-    print("=" * 80)
-    print(f"{'Metric':<36} | {'Teacher Slice':<16} | {'Self Slice (Fresh)':<18} | {'Status'}")
-    print("-" * 80)
+    stone_sub = metrics.get("stone_subset", {})
+    s_r_stone = stone_sub.get("pearson_r", 0.0)
+    s_mae_stone = stone_sub.get("mae", 0.0)
 
-    r_status = "✅ HEALTHY (> 0.30)" if s_r > 0.30 else ("⚠️ FLAT (< 0.30)" if s_r > 0.20 else "❌ COLLAPSE (< 0.20)")
-    print(f"{'Pearson r (Target > 0.30)':<36} | {t_r:<16.4f} | {s_r:<18.4f} | {r_status}")
-    print(f"{'Spearman rho':<36} | {t_rho:<16.4f} | {s_rho:<18.4f} | {'—'}")
-    print(f"{'MAE':<36} | {t_mae:<16.4f} | {s_mae:<18.4f} | {'Lower is better'}")
-    print(f"{'RMSE':<36} | {t_rmse:<16.4f} | {s_rmse:<18.4f} | {'Lower is better'}")
-    print(f"{'Predicted Q-Std (Uncollapsed)':<36} | {t_q_std:<16.4f} | {s_q_std:<18.4f} | {'✅' if s_q_std > 0.1 else '⚠️ COLLAPSED'}")
-    print(f"{'Realized Return Std':<36} | {t_ret_std:<16.4f} | {s_ret_std:<18.4f} | {'—'}")
-    print(f"{'Ensemble Disagreement':<36} | {t_dis:<16.4f} | {s_dis:<18.4f} | {'—'}")
+    print("\n" + "=" * 80)
+    print("      D1 Q-CALIBRATION: HONEST SELF-PLAY SLICE (STEP 1 AUDIT)")
+    print("=" * 80)
+    print(f"{'Slice / Subset':<32} | {'Baseline (Step 0)':<18} | {'Step 1 Final':<16} | {'Status'}")
+    print("-" * 80)
+    r_status = "✅ PASSED (> 0.3665)" if s_r > 0.3665 else "⚠️ BELOW BASELINE"
+    print(f"{'Overall Pearson r':<32} | {'0.3665':<18} | {s_r:<16.4f} | {r_status}")
+    print(f"{'Overall MAE':<32} | {'0.8661':<18} | {s_mae:<16.4f} | {'Lower is better'}")
+
+    r_stone_status = "✅ REPAIRED (> 0.1933)" if s_r_stone > 0.1933 else "⚠️ UNREPAIRED"
+    print(f"{'Stone Subset Pearson r':<32} | {'0.1933':<18} | {s_r_stone:<16.4f} | {r_stone_status}")
+    print(f"{'Stone Subset MAE':<32} | {'0.5674':<18} | {s_mae_stone:<16.4f} | {'Lower is better'}")
+    print(f"{'Predicted Q-Std (Dispersion)':<32} | {'0.2711':<18} | {s_q_std:<16.4f} | {'✅' if s_q_std > 0.1 else '⚠️ COLLAPSED'}")
+    print(f"{'Ensemble Disagreement':<32} | {'—':<18} | {s_dis:<16.4f} | {'—'}")
     print("=" * 80)
 
     # 9. Copy to Drive if provided
@@ -404,25 +467,54 @@ def run_self_calibration_diagnostic(
             shutil.copy2(output_png, str(drive_p / Path(output_png).name))
             print(f"[Drive] Copied self-slice JSON and PNG to {drive_p}")
 
+    print("\n" + "=" * 80)
+    print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")
+    print("=" * 80)
+    print(f"--- BEGIN {Path(output_json).name} ---")
+    print(json.dumps(metrics, indent=2))
+    print(f"--- END {Path(output_json).name} ---\n")
+
     return metrics
+
+
+def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
+    p = Path(ckpt_path)
+    if p.exists():
+        return str(p)
+    candidates = [
+        REPO_ROOT / ckpt_path,
+        REPO_ROOT / "checkpoints" / p.name,
+    ]
+    if drive_dir:
+        dp = Path(drive_dir)
+        candidates.extend([
+            dp / ckpt_path,
+            dp / "checkpoints" / p.name,
+        ])
+    for cand in candidates:
+        if cand.exists():
+            return str(cand)
+    return str(ckpt_path)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate Q-calibration on fresh self-play slice.")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_t1_joint.pt")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_step1_stone.pt")
     parser.add_argument("--calibrator", type=str, default="results/calibration/event_head_calibrator.json")
     parser.add_argument("--teacher_json", type=str, default="results/diagnostics/t1_joint_q_calibration.json")
     parser.add_argument("--num_episodes", type=int, default=48)
     parser.add_argument("--seed_start", type=int, default=4000)
     parser.add_argument("--max_steps", type=int, default=1000)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--output_json", type=str, default="results/diagnostics/t1_joint_q_calibration_self.json")
-    parser.add_argument("--output_png", type=str, default="results/diagnostics/t1_joint_q_calibration_self.png")
+    parser.add_argument("--output_json", type=str, default="results/diagnostics/step1_q_calibration_self.json")
+    parser.add_argument("--output_png", type=str, default="results/diagnostics/step1_q_calibration_self.png")
     parser.add_argument("--drive_dir", type=str, default=None)
 
     args = parser.parse_args()
+    resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
+
     run_self_calibration_diagnostic(
-        checkpoint=args.checkpoint,
+        checkpoint=resolved_ckpt,
         calibrator_path=args.calibrator,
         teacher_diag_path=args.teacher_json,
         num_episodes=args.num_episodes,
