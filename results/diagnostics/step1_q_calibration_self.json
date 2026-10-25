@@ -1,0 +1,44 @@
+{
+  "num_episodes": 48,
+  "total_transitions": 7930,
+  "pearson_r": 0.5694587230682373,
+  "pearson_p_value": 0.0,
+  "spearman_rho": 0.6900081961646969,
+  "spearman_p_value": 0.0,
+  "mae": 0.9463649988174438,
+  "rmse": 1.232054591178894,
+  "q_pred_mean": 0.24039806425571442,
+  "q_pred_std": 0.42506837844848633,
+  "q_pred_min": -0.26144981384277344,
+  "q_pred_max": 2.1461682319641113,
+  "realized_return_mean": 0.780345618724823,
+  "realized_return_std": 1.2929272651672363,
+  "realized_return_min": -0.8931480050086975,
+  "realized_return_max": 4.440563201904297,
+  "mean_ensemble_disagreement": 0.12413579225540161,
+  "max_ensemble_disagreement": 1.6348884105682373,
+  "stone_subset": {
+    "num_transitions": 272,
+    "pearson_r": 0.21274058520793915,
+    "pearson_p_value": 0.0004109093819281352,
+    "spearman_rho": 0.28385776013901903,
+    "mae": 0.501550018787384,
+    "q_pred_mean": -0.009734583087265491,
+    "realized_return_mean": -0.48544591665267944
+  },
+  "baseline_comparison": {
+    "step0_overall_pearson_r": 0.3665,
+    "step0_overall_mae": 0.8661,
+    "step0_stone_subset_pearson_r": 0.1933,
+    "step0_stone_subset_mae": 0.5674,
+    "delta_overall_pearson_r": 0.20295873284339905,
+    "delta_stone_subset_pearson_r": 0.01944058520793915
+  },
+  "slice_type": "SELF_PLAY_FRESH",
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_stone.pt",
+  "seed_range": [
+    4000,
+    4047
+  ],
+  "tag": "DIAGNOSTICS-ONLY (never enter training manifest)"
+}
