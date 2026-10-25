@@ -1,0 +1,31 @@
+{
+  "starting_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_phase_a.pt",
+  "final_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_stone.pt",
+  "buffer_composition": {
+    "structured_random": 150000,
+    "teacher_hybrid": 150000,
+    "planner_v2": 30000,
+    "task_total": 330000,
+    "curiosity": 355469,
+    "total_transitions": 685469,
+    "total_episodes": 3961
+  },
+  "phase_a": {
+    "steps": 5000,
+    "final_loss": 3.0746,
+    "effective_stone_rate": 0.58,
+    "calibration": {
+      "pearson_r": 0.8074,
+      "mae": 0.2444
+    }
+  },
+  "phase_b": {
+    "steps": 10000,
+    "final_loss": 2.1576,
+    "effective_stone_rate": 0.56,
+    "calibration": {
+      "pearson_r": 0.8479,
+      "mae": 0.1977
+    }
+  }
+}

@@ -673,9 +673,9 @@ def main():
     ckpt_a = next((p for p in ckpt_a_candidates if p.exists()), None)
 
     if args.skip_phase_a and ckpt_a is not None:
-        local_ckpt_a = _ensure_local_checkpoint(str(ckpt_a), drive_p)
-        model = JEPAv3.from_checkpoint(str(local_ckpt_a), device=args.device)
-        print(f"\n[Model] Successfully loaded Phase A checkpoint: {local_ckpt_a}")
+        local_ckpt = _ensure_local_checkpoint(str(ckpt_a), drive_p)
+        model = JEPAv3.from_checkpoint(str(local_ckpt), device=args.device)
+        print(f"\n[Model] Successfully loaded Phase A checkpoint: {local_ckpt}")
         print("Skipping Phase A training and proceeding directly to Phase B...")
         phase_a_results = {"final_loss": 3.0746, "effective_stone_rate": 0.58}
         calib_phase_a = {"pearson_r": 0.8074, "mae": 0.2444}
