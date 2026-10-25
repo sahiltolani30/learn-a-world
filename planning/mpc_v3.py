@@ -38,10 +38,13 @@ class RecurrentMPCPlanner:
         prior_mix: float = 0.5,
         prior_temperature: float = 1.0,
         action_persistence: float = 0.0,
+        vital_reward_weight: float = 0.0,
         num_actions: int = 17,
         use_calibration: bool = True,
         denormalize_q: bool = False,
         tte_weight: float = 0.0,
+        recurring_vitals: bool = False,
+        hierarchical_tte: bool = False,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -55,10 +58,13 @@ class RecurrentMPCPlanner:
         self.prior_mix = prior_mix
         self.prior_temperature = prior_temperature
         self.action_persistence = action_persistence
+        self.vital_reward_weight = vital_reward_weight
         self.num_actions = num_actions
         self.use_calibration = use_calibration
         self.denormalize_q = denormalize_q
         self.tte_weight = tte_weight
+        self.recurring_vitals = recurring_vitals
+        self.hierarchical_tte = hierarchical_tte
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
     def plan(
@@ -150,6 +156,17 @@ class RecurrentMPCPlanner:
                         s_t, a_t, m_t, return_decomposition=True, use_calibration=self.use_calibration
                     )
                     p_t = decomp["event_probs"]
+
+                    # Continuous Vital Survival Incentives:
+                    # Biological imperatives (drink, eat) must be satisfied cyclically to survive.
+                    if self.vital_reward_weight > 0.0 or self.recurring_vitals:
+                        v_weight = self.vital_reward_weight if self.vital_reward_weight > 0.0 else 0.3
+                        # 2: collect_drink (hydration is priority #1 for survival)
+                        # 9: eat_cow, 10: eat_plant (caloric nutrition)
+                        drink_bonus = p_t[:, 2] * v_weight
+                        food_bonus = (p_t[:, 9] + p_t[:, 10]) * (0.5 * v_weight)
+                        r_hat = r_hat + drink_bonus + food_bonus
+
                     cumulative_reward = cumulative_reward + (self.gamma ** t) * r_hat
 
                     # Simulated belief progression
@@ -175,8 +192,45 @@ class RecurrentMPCPlanner:
                 if self.tte_weight > 0.0 and hasattr(self.model, "time_to_event_head"):
                     tau_0 = self.model.time_to_event_head(s_0)  # [1, 22]
                     tau_H = self.model.time_to_event_head(s_t)  # [C, 22]
-                    # Generic Potential Field: evaluates all unachieved milestones identically by index
-                    unachieved_mask = (1.0 - m_0).expand(C, -1)
+
+                    goal_mask = (1.0 - m_0).clone()
+                    if self.recurring_vitals:
+                        # Biological vitals recur cyclically throughout life:
+                        # 2: collect_drink, 9: eat_cow, 10: eat_plant
+                        goal_mask[:, 2] = 1.0
+                        goal_mask[:, 9] = 0.5
+                        goal_mask[:, 10] = 0.5
+
+                    if self.hierarchical_tte:
+                        # Technological stage weighting (0..21 generic indices):
+                        weights = torch.ones(22, device=self.device)
+                        has_wood_pick = bool(m_0[0, 15].item() > 0.5)
+                        has_stone = bool(m_0[0, 5].item() > 0.5)
+                        has_stone_pick = bool(m_0[0, 13].item() > 0.5)
+                        has_furnace = bool(m_0[0, 17].item() > 0.5)
+
+                        if not has_wood_pick:
+                            weights[6] = 2.0   # collect_wood
+                            weights[20] = 2.0  # place_table
+                            weights[15] = 3.0  # make_wood_pickaxe
+                        elif has_wood_pick and not has_stone:
+                            weights[5] = 3.5   # collect_stone
+                            weights[19] = 2.0  # place_stone
+                        elif has_stone and not has_stone_pick:
+                            weights[13] = 3.5  # make_stone_pickaxe
+                            weights[17] = 3.0  # place_furnace
+                        elif has_stone_pick and not has_furnace:
+                            weights[17] = 3.5  # place_furnace
+                            weights[0] = 2.5   # collect_coal
+                            weights[3] = 2.5   # collect_iron
+                        elif has_furnace:
+                            weights[3] = 4.0   # collect_iron
+                            weights[0] = 3.0   # collect_coal
+                            weights[11] = 4.0  # make_iron_pickaxe
+
+                        goal_mask = goal_mask * weights.unsqueeze(0)
+
+                    unachieved_mask = goal_mask.expand(C, -1)
                     prog = ((tau_H - tau_0) * unachieved_mask).clamp(min=0.0).sum(dim=-1)
                     tte_gain = self.tte_weight * prog
 
