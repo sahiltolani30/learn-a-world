@@ -21,6 +21,7 @@ Phase 2 (Combinations):
   11. h15_tte05_denorm: --horizon 15 --tte_weight 0.5 --denormalize_q
   12. h20_tte05_c128: --horizon 20 --tte_weight 0.5 --num_candidates 128
   13. std_off_denorm_h15_tte05: --no-standardize-scores --denormalize_q --horizon 15 --tte_weight 0.5
+  14. denorm_tte05: --denormalize_q --tte_weight 0.5
 
 Outputs:
   - Individual JSON files in results/sweep/<name>_20ep.json
@@ -126,6 +127,12 @@ PHASE_2_CONFIGS = [
         "description": "Standardize OFF + Denormalize Q + Horizon 15 + TTE 0.5",
         "cli_args": ["--no-standardize-scores", "--denormalize_q", "--horizon", "15", "--tte_weight", "0.5"],
         "output_json": "results/sweep/std_off_denorm_h15_tte05_20ep.json",
+    },
+    {
+        "name": "denorm_tte05",
+        "description": "Denormalize Q ON + TTE 0.5 (H=10, Standardize ON)",
+        "cli_args": ["--denormalize_q", "--tte_weight", "0.5"],
+        "output_json": "results/sweep/denorm_tte05_20ep.json",
     },
 ]
 

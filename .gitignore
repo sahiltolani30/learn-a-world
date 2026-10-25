@@ -46,3 +46,4 @@ wandb/
 
 # Downloaded Archives
 learn-a-world*/
+*.zip
