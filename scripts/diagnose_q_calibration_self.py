@@ -340,6 +340,7 @@ def run_self_calibration_diagnostic(
     output_json: str = "results/diagnostics/t1_joint_q_calibration_self.json",
     output_png: str = "results/diagnostics/t1_joint_q_calibration_self.png",
     drive_dir: Optional[str] = None,
+    force: bool = False,
 ) -> Dict[str, Any]:
     print("\n" + "=" * 70)
     print("HONEST DIAGNOSTIC SLICE: SELF-DISTRIBUTION Q-CALIBRATION (PART 2)")
@@ -347,6 +348,7 @@ def run_self_calibration_diagnostic(
     print(f"  Seeds:        {seed_start}..{seed_start + num_episodes - 1} (DIAGNOSTICS-ONLY)")
     print(f"  Episodes:     {num_episodes}")
     print(f"  Device:       {device}")
+    print(f"  Force Fresh:  {force}")
     print("=" * 70 + "\n")
 
     # 1. Load model
@@ -374,15 +376,16 @@ def run_self_calibration_diagnostic(
     local_cache = Path(f"/content/episodes_{seed_start}_{seed_start + num_episodes - 1}.pkl")
 
     episodes = None
-    for cand_cache in [local_cache, cache_path]:
-        if cand_cache and cand_cache.exists():
-            try:
-                with open(cand_cache, "rb") as f:
-                    episodes = pickle.load(f)
-                print(f"[Self-Diag] Loaded {len(episodes)} cached self-play episodes from {cand_cache}")
-                break
-            except Exception:
-                episodes = None
+    if not force:
+        for cand_cache in [local_cache, cache_path]:
+            if cand_cache and cand_cache.exists():
+                try:
+                    with open(cand_cache, "rb") as f:
+                        episodes = pickle.load(f)
+                    print(f"[Self-Diag] Loaded {len(episodes)} cached self-play episodes from {cand_cache}")
+                    break
+                except Exception:
+                    episodes = None
 
     if episodes is None:
         episodes = generate_self_play_episodes(
@@ -537,6 +540,7 @@ def main() -> None:
     parser.add_argument("--output_json", type=str, default="results/diagnostics/step1_q_calibration_self.json")
     parser.add_argument("--output_png", type=str, default="results/diagnostics/step1_q_calibration_self.png")
     parser.add_argument("--drive_dir", type=str, default=None)
+    parser.add_argument("--force", action="store_true", help="Force fresh self-play episode generation (ignore cached pkl)")
 
     args = parser.parse_args()
     resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
@@ -552,6 +556,7 @@ def main() -> None:
         output_json=args.output_json,
         output_png=args.output_png,
         drive_dir=args.drive_dir,
+        force=args.force,
     )
 
 
