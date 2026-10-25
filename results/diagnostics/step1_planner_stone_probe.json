@@ -1,0 +1,515 @@
+{
+  "num_probed_states": 120,
+  "action_agreement_rate": 0.14166666666666666,
+  "mean_value_gap": 0.0022824544614801806,
+  "mean_q_stone_approaching": 0.02656288941701253,
+  "mean_q_wandering": 0.02428043495553235,
+  "baseline_comparison": {
+    "step0_agreement_rate": 0.2833333333333333,
+    "step0_mean_value_gap": 0.021818772532666723,
+    "delta_agreement_rate": -0.14166666666666666,
+    "delta_mean_value_gap": -0.019536318071186543
+  },
+  "probe_records": [
+    {
+      "step": 105,
+      "recorded_action": 5,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.010884314775466919,
+      "q_wander_mean": -0.01090715080499649,
+      "value_gap": 2.2836029529571533e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 58,
+      "recorded_action": 5,
+      "planned_action": 3,
+      "agreement": false,
+      "q_stone_action": -0.010675907135009766,
+      "q_wander_mean": -0.010599253699183464,
+      "value_gap": -7.665343582630157e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 78,
+      "recorded_action": 5,
+      "planned_action": 4,
+      "agreement": false,
+      "q_stone_action": -0.010409116744995117,
+      "q_wander_mean": -0.010526474565267563,
+      "value_gap": 0.00011735782027244568,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 98,
+      "recorded_action": 5,
+      "planned_action": 4,
+      "agreement": false,
+      "q_stone_action": -0.0022791028022766113,
+      "q_wander_mean": -0.0035685598850250244,
+      "value_gap": 0.001289457082748413,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 113,
+      "recorded_action": 4,
+      "planned_action": 4,
+      "agreement": true,
+      "q_stone_action": -0.009734690189361572,
+      "q_wander_mean": -0.00944514200091362,
+      "value_gap": -0.00028954818844795227,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 133,
+      "recorded_action": 3,
+      "planned_action": 3,
+      "agreement": true,
+      "q_stone_action": -0.011686921119689941,
+      "q_wander_mean": -0.01179688610136509,
+      "value_gap": 0.00010996498167514801,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 100,
+      "recorded_action": 5,
+      "planned_action": 7,
+      "agreement": false,
+      "q_stone_action": -0.0026138722896575928,
+      "q_wander_mean": -0.003892442211508751,
+      "value_gap": 0.0012785699218511581,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 41,
+      "recorded_action": 10,
+      "planned_action": 2,
+      "agreement": false,
+      "q_stone_action": 1.0140712261199951,
+      "q_wander_mean": 0.9973922967910767,
+      "value_gap": 0.016678929328918457,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 61,
+      "recorded_action": 4,
+      "planned_action": 1,
+      "agreement": false,
+      "q_stone_action": -0.00806879997253418,
+      "q_wander_mean": -0.007223650813102722,
+      "value_gap": -0.0008451491594314575,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 81,
+      "recorded_action": 2,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.003474205732345581,
+      "q_wander_mean": -0.005472395569086075,
+      "value_gap": 0.0019981898367404938,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 130,
+      "recorded_action": 3,
+      "planned_action": 4,
+      "agreement": false,
+      "q_stone_action": -0.011251598596572876,
+      "q_wander_mean": -0.01164284534752369,
+      "value_gap": 0.0003912467509508133,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 151,
+      "recorded_action": 1,
+      "planned_action": 14,
+      "agreement": false,
+      "q_stone_action": 0.13643312454223633,
+      "q_wander_mean": 0.13668134808540344,
+      "value_gap": -0.00024822354316711426,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 114,
+      "recorded_action": 5,
+      "planned_action": 8,
+      "agreement": false,
+      "q_stone_action": -0.00965389609336853,
+      "q_wander_mean": -0.009904969483613968,
+      "value_gap": 0.0002510733902454376,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 134,
+      "recorded_action": 1,
+      "planned_action": 1,
+      "agreement": true,
+      "q_stone_action": -0.010833680629730225,
+      "q_wander_mean": -0.01022339053452015,
+      "value_gap": -0.0006102900952100754,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 154,
+      "recorded_action": 5,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.003959923982620239,
+      "q_wander_mean": -0.007029958069324493,
+      "value_gap": 0.003070034086704254,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 84,
+      "recorded_action": 5,
+      "planned_action": 14,
+      "agreement": false,
+      "q_stone_action": -0.04824820160865784,
+      "q_wander_mean": -0.04755019396543503,
+      "value_gap": -0.0006980076432228088,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 89,
+      "recorded_action": 5,
+      "planned_action": 5,
+      "agreement": true,
+      "q_stone_action": -0.011342883110046387,
+      "q_wander_mean": -0.01151333749294281,
+      "value_gap": 0.00017045438289642334,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 109,
+      "recorded_action": 5,
+      "planned_action": 14,
+      "agreement": false,
+      "q_stone_action": -0.011788040399551392,
+      "q_wander_mean": -0.011709857732057571,
+      "value_gap": -7.818266749382019e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 129,
+      "recorded_action": 5,
+      "planned_action": 8,
+      "agreement": false,
+      "q_stone_action": 0.3716811537742615,
+      "q_wander_mean": 0.3196191191673279,
+      "value_gap": 0.052062034606933594,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 164,
+      "recorded_action": 3,
+      "planned_action": 11,
+      "agreement": false,
+      "q_stone_action": 0.7582665085792542,
+      "q_wander_mean": 0.6708546876907349,
+      "value_gap": 0.08741182088851929,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 87,
+      "recorded_action": 5,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.011089831590652466,
+      "q_wander_mean": -0.011274348944425583,
+      "value_gap": 0.00018451735377311707,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 127,
+      "recorded_action": 5,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": 0.06308194994926453,
+      "q_wander_mean": 0.058194585144519806,
+      "value_gap": 0.0048873648047447205,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 64,
+      "recorded_action": 5,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.011917293071746826,
+      "q_wander_mean": -0.011968106031417847,
+      "value_gap": 5.081295967102051e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 84,
+      "recorded_action": 1,
+      "planned_action": 6,
+      "agreement": false,
+      "q_stone_action": -0.011310994625091553,
+      "q_wander_mean": -0.011754205450415611,
+      "value_gap": 0.00044321082532405853,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 104,
+      "recorded_action": 5,
+      "planned_action": 5,
+      "agreement": true,
+      "q_stone_action": -0.008162438869476318,
+      "q_wander_mean": -0.008386936038732529,
+      "value_gap": 0.00022449716925621033,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 124,
+      "recorded_action": 5,
+      "planned_action": 3,
+      "agreement": false,
+      "q_stone_action": -0.010690659284591675,
+      "q_wander_mean": -0.011063648387789726,
+      "value_gap": 0.00037298910319805145,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 71,
+      "recorded_action": 4,
+      "planned_action": 3,
+      "agreement": false,
+      "q_stone_action": -0.011791318655014038,
+      "q_wander_mean": -0.007356874644756317,
+      "value_gap": -0.004434444010257721,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 119,
+      "recorded_action": 3,
+      "planned_action": 3,
+      "agreement": true,
+      "q_stone_action": -0.01187056303024292,
+      "q_wander_mean": -0.012094564735889435,
+      "value_gap": 0.0002240017056465149,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 139,
+      "recorded_action": 5,
+      "planned_action": 15,
+      "agreement": false,
+      "q_stone_action": -0.012236148118972778,
+      "q_wander_mean": -0.012188244611024857,
+      "value_gap": -4.790350794792175e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 159,
+      "recorded_action": 5,
+      "planned_action": 15,
+      "agreement": false,
+      "q_stone_action": -0.010979920625686646,
+      "q_wander_mean": -0.010972250252962112,
+      "value_gap": -7.670372724533081e-06,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 120,
+      "recorded_action": 5,
+      "planned_action": 6,
+      "agreement": false,
+      "q_stone_action": -0.00932621955871582,
+      "q_wander_mean": -0.009973974898457527,
+      "value_gap": 0.0006477553397417068,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 140,
+      "recorded_action": 1,
+      "planned_action": 10,
+      "agreement": false,
+      "q_stone_action": -0.011418312788009644,
+      "q_wander_mean": -0.011435829102993011,
+      "value_gap": 1.751631498336792e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 124,
+      "recorded_action": 1,
+      "planned_action": 5,
+      "agreement": false,
+      "q_stone_action": -0.002969801425933838,
+      "q_wander_mean": -0.008388901129364967,
+      "value_gap": 0.0054190997034311295,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 100,
+      "recorded_action": 7,
+      "planned_action": 5,
+      "agreement": false,
+      "q_stone_action": 0.7296004891395569,
+      "q_wander_mean": 0.6964017152786255,
+      "value_gap": 0.033198773860931396,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 157,
+      "recorded_action": 5,
+      "planned_action": 4,
+      "agreement": false,
+      "q_stone_action": -0.011301279067993164,
+      "q_wander_mean": -0.011453032493591309,
+      "value_gap": 0.00015175342559814453,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 177,
+      "recorded_action": 13,
+      "planned_action": 6,
+      "agreement": false,
+      "q_stone_action": -0.011692941188812256,
+      "q_wander_mean": -0.011701675131917,
+      "value_gap": 8.733943104743958e-06,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 197,
+      "recorded_action": 3,
+      "planned_action": 0,
+      "agreement": false,
+      "q_stone_action": -0.019027382135391235,
+      "q_wander_mean": -0.019075622782111168,
+      "value_gap": 4.8240646719932556e-05,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 217,
+      "recorded_action": 4,
+      "planned_action": 4,
+      "agreement": true,
+      "q_stone_action": -0.0416390597820282,
+      "q_wander_mean": -0.04469584301114082,
+      "value_gap": 0.003056783229112625,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 237,
+      "recorded_action": 3,
+      "planned_action": 0,
+      "agreement": false,
+      "q_stone_action": -0.025903552770614624,
+      "q_wander_mean": -0.024264322593808174,
+      "value_gap": -0.0016392301768064499,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 257,
+      "recorded_action": 14,
+      "planned_action": 2,
+      "agreement": false,
+      "q_stone_action": -0.024825096130371094,
+      "q_wander_mean": -0.024051355198025703,
+      "value_gap": -0.0007737409323453903,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 277,
+      "recorded_action": 8,
+      "planned_action": 7,
+      "agreement": false,
+      "q_stone_action": -0.02204263210296631,
+      "q_wander_mean": -0.02236667461693287,
+      "value_gap": 0.00032404251396656036,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 297,
+      "recorded_action": 7,
+      "planned_action": 9,
+      "agreement": false,
+      "q_stone_action": -0.05401763319969177,
+      "q_wander_mean": -0.058425724506378174,
+      "value_gap": 0.004408091306686401,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 317,
+      "recorded_action": 8,
+      "planned_action": 13,
+      "agreement": false,
+      "q_stone_action": -0.0787615180015564,
+      "q_wander_mean": -0.07942256331443787,
+      "value_gap": 0.0006610453128814697,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 337,
+      "recorded_action": 8,
+      "planned_action": 8,
+      "agreement": true,
+      "q_stone_action": -0.0695791244506836,
+      "q_wander_mean": -0.07180719822645187,
+      "value_gap": 0.00222807377576828,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 357,
+      "recorded_action": 12,
+      "planned_action": 6,
+      "agreement": false,
+      "q_stone_action": -0.04372668266296387,
+      "q_wander_mean": -0.04098455607891083,
+      "value_gap": -0.0027421265840530396,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 377,
+      "recorded_action": 5,
+      "planned_action": 8,
+      "agreement": false,
+      "q_stone_action": -0.051869213581085205,
+      "q_wander_mean": -0.06086114048957825,
+      "value_gap": 0.008991926908493042,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 397,
+      "recorded_action": 14,
+      "planned_action": 4,
+      "agreement": false,
+      "q_stone_action": -0.01153874397277832,
+      "q_wander_mean": -0.01183292455971241,
+      "value_gap": 0.00029418058693408966,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 417,
+      "recorded_action": 8,
+      "planned_action": 1,
+      "agreement": false,
+      "q_stone_action": -0.032950401306152344,
+      "q_wander_mean": -0.03360085189342499,
+      "value_gap": 0.000650450587272644,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 23,
+      "recorded_action": 7,
+      "planned_action": 7,
+      "agreement": true,
+      "q_stone_action": -0.009405016899108887,
+      "q_wander_mean": -0.010209610685706139,
+      "value_gap": 0.0008045937865972519,
+      "is_stone_trajectory": true
+    },
+    {
+      "step": 76,
+      "recorded_action": 5,
+      "planned_action": 8,
+      "agreement": false,
+      "q_stone_action": -0.01083439588546753,
+      "q_wander_mean": -0.01110083982348442,
+      "value_gap": 0.0002664439380168915,
+      "is_stone_trajectory": true
+    }
+  ]
+}

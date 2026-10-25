@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import pickle
 import shutil
 import sys
 import time
@@ -186,6 +187,7 @@ def evaluate_self_q_calibration(
     all_q_pred = []
     all_q_std = []
     all_returns = []
+    stone_mask_all = []
 
     with torch.no_grad():
         for ep in episodes:
@@ -365,15 +367,41 @@ def run_self_calibration_diagnostic(
             cal = EventHeadCalibrator.load(cand)
             print(f"[Self-Diag] Attached EventHeadCalibrator from Drive: {cand}")
 
-    # 3. Generate fresh self-play episodes
-    episodes = generate_self_play_episodes(
-        model=model,
-        num_episodes=num_episodes,
-        seed_start=seed_start,
-        max_steps=max_steps,
-        device=device,
-        calibrator=cal,
-    )
+    # 3. Generate or load fresh self-play episodes
+    cache_path = None
+    if drive_dir:
+        cache_path = Path(drive_dir) / "data" / "diagnostics" / f"episodes_{seed_start}_{seed_start + num_episodes - 1}.pkl"
+    local_cache = Path(f"/content/episodes_{seed_start}_{seed_start + num_episodes - 1}.pkl")
+
+    episodes = None
+    for cand_cache in [local_cache, cache_path]:
+        if cand_cache and cand_cache.exists():
+            try:
+                with open(cand_cache, "rb") as f:
+                    episodes = pickle.load(f)
+                print(f"[Self-Diag] Loaded {len(episodes)} cached self-play episodes from {cand_cache}")
+                break
+            except Exception:
+                episodes = None
+
+    if episodes is None:
+        episodes = generate_self_play_episodes(
+            model=model,
+            num_episodes=num_episodes,
+            seed_start=seed_start,
+            max_steps=max_steps,
+            device=device,
+            calibrator=cal,
+        )
+        for save_dest in [local_cache, cache_path]:
+            if save_dest:
+                try:
+                    save_dest.parent.mkdir(parents=True, exist_ok=True)
+                    with open(save_dest, "wb") as f:
+                        pickle.dump(episodes, f)
+                    print(f"[Self-Diag] Cached self-play episodes to {save_dest}")
+                except Exception:
+                    pass
 
     # 4. Evaluate D1 metrics on self-collected transitions
     print(f"\n[Self-Diag] Evaluating Q-calibration on {sum(ep['length'] for ep in episodes):,} self-play transitions...")
