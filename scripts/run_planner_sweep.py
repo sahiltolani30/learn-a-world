@@ -206,6 +206,7 @@ def run_sweep(
     device: str = "cuda",
     num_episodes: int = 20,
     seed_start: int = 2050,
+    parallel: int = 1,
     force: bool = False,
 ) -> List[Dict[str, Any]]:
     SWEEP_DIR.mkdir(parents=True, exist_ok=True)
@@ -215,26 +216,23 @@ def run_sweep(
     print(f"PLANNER PERMUTATION SWEEP: {len(configs)} Configurations ({num_episodes} eps, Seeds {seed_start}..{seed_start + num_episodes - 1})")
     print(f"Checkpoint : {checkpoint}")
     print(f"Device     : {device}")
+    print(f"Parallel   : {parallel} worker(s)")
     print("=" * 80 + "\n", flush=True)
 
     t_sweep_start = time.time()
 
-    for idx, cfg in enumerate(configs):
+    def _execute_single(cfg: Dict[str, Any], idx: int, total: int, pipe_to_log: bool) -> Optional[Dict[str, Any]]:
         name = cfg["name"]
         out_rel = cfg["output_json"]
         out_path = REPO_ROOT / out_rel
-
-        print(f"\n[{idx + 1}/{len(configs)}] Starting configuration: {name.upper()}")
-        print(f"  Description: {cfg['description']}")
-        print(f"  Target File: {out_path}")
+        log_path = SWEEP_DIR / f"{name}.log"
 
         if not force and is_valid_result(out_path):
-            print(f"  --> [SKIP] Result already exists and is valid ({out_path.name})")
+            print(f"  [{idx + 1}/{total} SKIP] Result already exists and is valid: {name.upper()} ({out_path.name})", flush=True)
             with open(out_path) as f:
                 data = json.load(f)
             data["name"] = name
-            results.append(data)
-            continue
+            return data
 
         cmd = [
             sys.executable,
@@ -247,23 +245,49 @@ def run_sweep(
         ] + cfg["cli_args"]
 
         t_cfg_start = time.time()
-        print(f"  Running: {' '.join(cmd)}", flush=True)
+        if pipe_to_log:
+            print(f"  [{idx + 1}/{total} LAUNCHED] {name.upper()} ({cfg['description']}) -> log: results/sweep/{name}.log", flush=True)
+            with open(log_path, "w") as lf:
+                res = subprocess.run(cmd, cwd=str(REPO_ROOT), stdout=lf, stderr=subprocess.STDOUT)
+        else:
+            print(f"\n[{idx + 1}/{total}] Starting configuration: {name.upper()}")
+            print(f"  Description: {cfg['description']}")
+            print(f"  Running: {' '.join(cmd)}", flush=True)
+            res = subprocess.run(cmd, cwd=str(REPO_ROOT))
 
-        res = subprocess.run(cmd, cwd=str(REPO_ROOT))
         cfg_dur = time.time() - t_cfg_start
 
         if res.returncode != 0:
-            print(f"  [ERROR] Configuration {name} failed with exit code {res.returncode}!", file=sys.stderr)
-            continue
+            print(f"  [ERROR] Configuration {name.upper()} failed with exit code {res.returncode}! (Check log: {log_path})", file=sys.stderr, flush=True)
+            return None
 
         if is_valid_result(out_path):
             with open(out_path) as f:
                 data = json.load(f)
             data["name"] = name
-            results.append(data)
-            print(f"  --> Completed {name} in {cfg_dur:.1f}s | Score: {data.get('crafter_score', 0):.2f}% | Reward: {data.get('mean_episode_reward', 0):.2f}")
+            print(f"  --> [COMPLETED {idx + 1}/{total}] {name.upper()} in {cfg_dur:.1f}s | Score: {data.get('crafter_score', 0):.2f}% | Reward: {data.get('mean_episode_reward', 0):.2f}", flush=True)
+            return data
         else:
-            print(f"  [WARNING] Output file {out_path} is missing or incomplete!", file=sys.stderr)
+            print(f"  [WARNING] Output file {out_path} for {name.upper()} is missing or incomplete!", file=sys.stderr, flush=True)
+            return None
+
+    if parallel > 1:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        print(f"--> Spawning pool with {parallel} parallel workers...\n", flush=True)
+        with ThreadPoolExecutor(max_workers=parallel) as executor:
+            future_to_cfg = {
+                executor.submit(_execute_single, cfg, idx, len(configs), True): cfg
+                for idx, cfg in enumerate(configs)
+            }
+            for future in as_completed(future_to_cfg):
+                res_data = future.result()
+                if res_data is not None:
+                    results.append(res_data)
+    else:
+        for idx, cfg in enumerate(configs):
+            res_data = _execute_single(cfg, idx, len(configs), False)
+            if res_data is not None:
+                results.append(res_data)
 
     total_sweep_dur = time.time() - t_sweep_start
     print(f"\n--> Sweep completed in {total_sweep_dur / 60:.1f} minutes.")
@@ -319,6 +343,7 @@ def main() -> None:
     parser.add_argument("--device", type=str, default=DEFAULT_DEVICE)
     parser.add_argument("--num_episodes", type=int, default=20)
     parser.add_argument("--seed_start", type=int, default=2050)
+    parser.add_argument("--parallel", type=int, default=1, help="Number of parallel worker processes (e.g. 2 or 3)")
     parser.add_argument("--force", action="store_true", help="Force re-run even if result JSON exists")
     parser.add_argument("--report-only", action="store_true", help="Only build and display summary from existing files")
     args = parser.parse_args()
@@ -357,6 +382,7 @@ def main() -> None:
         device=args.device,
         num_episodes=args.num_episodes,
         seed_start=args.seed_start,
+        parallel=args.parallel,
         force=args.force,
     )
 
