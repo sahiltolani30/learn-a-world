@@ -183,11 +183,8 @@ def evaluate_config_on_probe(
         prior_mix=cfg.get("prior_mix", 0.5),
         prior_temperature=cfg.get("prior_temperature", 1.0),
         action_persistence=cfg.get("action_persistence", 0.0),
-        vital_reward_weight=cfg.get("vital_reward_weight", 0.0),
         denormalize_q=cfg.get("denormalize_q", False),
         tte_weight=cfg.get("tte_weight", 0.0),
-        recurring_vitals=cfg.get("recurring_vitals", False),
-        hierarchical_tte=cfg.get("hierarchical_tte", False),
         device=dev,
     )
 
@@ -264,11 +261,8 @@ def run_screening_for_config(
         prior_mix=cfg.get("prior_mix", 0.5),
         prior_temperature=cfg.get("prior_temperature", 1.0),
         action_persistence=cfg.get("action_persistence", 0.0),
-        vital_reward_weight=cfg.get("vital_reward_weight", 0.0),
         denormalize_q=cfg.get("denormalize_q", False),
         tte_weight=cfg.get("tte_weight", 0.0),
-        recurring_vitals=cfg.get("recurring_vitals", False),
-        hierarchical_tte=cfg.get("hierarchical_tte", False),
         device=dev,
     )
     belief = AgentBeliefV3(recurrent_dim=256)
@@ -360,52 +354,37 @@ def main() -> None:
     sampled_states = load_probe_states(args.drive_dir, max_states=args.max_states)
     print(f"[Sweep] Successfully loaded {len(sampled_states)} states.")
 
-    # Complete Senior ML Combinatorial Ablation Grid:
+    # Domain-Agnostic Combinatorial Ablation Grid:
     # Lever A: Value Denormalization (denormalize_q: True)
     # Lever B: Time-to-Event Compass (tte_weight: 0.5)
-    # Lever C: Continuous Vital Survival (recurring_vitals: True, vital_reward_weight: 0.3)
     # Lever D: Action Persistence / Mining Momentum (action_persistence: 0.3)
-    # Lever E: Hierarchical Tech-Tree Focus (hierarchical_tte: True)
     # Lever F: Deep Test-Time Compute (horizon: 15, num_candidates: 128, cem_iterations: 3)
     CONFIGS = [
         # Baseline
         {"name": "0_Baseline"},
 
-        # Singles (A, B, C, D, E, F)
+        # Singles (A, B, D, F)
         {"name": "A_Denorm", "denormalize_q": True},
         {"name": "B_TTE", "tte_weight": 0.5},
-        {"name": "C_Vitals", "recurring_vitals": True, "vital_reward_weight": 0.3},
         {"name": "D_Persistence", "action_persistence": 0.3},
-        {"name": "E_Hierarchical", "hierarchical_tte": True, "tte_weight": 0.5},
         {"name": "F_DeepCompute", "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
 
         # Pairs
         {"name": "AB_Denorm_TTE", "denormalize_q": True, "tte_weight": 0.5},
-        {"name": "AC_Denorm_Vitals", "denormalize_q": True, "recurring_vitals": True, "vital_reward_weight": 0.3},
         {"name": "AD_Denorm_Persistence", "denormalize_q": True, "action_persistence": 0.3},
-        {"name": "AE_Denorm_Hierarchical", "denormalize_q": True, "hierarchical_tte": True, "tte_weight": 0.5},
         {"name": "AF_Denorm_DeepCompute", "denormalize_q": True, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
-        {"name": "BC_TTE_Vitals", "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3},
         {"name": "BD_TTE_Persistence", "tte_weight": 0.5, "action_persistence": 0.3},
-        {"name": "BE_TTE_Hierarchical", "tte_weight": 0.5, "hierarchical_tte": True},
-        {"name": "CD_Vitals_Persistence", "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3},
-        {"name": "CE_Vitals_Hierarchical", "recurring_vitals": True, "vital_reward_weight": 0.3, "hierarchical_tte": True, "tte_weight": 0.5},
-        {"name": "DE_Persistence_Hierarchical", "action_persistence": 0.3, "hierarchical_tte": True, "tte_weight": 0.5},
+        {"name": "BF_TTE_DeepCompute", "tte_weight": 0.5, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
+        {"name": "DF_Persistence_DeepCompute", "action_persistence": 0.3, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
 
         # Triples
-        {"name": "ABC_Denorm_TTE_Vitals", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3},
         {"name": "ABD_Denorm_TTE_Persist", "denormalize_q": True, "tte_weight": 0.5, "action_persistence": 0.3},
-        {"name": "ABE_Denorm_TTE_Hierarch", "denormalize_q": True, "tte_weight": 0.5, "hierarchical_tte": True},
-        {"name": "ACD_Denorm_Vitals_Persist", "denormalize_q": True, "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3},
-        {"name": "ACE_Denorm_Vitals_Hierarch", "denormalize_q": True, "recurring_vitals": True, "vital_reward_weight": 0.3, "hierarchical_tte": True, "tte_weight": 0.5},
-        {"name": "BCD_TTE_Vitals_Persist", "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3},
-        {"name": "BCE_TTE_Vitals_Hierarch", "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3, "hierarchical_tte": True},
-        {"name": "CDE_Vitals_Persist_Hier", "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3, "hierarchical_tte": True, "tte_weight": 0.5},
+        {"name": "ABF_Denorm_TTE_DeepCompute", "denormalize_q": True, "tte_weight": 0.5, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
+        {"name": "ADF_Denorm_Persist_DeepCompute", "denormalize_q": True, "action_persistence": 0.3, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
+        {"name": "BDF_TTE_Persist_DeepCompute", "tte_weight": 0.5, "action_persistence": 0.3, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
 
-        # Grand Combinations (OpenAI O1 / Senior ML Architectures)
-        {"name": "ABCD_Quad_Survival", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3},
-        {"name": "ABCDE_FullSynergy_H10", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3, "hierarchical_tte": True, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.65},
-        {"name": "Grand_Master_O1_H15", "denormalize_q": True, "tte_weight": 0.5, "recurring_vitals": True, "vital_reward_weight": 0.3, "action_persistence": 0.3, "hierarchical_tte": True, "uncertainty_weight": 0.1, "novelty_weight": 0.005, "prior_mix": 0.65, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
+        # Quad
+        {"name": "ABDF_Quad_DeepCompute", "denormalize_q": True, "tte_weight": 0.5, "action_persistence": 0.3, "horizon": 15, "num_candidates": 128, "cem_iterations": 3},
     ]
 
     print(f"\n[Sweep] Evaluating {len(CONFIGS)} combinatorial configurations on 120 states...")
