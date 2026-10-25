@@ -1,0 +1,384 @@
+{
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_step1_stone.pt",
+  "total_configs_evaluated": 29,
+  "leaderboard": [
+    {
+      "config_name": "Grand_Master_O1_H15",
+      "action_agreement_rate": 0.25,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 22.2,
+      "params": {
+        "name": "Grand_Master_O1_H15",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3,
+        "hierarchical_tte": true,
+        "uncertainty_weight": 0.1,
+        "novelty_weight": 0.005,
+        "prior_mix": 0.65,
+        "horizon": 15,
+        "num_candidates": 128,
+        "cem_iterations": 3
+      }
+    },
+    {
+      "config_name": "BCE_TTE_Vitals_Hierarch",
+      "action_agreement_rate": 0.20833333333333334,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.67,
+      "params": {
+        "name": "BCE_TTE_Vitals_Hierarch",
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "hierarchical_tte": true
+      }
+    },
+    {
+      "config_name": "ABCDE_FullSynergy_H10",
+      "action_agreement_rate": 0.20833333333333334,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.9,
+      "params": {
+        "name": "ABCDE_FullSynergy_H10",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3,
+        "hierarchical_tte": true,
+        "uncertainty_weight": 0.1,
+        "novelty_weight": 0.005,
+        "prior_mix": 0.65
+      }
+    },
+    {
+      "config_name": "CE_Vitals_Hierarchical",
+      "action_agreement_rate": 0.2,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.81,
+      "params": {
+        "name": "CE_Vitals_Hierarchical",
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "ABD_Denorm_TTE_Persist",
+      "action_agreement_rate": 0.2,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.69,
+      "params": {
+        "name": "ABD_Denorm_TTE_Persist",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "ABE_Denorm_TTE_Hierarch",
+      "action_agreement_rate": 0.2,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.38,
+      "params": {
+        "name": "ABE_Denorm_TTE_Hierarch",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "hierarchical_tte": true
+      }
+    },
+    {
+      "config_name": "BC_TTE_Vitals",
+      "action_agreement_rate": 0.19166666666666668,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.66,
+      "params": {
+        "name": "BC_TTE_Vitals",
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3
+      }
+    },
+    {
+      "config_name": "BE_TTE_Hierarchical",
+      "action_agreement_rate": 0.19166666666666668,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.54,
+      "params": {
+        "name": "BE_TTE_Hierarchical",
+        "tte_weight": 0.5,
+        "hierarchical_tte": true
+      }
+    },
+    {
+      "config_name": "ABCD_Quad_Survival",
+      "action_agreement_rate": 0.19166666666666668,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.74,
+      "params": {
+        "name": "ABCD_Quad_Survival",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "DE_Persistence_Hierarchical",
+      "action_agreement_rate": 0.18333333333333332,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.72,
+      "params": {
+        "name": "DE_Persistence_Hierarchical",
+        "action_persistence": 0.3,
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "AF_Denorm_DeepCompute",
+      "action_agreement_rate": 0.18333333333333332,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 21.36,
+      "params": {
+        "name": "AF_Denorm_DeepCompute",
+        "denormalize_q": true,
+        "horizon": 15,
+        "num_candidates": 128,
+        "cem_iterations": 3
+      }
+    },
+    {
+      "config_name": "ABC_Denorm_TTE_Vitals",
+      "action_agreement_rate": 0.18333333333333332,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.57,
+      "params": {
+        "name": "ABC_Denorm_TTE_Vitals",
+        "denormalize_q": true,
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3
+      }
+    },
+    {
+      "config_name": "CDE_Vitals_Persist_Hier",
+      "action_agreement_rate": 0.175,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.71,
+      "params": {
+        "name": "CDE_Vitals_Persist_Hier",
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3,
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "AB_Denorm_TTE",
+      "action_agreement_rate": 0.175,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.47,
+      "params": {
+        "name": "AB_Denorm_TTE",
+        "denormalize_q": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "0_Baseline",
+      "action_agreement_rate": 0.16666666666666666,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 13.14,
+      "params": {
+        "name": "0_Baseline"
+      }
+    },
+    {
+      "config_name": "E_Hierarchical",
+      "action_agreement_rate": 0.16666666666666666,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.5,
+      "params": {
+        "name": "E_Hierarchical",
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "AE_Denorm_Hierarchical",
+      "action_agreement_rate": 0.16666666666666666,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.68,
+      "params": {
+        "name": "AE_Denorm_Hierarchical",
+        "denormalize_q": true,
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "ACD_Denorm_Vitals_Persist",
+      "action_agreement_rate": 0.16666666666666666,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.56,
+      "params": {
+        "name": "ACD_Denorm_Vitals_Persist",
+        "denormalize_q": true,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "D_Persistence",
+      "action_agreement_rate": 0.15833333333333333,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.48,
+      "params": {
+        "name": "D_Persistence",
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "F_DeepCompute",
+      "action_agreement_rate": 0.15833333333333333,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 21.25,
+      "params": {
+        "name": "F_DeepCompute",
+        "horizon": 15,
+        "num_candidates": 128,
+        "cem_iterations": 3
+      }
+    },
+    {
+      "config_name": "CD_Vitals_Persistence",
+      "action_agreement_rate": 0.15833333333333333,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.61,
+      "params": {
+        "name": "CD_Vitals_Persistence",
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "ACE_Denorm_Vitals_Hierarch",
+      "action_agreement_rate": 0.15833333333333333,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.75,
+      "params": {
+        "name": "ACE_Denorm_Vitals_Hierarch",
+        "denormalize_q": true,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "hierarchical_tte": true,
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "C_Vitals",
+      "action_agreement_rate": 0.15,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.45,
+      "params": {
+        "name": "C_Vitals",
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3
+      }
+    },
+    {
+      "config_name": "BCD_TTE_Vitals_Persist",
+      "action_agreement_rate": 0.14166666666666666,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.75,
+      "params": {
+        "name": "BCD_TTE_Vitals_Persist",
+        "tte_weight": 0.5,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "A_Denorm",
+      "action_agreement_rate": 0.14166666666666666,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.4,
+      "params": {
+        "name": "A_Denorm",
+        "denormalize_q": true
+      }
+    },
+    {
+      "config_name": "AC_Denorm_Vitals",
+      "action_agreement_rate": 0.14166666666666666,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.58,
+      "params": {
+        "name": "AC_Denorm_Vitals",
+        "denormalize_q": true,
+        "recurring_vitals": true,
+        "vital_reward_weight": 0.3
+      }
+    },
+    {
+      "config_name": "AD_Denorm_Persistence",
+      "action_agreement_rate": 0.11666666666666667,
+      "mean_value_gap": 0.0022824544614801806,
+      "eval_seconds": 12.4,
+      "params": {
+        "name": "AD_Denorm_Persistence",
+        "denormalize_q": true,
+        "action_persistence": 0.3
+      }
+    },
+    {
+      "config_name": "B_TTE",
+      "action_agreement_rate": 0.10833333333333334,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.4,
+      "params": {
+        "name": "B_TTE",
+        "tte_weight": 0.5
+      }
+    },
+    {
+      "config_name": "BD_TTE_Persistence",
+      "action_agreement_rate": 0.1,
+      "mean_value_gap": 0.010896723469098408,
+      "eval_seconds": 12.5,
+      "params": {
+        "name": "BD_TTE_Persistence",
+        "tte_weight": 0.5,
+        "action_persistence": 0.3
+      }
+    }
+  ],
+  "champions_screening": [
+    {
+      "config_name": "Grand_Master_O1_H15",
+      "num_episodes": 20,
+      "seed_range": [
+        2050,
+        2069
+      ],
+      "crafter_score": 4.030728916233548,
+      "mean_survival_length": 171.15,
+      "mean_episode_reward": 4.249999999999998,
+      "mean_achievements_per_ep": 5.15,
+      "stone_unlock_rate": 0.0,
+      "drink_unlock_rate": 40.0,
+      "wood_pickaxe_unlock_rate": 10.0,
+      "total_seconds": 530.55
+    }
+  ]
+}
