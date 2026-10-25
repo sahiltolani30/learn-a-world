@@ -36,6 +36,9 @@ class RecurrentMPCPlanner:
         uncertainty_weight: float = 0.5,
         novelty_weight: float = 0.02,
         prior_mix: float = 0.5,
+        prior_temperature: float = 1.0,
+        action_persistence: float = 0.0,
+        vital_reward_weight: float = 0.0,
         num_actions: int = 17,
         use_calibration: bool = True,
         denormalize_q: bool = False,
@@ -53,6 +56,9 @@ class RecurrentMPCPlanner:
         self.uncertainty_weight = uncertainty_weight
         self.novelty_weight = novelty_weight
         self.prior_mix = prior_mix
+        self.prior_temperature = prior_temperature
+        self.action_persistence = action_persistence
+        self.vital_reward_weight = vital_reward_weight
         self.num_actions = num_actions
         self.use_calibration = use_calibration
         self.denormalize_q = denormalize_q
@@ -116,17 +122,23 @@ class RecurrentMPCPlanner:
                 m_roll = m_0.expand(N_prior, -1).clone()
 
                 for h_step in range(self.horizon):
-                    a_h = self.model.sample_prior_action(s_roll, m_roll, temperature=1.0)
+                    a_h = self.model.sample_prior_action(s_roll, m_roll, temperature=self.prior_temperature)
                     prior_actions[:, h_step] = a_h
                     p_h = self.model.event_head.predict_proba(s_roll, a_h, m_roll, use_calibration=self.use_calibration)
                     m_roll = torch.where(p_h > 0.5, torch.tensor(1.0, device=self.device), m_roll)
                     z_roll, h_roll, s_roll = self.model.predict_next_step(z_roll, h_roll, a_h)
 
-                # 3. Sample N_cem candidates from CEM categorical distribution
+                # 3. Sample N_cem candidates from CEM categorical distribution (with temporal persistence)
                 cem_actions = torch.empty((N_cem, self.horizon), dtype=torch.long, device=self.device)
                 for h_step in range(self.horizon):
                     probs_h = action_dist[h_step]
-                    cem_actions[:, h_step] = torch.multinomial(probs_h, num_samples=N_cem, replacement=True)
+                    fresh_actions = torch.multinomial(probs_h, num_samples=N_cem, replacement=True)
+                    if self.action_persistence > 0.0 and h_step > 0:
+                        repeat_mask = torch.rand(N_cem, device=self.device) < self.action_persistence
+                        prev_actions = cem_actions[:, h_step - 1]
+                        cem_actions[:, h_step] = torch.where(repeat_mask, prev_actions, fresh_actions)
+                    else:
+                        cem_actions[:, h_step] = fresh_actions
 
                 # Combine candidates: [C, horizon]
                 actions_seq = torch.cat([prior_actions, cem_actions], dim=0)
@@ -143,15 +155,26 @@ class RecurrentMPCPlanner:
                     r_hat, decomp = self.model.predict_reward(
                         s_t, a_t, m_t, return_decomposition=True, use_calibration=self.use_calibration
                     )
+                    p_t = decomp["event_probs"]
+
+                    # Continuous Vital Survival Incentives:
+                    # Biological imperatives (drink, eat) must be satisfied cyclically to survive.
+                    if self.vital_reward_weight > 0.0 or self.recurring_vitals:
+                        v_weight = self.vital_reward_weight if self.vital_reward_weight > 0.0 else 0.3
+                        # 2: collect_drink (hydration is priority #1 for survival)
+                        # 9: eat_cow, 10: eat_plant (caloric nutrition)
+                        drink_bonus = p_t[:, 2] * v_weight
+                        food_bonus = (p_t[:, 9] + p_t[:, 10]) * (0.5 * v_weight)
+                        r_hat = r_hat + drink_bonus + food_bonus
+
                     cumulative_reward = cumulative_reward + (self.gamma ** t) * r_hat
 
                     # Simulated belief progression
-                    p_t = decomp["event_probs"]
                     m_t = torch.where(p_t > 0.5, torch.tensor(1.0, device=self.device), m_t)
                     z_t, h_t, s_t = self.model.predict_next_step(z_t, h_t, a_t)
 
                 # 5. Terminal Clipped Double-Q evaluation at horizon H
-                a_terminal = self.model.sample_prior_action(s_t, m_t, temperature=1.0)
+                a_terminal = self.model.sample_prior_action(s_t, m_t, temperature=self.prior_temperature)
                 q_term = self.model.q_min(s_t, a_terminal, use_target=True)
                 q_std_term = self.model.q_std(s_t, a_terminal, use_target=True)
 
@@ -179,17 +202,32 @@ class RecurrentMPCPlanner:
                         goal_mask[:, 10] = 0.5
 
                     if self.hierarchical_tte:
-                        # Direct neural attention toward the next technological bottleneck:
-                        # 15: make_wood_pickaxe, 5: collect_stone, 13: make_stone_pickaxe, 17: place_furnace
+                        # Technological stage weighting (0..21 generic indices):
                         weights = torch.ones(22, device=self.device)
-                        has_pick = bool(m_0[0, 15].item() > 0.5)
+                        has_wood_pick = bool(m_0[0, 15].item() > 0.5)
                         has_stone = bool(m_0[0, 5].item() > 0.5)
-                        if has_pick and not has_stone:
-                            weights[5] = 3.0   # Laser focus on stone once pickaxe is crafted!
+                        has_stone_pick = bool(m_0[0, 13].item() > 0.5)
+                        has_furnace = bool(m_0[0, 17].item() > 0.5)
+
+                        if not has_wood_pick:
+                            weights[6] = 2.0   # collect_wood
+                            weights[20] = 2.0  # place_table
+                            weights[15] = 3.0  # make_wood_pickaxe
+                        elif has_wood_pick and not has_stone:
+                            weights[5] = 3.5   # collect_stone
                             weights[19] = 2.0  # place_stone
-                        elif has_stone:
-                            weights[13] = 3.0  # make_stone_pickaxe
-                            weights[17] = 2.0  # place_furnace
+                        elif has_stone and not has_stone_pick:
+                            weights[13] = 3.5  # make_stone_pickaxe
+                            weights[17] = 3.0  # place_furnace
+                        elif has_stone_pick and not has_furnace:
+                            weights[17] = 3.5  # place_furnace
+                            weights[0] = 2.5   # collect_coal
+                            weights[3] = 2.5   # collect_iron
+                        elif has_furnace:
+                            weights[3] = 4.0   # collect_iron
+                            weights[0] = 3.0   # collect_coal
+                            weights[11] = 4.0  # make_iron_pickaxe
+
                         goal_mask = goal_mask * weights.unsqueeze(0)
 
                     unachieved_mask = goal_mask.expand(C, -1)
