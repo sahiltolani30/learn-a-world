@@ -75,6 +75,40 @@ def compute_monte_carlo_returns(rewards: np.ndarray, gamma: float = 0.99) -> np.
     return returns
 
 
+def resolve_curiosity_shards(drive_dir: Path) -> Tuple[Path, List[Path]]:
+    """
+    Finds the curiosity shards directory and returns only genuine curiosity exploration shards,
+    strictly excluding any base demonstration snapshots (structured_random, teacher_hybrid, planner_v2).
+    """
+    candidates = [
+        drive_dir / "data" / "curiosity_shards",
+        drive_dir / "curiosity_shards",
+        drive_dir / "data" / "sequences",
+        REPO_ROOT / "data" / "curiosity_shards",
+        REPO_ROOT / "data" / "sequences",
+    ]
+    base_stems = {"structured_random", "teacher_hybrid", "planner_v2"}
+
+    for c in candidates:
+        if c.exists():
+            all_npz = sorted(list(c.glob("*.npz")) + list(c.glob("**/*.npz")))
+            cur_shards = [
+                f for f in all_npz
+                if not any(bs in f.name for bs in base_stems)
+            ]
+            seen = set()
+            unique_shards = []
+            for f in cur_shards:
+                p = f.resolve()
+                if p not in seen:
+                    seen.add(p)
+                    unique_shards.append(f)
+            if unique_shards:
+                return c, unique_shards
+
+    return drive_dir / "data" / "curiosity_shards", []
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 2. Buffer Loader for Full 685k Pool (Anti-Eviction Guarantee)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -83,54 +117,63 @@ def build_longhorizon_buffer(
     structured_random_final: str,
     teacher_hybrid_final: str,
     planner_v2_final: str,
-    curiosity_dir: str,
+    curiosity_shards: List[Path],
     capacity_transitions: int = 1_000_000,
     gamma: float = 0.99,
 ) -> Tuple[EpisodeBuffer, Dict[str, Any]]:
     """
-    Loads base demonstration snapshots and all curiosity shards (capacity 1,000,000).
+    Loads base demonstration snapshots and curiosity shards with capacity 1,000,000.
     Precomputes full Monte-Carlo discounted returns on all episodes.
-    Asserts zero silent evictions.
+    Logs live progress at each stage and asserts zero silent evictions.
     """
     print("\n" + "=" * 80)
     print("BUFFER LOADER: FULL 685K POOL FOR LONG-HORIZON Q RETRAINING")
     print("=" * 80)
-    print(f"Capacity Limit : {capacity_transitions:,} transitions")
-    print(f"Base Snapshots : {Path(structured_random_final).name}, {Path(teacher_hybrid_final).name}, {Path(planner_v2_final).name}")
-    print(f"Curiosity Pool : {curiosity_dir}")
-    print(f"Discount Gamma : {gamma}")
-    print("=" * 80)
+    print(f"Capacity Limit   : {capacity_transitions:,} transitions")
+    print(f"Base Snapshots   : {Path(structured_random_final).name}, {Path(teacher_hybrid_final).name}, {Path(planner_v2_final).name}")
+    print(f"Curiosity Shards : {len(curiosity_shards)} files")
+    print(f"Discount Gamma   : {gamma}")
+    print("=" * 80, flush=True)
 
     gc.collect()
     buffer = EpisodeBuffer(capacity_transitions=capacity_transitions)
     raw_loaded = 0
     per_source_counts: Dict[str, int] = {}
 
-    # 1. Base Demonstrations
+    # 1. Base Demonstrations with explicit live progress
+    print(f"  [1/4] Loading structured_random ({Path(structured_random_final).name})...", flush=True)
+    t0 = time.time()
     n_struct = _load_single_shard(structured_random_final, "structured_random", buffer)
     raw_loaded += n_struct
     per_source_counts["structured_random"] = n_struct
+    print(f"        ✅ Loaded {n_struct:,} transitions in {time.time() - t0:.1f}s (Buffer total: {buffer.total_transitions:,})", flush=True)
 
+    print(f"  [2/4] Loading teacher_hybrid ({Path(teacher_hybrid_final).name})...", flush=True)
+    t0 = time.time()
     n_teacher = _load_single_shard(teacher_hybrid_final, "teacher_hybrid", buffer)
     raw_loaded += n_teacher
     per_source_counts["teacher_hybrid"] = n_teacher
+    print(f"        ✅ Loaded {n_teacher:,} transitions in {time.time() - t0:.1f}s (Buffer total: {buffer.total_transitions:,})", flush=True)
 
+    print(f"  [3/4] Loading planner_v2 ({Path(planner_v2_final).name})...", flush=True)
+    t0 = time.time()
     n_planner = _load_single_shard(planner_v2_final, "planner_v2", buffer)
     raw_loaded += n_planner
     per_source_counts["planner_v2"] = n_planner
+    print(f"        ✅ Loaded {n_planner:,} transitions in {time.time() - t0:.1f}s (Buffer total: {buffer.total_transitions:,})", flush=True)
 
     task_total = n_struct + n_teacher + n_planner
 
-    # 2. Curiosity Shards
-    shard_files = sorted(list(Path(curiosity_dir).glob("*.npz")))
-    if not shard_files:
-        # Check subdirectories
-        shard_files = sorted(list(Path(curiosity_dir).glob("**/*.npz")))
-
+    # 2. Curiosity Shards with batch progress
+    print(f"  [4/4] Loading {len(curiosity_shards)} curiosity exploration shards...", flush=True)
+    t_cur = time.time()
     n_curiosity_total = 0
-    for sf in shard_files:
+    for i, sf in enumerate(curiosity_shards):
         n_cur = _load_single_shard(str(sf), "curiosity", buffer)
         n_curiosity_total += n_cur
+        if (i + 1) % 15 == 0 or (i + 1) == len(curiosity_shards):
+            print(f"        Shards loaded: {i + 1:2d}/{len(curiosity_shards)} ({n_curiosity_total:,} transitions, {time.time() - t_cur:.1f}s)", flush=True)
+
     raw_loaded += n_curiosity_total
     per_source_counts["curiosity"] = n_curiosity_total
 
@@ -143,9 +186,9 @@ def build_longhorizon_buffer(
     print(f"  - Teacher Hybrid     : {n_teacher:>9,} transitions")
     print(f"  - Planner v2         : {n_planner:>9,} transitions")
     print(f"  - Task Demonstrations: {task_total:>9,} transitions")
-    print(f"  - Curiosity Shards   : {n_curiosity_total:>9,} transitions ({len(shard_files)} shards)")
+    print(f"  - Curiosity Shards   : {n_curiosity_total:>9,} transitions ({len(curiosity_shards)} shards)")
     print(f"  - TOTAL IN BUFFER    : {buffer.total_transitions:>9,} transitions across {buffer.num_episodes:,} episodes")
-    print("-" * 80)
+    print("-" * 80, flush=True)
 
     # Hard assert against silent eviction
     assert buffer.total_transitions == raw_loaded, (
@@ -156,14 +199,16 @@ def build_longhorizon_buffer(
         f"[FATAL AUDIT FAILURE] Total loaded transitions ({buffer.total_transitions:,}) "
         f"exceeds capacity ({capacity_transitions:,})!"
     )
-    print("  ✅ BUFFER INTEGRITY ASSERTION PASSED: 100% data retained with zero eviction.")
+    print("  ✅ BUFFER INTEGRITY ASSERTION PASSED: 100% data retained with zero eviction.", flush=True)
 
     # Precompute Monte-Carlo returns for every episode
-    print(f"\n[MC-Return] Precomputing Monte-Carlo returns across {len(buffer.episodes):,} episodes (gamma={gamma})...")
+    print(f"\n[MC-Return] Precomputing Monte-Carlo returns across {len(buffer.episodes):,} episodes (gamma={gamma})...", flush=True)
     t_mc = time.time()
-    for ep in buffer.episodes:
+    for i, ep in enumerate(buffer.episodes):
         ep["mc_returns"] = compute_monte_carlo_returns(ep["rewards"], gamma=gamma)
-    print(f"  ✅ Monte-Carlo returns precomputed in {time.time() - t_mc:.2f}s.")
+        if (i + 1) % 500 == 0 or (i + 1) == len(buffer.episodes):
+            print(f"  -> Precomputed returns: {i + 1:,}/{len(buffer.episodes):,} episodes ({time.time() - t_mc:.1f}s)", flush=True)
+    print(f"  ✅ Monte-Carlo returns precomputed in {time.time() - t_mc:.2f}s.", flush=True)
 
     return buffer, per_source_counts
 
@@ -447,16 +492,15 @@ def main() -> None:
         drive_path = Path(args.drive_dir) if args.drive_dir and Path(args.drive_dir).exists() else REPO_ROOT
         base_shards = find_drive_base_shards(str(drive_path))
 
-        curiosity_dir = drive_path / "data" / "sequences"
-        if not curiosity_dir.exists():
-            curiosity_dir = REPO_ROOT / "data" / "sequences"
+        curiosity_dir, curiosity_shards = resolve_curiosity_shards(drive_path)
+        print(f"[Init] Curiosity pool resolved: {curiosity_dir} ({len(curiosity_shards)} shards)")
 
         # Load buffer and precompute Monte-Carlo returns
         buffer, counts = build_longhorizon_buffer(
             structured_random_final=base_shards["structured_random_final"],
             teacher_hybrid_final=base_shards["teacher_hybrid_final"],
             planner_v2_final=base_shards["planner_v2_final"],
-            curiosity_dir=str(curiosity_dir),
+            curiosity_shards=curiosity_shards,
             capacity_transitions=1_000_000,
             gamma=args.gamma,
         )
