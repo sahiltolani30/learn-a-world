@@ -45,14 +45,20 @@ def _resolve_memory_bank(bank_path: str, drive_dir: Optional[str] = None) -> str
     candidates = [
         REPO_ROOT / bank_path,
         REPO_ROOT / "checkpoints" / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / bank_path,
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints") / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / p.name,
+        Path("/content/drive/MyDrive") / bank_path,
+        Path("/content/drive/MyDrive/checkpoints") / p.name,
+        Path("/content/checkpoints") / p.name,
+        Path("/content") / p.name,
     ]
     if drive_dir:
         dp = Path(drive_dir)
         candidates.extend([
             dp / bank_path,
             dp / "checkpoints" / p.name,
-            Path("/content") / "checkpoints" / p.name,
-            Path("/content") / p.name,
+            dp / p.name,
         ])
     for cand in candidates:
         if cand.exists():

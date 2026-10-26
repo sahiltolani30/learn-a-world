@@ -41,14 +41,20 @@ def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
     candidates = [
         REPO_ROOT / ckpt_path,
         REPO_ROOT / "checkpoints" / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / ckpt_path,
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints") / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / p.name,
+        Path("/content/drive/MyDrive") / ckpt_path,
+        Path("/content/drive/MyDrive/checkpoints") / p.name,
+        Path("/content/checkpoints") / p.name,
+        Path("/content") / p.name,
     ]
     if drive_dir:
         dp = Path(drive_dir)
         candidates.extend([
             dp / ckpt_path,
             dp / "checkpoints" / p.name,
-            Path("/content") / "checkpoints" / p.name,
-            Path("/content") / p.name,
+            dp / p.name,
         ])
     for cand in candidates:
         if cand.exists():
