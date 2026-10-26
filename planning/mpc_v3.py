@@ -50,7 +50,7 @@ class RecurrentMPCPlanner:
         death_risk_factor: float = 0.0,
         harvest_bonus: float = 0.15,
         semantic_memory: Optional[Any] = None,
-        memory_sim_threshold: float = 0.70,
+        memory_sim_threshold: float = 0.58,
         memory_inject_ratio: float = 0.50,
         device: Optional[Union[str, torch.device]] = None,
     ):

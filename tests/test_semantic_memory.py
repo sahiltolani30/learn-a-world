@@ -20,6 +20,7 @@ from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
 from planning.semantic_memory import (
     AutonomousMemoryWriter,
+    DopaminePersonalBestTracker,
     LongTermSemanticMemory,
     NUM_ACHIEVEMENTS,
     ShortTermWorkingMemory,
@@ -138,13 +139,14 @@ def test_autonomous_memory_writer():
     # Step without achievement
     z_0 = torch.randn(128)
     info_empty = {"achievements": {"collect_wood": 0}}
-    res = writer.step(z_t=z_0, action=1, reward=0.0, info=info_empty)
+    res, surge = writer.step(z_t=z_0, action=1, reward=0.0, info=info_empty)
     assert res is None
+    assert surge == 0.0
     assert len(ltm) == 0
 
     # Step with achievement unlock
     info_wood = {"achievements": {"collect_wood": 1}}
-    res_wood = writer.step(z_t=z_0, action=2, reward=1.0, info=info_wood)
+    res_wood, surge_wood = writer.step(z_t=z_0, action=2, reward=1.0, info=info_wood)
     assert res_wood == "collect_wood"
     assert len(ltm) == 1
     assert ltm.actions[0].item() == 2
@@ -197,3 +199,26 @@ def test_recurrent_mpc_planner_with_semantic_memory():
     assert "memory_retrieved_action" in debug
     assert debug["memory_retrieved_action"] == 15.0
     assert debug["memory_match_sim"] > 0.90
+
+
+def test_dopamine_personal_best_tracker():
+    tracker = DopaminePersonalBestTracker(dopamine_scale=0.50)
+    tracker.reset_episode()
+
+    # Step 1: No milestones
+    surge_0 = tracker.update_step(reward=0.0, newly_unlocked=[])
+    assert surge_0 == 0.0
+
+    # Step 2: First-ever discovery of wood (unprecedented achievement)
+    surge_1 = tracker.update_step(reward=1.0, newly_unlocked=["collect_wood"])
+    assert surge_1 > 0.0, "First-ever discovery should trigger dopamine surge!"
+    assert "collect_wood" in tracker.lifetime_unlocked_set
+
+    # End episode 1, start episode 2
+    tracker.reset_episode()
+    # Step 1 in ep 2: wood already seen, but achieves 2 milestones (new milestone count PB)
+    tracker.update_step(reward=1.0, newly_unlocked=["collect_wood"])
+    surge_2 = tracker.update_step(reward=1.0, newly_unlocked=["place_table"])
+    assert surge_2 > 0.0, "Breaking milestone count PB should trigger dopamine surge!"
+    assert tracker.lifetime_best_milestones == 2
+

@@ -34,7 +34,7 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS, compute_crafter_score
 from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
-from planning.semantic_memory import LongTermSemanticMemory, AutonomousMemoryWriter
+from planning.semantic_memory import LongTermSemanticMemory, AutonomousMemoryWriter, DopaminePersonalBestTracker
 from scripts.screen_v3_50eps import _resolve_checkpoint
 
 
@@ -80,7 +80,7 @@ def run_dual_memory_screening(
     vital_weight: float = 0.5,
     harvest_bonus: float = 0.15,
     action_persistence: float = 0.5,
-    memory_sim_threshold: float = 0.70,
+    memory_sim_threshold: float = 0.58,
     memory_inject_ratio: float = 0.50,
     save_updated_memory: bool = True,
 ) -> Dict[str, Any]:
@@ -130,8 +130,9 @@ def run_dual_memory_screening(
         )
         resolved_bank = memory_bank_path
 
-    # 3. Autonomous Online Memory Writer
-    writer = AutonomousMemoryWriter(memory_bank=memory_bank)
+    # 3. Dopamine Personal-Best Tracker & Autonomous Online Memory Writer
+    dopamine_tracker = DopaminePersonalBestTracker(dopamine_scale=0.50)
+    writer = AutonomousMemoryWriter(memory_bank=memory_bank, dopamine_tracker=dopamine_tracker)
     initial_bank_size = len(memory_bank)
 
     # 4. Build Planner & Stateful Belief (System 1 Working Memory is embedded in AgentBeliefV3)
@@ -211,15 +212,16 @@ def run_dual_memory_screening(
                 mask_t = belief.get_mask_tensor(device=dev).unsqueeze(0)
                 event_probs = model.event_head.predict_proba(s_t, act_t, mask_t).squeeze(0)
 
-            # Online Autonomous Memory Writer detects milestone breakthroughs in real time
-            newly_unlocked_event = writer.step(
+            # Online Autonomous Memory Writer detects milestone breakthroughs and triggers Dopamine surges
+            newly_unlocked_event, dopamine_surge = writer.step(
                 z_t=z_t.squeeze(0),
                 action=action,
                 reward=reward,
                 info=info,
             )
             if newly_unlocked_event:
-                ep_discoveries.append(newly_unlocked_event)
+                dopamine_tag = f" (+{dopamine_surge:.1f} Dopamine PB!)" if dopamine_surge > 0 else ""
+                ep_discoveries.append(f"{newly_unlocked_event}{dopamine_tag}")
 
             # System 1: Update belief masks, recurrent state, and short-term working memory
             belief.update(event_probs, reward, next_h=next_h.squeeze(0))
@@ -302,6 +304,9 @@ def run_dual_memory_screening(
         "stone_episodes": stone_episodes,
         "zombie_episodes": zombie_episodes,
         "pickaxe_conversion_percent": round(pickaxe_conversion, 1),
+        "dopamine_lifetime_best_reward": dopamine_tracker.lifetime_best_reward,
+        "dopamine_lifetime_best_milestones": dopamine_tracker.lifetime_best_milestones,
+        "dopamine_lifetime_best_steps": dopamine_tracker.lifetime_best_steps,
         "episodes": episode_records,
     }
 
@@ -317,6 +322,7 @@ def run_dual_memory_screening(
     print(f"Unique Achievements Unlocked: {summary['unlocked_achievement_count']} / 22")
     print(f"Table Unlocks: {table_episodes} | Pickaxe Unlocks: {pickaxe_episodes} | Conversion: {pickaxe_conversion:.1f}%")
     print(f"Stone Harvests: {stone_episodes} | Sword Crafts: {sword_episodes} | Zombie Defeats: {zombie_episodes}")
+    print(f"Dopamine Personal Bests: Max Reward={dopamine_tracker.lifetime_best_reward:.1f}, Max Milestones={dopamine_tracker.lifetime_best_milestones}, Max Steps={dopamine_tracker.lifetime_best_steps}")
     print(f"Semantic Memory: {initial_bank_size} initial -> {len(memory_bank)} entries (+{new_memories_count} learned)")
 
     print("\nPer-Achievement Unlock Rates:")
@@ -379,7 +385,7 @@ if __name__ == "__main__":
     parser.add_argument("--vital_weight", type=float, default=0.5)
     parser.add_argument("--harvest_bonus", type=float, default=0.15)
     parser.add_argument("--action_persistence", type=float, default=0.5)
-    parser.add_argument("--memory_sim_threshold", type=float, default=0.70)
+    parser.add_argument("--memory_sim_threshold", type=float, default=0.58)
     parser.add_argument("--memory_inject_ratio", type=float, default=0.50)
     parser.add_argument("--save_updated_memory", action="store_true", default=True)
     args = parser.parse_args()

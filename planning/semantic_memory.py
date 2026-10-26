@@ -24,7 +24,7 @@ import json
 import math
 import os
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional, Tuple, Union
+from typing import Any, Deque, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import torch
@@ -166,15 +166,17 @@ class LongTermSemanticMemory:
         self,
         z_t: torch.Tensor,
         active_inventory: np.ndarray,
-        sim_threshold: float = 0.70,
+        sim_threshold: float = 0.58,
     ) -> Tuple[Optional[int], float, Optional[str]]:
         """
         Queries the memory bank for affordances applicable to current state.
         
-        Dual-Key Conditioning (Eliminates Hallucination):
-        1. Precondition Mask Check: Filters for memories whose preconditions are satisfied
-           by current inventory: (preconditions <= active_inventory).
-        2. Cosine Similarity Matching: Matches current visual latent z_t against candidate keys.
+        Dual-Key Conditioning with Continuous Context Overlap:
+        1. Context Overlap: Measures what proportion of memory preconditions are satisfied
+           Overlap = (p_i . inv_t) / (||p_i||_1) >= 0.50 (forgiving coincidental noise like plants/cows).
+        2. Outcome Not Yet Satisfied Check: Avoids repeating completed achievements.
+        3. Visual Cosine Matching & Dopamine Return Weighting:
+           Candidate score = cos_sim * (0.7 + 0.3 * overlap) * (1.0 + 0.2 * tanh(R_i))
         
         Returns:
             (best_action, similarity_confidence, target_outcome_name)
@@ -185,16 +187,23 @@ class LongTermSemanticMemory:
         z = z_t.detach().to(self.device).float().flatten()
         z_norm = z / (z.norm(p=2).clamp(min=1e-6))
 
-        # 1. Precondition Filtering:
-        # Preconditions must be a subset of active inventory: (1 - inv) * p == 0
         inv_t = torch.from_numpy(active_inventory).to(self.device).float()
-        missing_preconditions = (1.0 - inv_t).unsqueeze(0) * self.preconditions  # [N, 22]
-        precondition_satisfied = (missing_preconditions.sum(dim=-1) == 0)        # [N] bool
 
-        # 2. Outcome Not Yet Satisfied Check:
-        # Avoid retrieving actions for achievements the agent already has
+        # 1. Continuous Context Overlap
+        p_counts = self.preconditions.sum(dim=-1)  # [N]
+        matched_preconditions = (self.preconditions * inv_t.unsqueeze(0)).sum(dim=-1)  # [N]
+        overlap = torch.where(
+            p_counts > 0,
+            matched_preconditions / p_counts,
+            torch.tensor(1.0, device=self.device),
+        )  # [N] in [0.0, 1.0]
+
+        # Require >= 50% prerequisite overlap (filters hallucinations, ignores coincidental noise)
+        sufficient_overlap = (overlap >= 0.50)
+
+        # 2. Outcome Not Yet Satisfied Check
         unmet_outcome = (self.outcomes * (1.0 - inv_t).unsqueeze(0)).sum(dim=-1) > 0  # [N] bool
-        valid_mask = precondition_satisfied & unmet_outcome
+        valid_mask = sufficient_overlap & unmet_outcome
 
         if not valid_mask.any():
             return None, 0.0, None
@@ -204,13 +213,24 @@ class LongTermSemanticMemory:
 
         # 3. Visual Cosine Similarity Matching
         cos_sims = torch.mv(valid_keys, z_norm)  # [M]
-        best_local_idx = int(torch.argmax(cos_sims))
+
+        # 4. Dopamine-weighted scoring: visual similarity * context overlap * return confidence
+        valid_overlaps = overlap[valid_indices]
+        valid_returns = self.returns[valid_indices]
+        return_weights = 1.0 + 0.20 * torch.tanh(valid_returns)
+        composite_scores = cos_sims * (0.70 + 0.30 * valid_overlaps) * return_weights
+
+        best_local_idx = int(torch.argmax(composite_scores))
         best_sim = float(cos_sims[best_local_idx].item())
 
         if best_sim >= sim_threshold:
             global_idx = int(valid_indices[best_local_idx].item())
             retrieved_action = int(self.actions[global_idx].item())
-            retrieved_name = self.outcome_names[global_idx] if global_idx < len(self.outcome_names) else "milestone"
+            retrieved_name = (
+                self.outcome_names[global_idx]
+                if global_idx < len(self.outcome_names)
+                else "milestone"
+            )
             return retrieved_action, best_sim, retrieved_name
 
         return None, best_sim, None
@@ -248,19 +268,101 @@ class LongTermSemanticMemory:
         self.latent_dim = data.get("latent_dim", self.latent_dim)
 
 
+class DopaminePersonalBestTracker:
+    """
+    Dopamine Personal-Best Circuit (Intrinsic Record-Breaking Reinforcement).
+    Tracks historical lifetime and within-session bests:
+    - Survival steps
+    - Cumulative reward
+    - Milestones unlocked in a single game
+    - Unique milestones discovered across lifetime
+    When an episode sets a new personal record, it triggers a 'dopamine surge'
+    that boosts the transition's return and prioritizes its memory consolidation.
+    """
+
+    def __init__(self, dopamine_scale: float = 0.50):
+        self.dopamine_scale = dopamine_scale
+        self.lifetime_best_reward: float = 0.0
+        self.lifetime_best_milestones: int = 0
+        self.lifetime_best_steps: int = 0
+        self.lifetime_unlocked_set: Set[str] = set()
+
+        self.current_ep_reward: float = 0.0
+        self.current_ep_milestones: int = 0
+        self.current_ep_steps: int = 0
+        self.record_broken_this_ep: bool = False
+
+    def reset_episode(self) -> None:
+        """Resets episode counters at the start of each episode."""
+        self.current_ep_reward = 0.0
+        self.current_ep_milestones = 0
+        self.current_ep_steps = 0
+        self.record_broken_this_ep = False
+
+    def update_step(
+        self,
+        reward: float,
+        newly_unlocked: List[str],
+    ) -> float:
+        """
+        Updates step metrics and computes intrinsic dopamine bonus.
+        Returns dopamine surge value (>= 0.0).
+        """
+        self.current_ep_steps += 1
+        self.current_ep_reward += float(reward)
+        self.current_ep_milestones += len(newly_unlocked)
+
+        dopamine_surge = 0.0
+
+        # 1. Unlocked an achievement NEVER seen before across all games
+        for name in newly_unlocked:
+            if name not in self.lifetime_unlocked_set:
+                self.lifetime_unlocked_set.add(name)
+                dopamine_surge += self.dopamine_scale * 1.5  # Large surge for unprecedented discovery!
+                self.record_broken_this_ep = True
+
+        # 2. Beat previous highest achievement count in a single game
+        if self.current_ep_milestones > self.lifetime_best_milestones:
+            self.lifetime_best_milestones = self.current_ep_milestones
+            dopamine_surge += self.dopamine_scale * 1.0
+            self.record_broken_this_ep = True
+
+        # 3. Beat previous highest episode reward
+        if self.current_ep_reward > self.lifetime_best_reward and self.lifetime_best_reward > 0.0:
+            margin = self.current_ep_reward - self.lifetime_best_reward
+            self.lifetime_best_reward = self.current_ep_reward
+            dopamine_surge += float(np.clip(margin * 0.25, 0.0, 1.0))
+            self.record_broken_this_ep = True
+        elif self.lifetime_best_reward == 0.0 and self.current_ep_reward > 0.0:
+            self.lifetime_best_reward = self.current_ep_reward
+
+        # 4. Beat longest survival length
+        if self.current_ep_steps > self.lifetime_best_steps:
+            self.lifetime_best_steps = self.current_ep_steps
+
+        return float(dopamine_surge)
+
+
 class AutonomousMemoryWriter:
     """
-    Autonomous Memory Writer.
+    Autonomous Memory Writer with Dopamine Record Reinforcement.
     Hooks into environment interaction loop to auto-record breakthrough transitions.
     """
 
-    def __init__(self, memory_bank: LongTermSemanticMemory):
+    def __init__(
+        self,
+        memory_bank: LongTermSemanticMemory,
+        dopamine_tracker: Optional[DopaminePersonalBestTracker] = None,
+    ):
         self.memory_bank = memory_bank
+        self.dopamine_tracker = dopamine_tracker
         self.ach_prev: np.ndarray = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
 
     def reset(self) -> None:
         """Resets milestone tracker for a new episode."""
         self.ach_prev.fill(0)
+        if self.dopamine_tracker:
+            self.dopamine_tracker.reset_episode()
 
     def step(
         self,
@@ -268,10 +370,10 @@ class AutonomousMemoryWriter:
         action: int,
         reward: float,
         info: Dict[str, Any],
-    ) -> Optional[str]:
+    ) -> Tuple[Optional[str], float]:
         """
         Inspects step outcome. If an achievement unlocked, autonomously logs memory.
-        Returns the name of the newly unlocked achievement, if any.
+        Returns (unlocked_name, dopamine_surge).
         """
         ach_dict = dict(info.get("achievements", {})) if isinstance(info, dict) else {}
         ach_curr = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
@@ -284,19 +386,25 @@ class AutonomousMemoryWriter:
                     newly_unlocked.append(a_name)
 
         delta_events = np.clip(ach_curr - self.ach_prev, 0, 1)
+        dopamine_surge = 0.0
+
+        if self.dopamine_tracker:
+            dopamine_surge = self.dopamine_tracker.update_step(reward, newly_unlocked)
 
         if np.any(delta_events > 0):
             event_name = ", ".join(newly_unlocked)
+            effective_return = float(reward) + dopamine_surge
             self.memory_bank.add_entry(
                 key=z_t,
                 preconditions=self.ach_prev.copy(),
                 action=action,
                 outcome=delta_events,
-                realized_return=reward,
+                realized_return=effective_return,
                 outcome_name=event_name,
             )
             self.ach_prev = ach_curr.copy()
-            return event_name
+            return event_name, dopamine_surge
 
         self.ach_prev = ach_curr.copy()
-        return None
+        return None, dopamine_surge
+
