@@ -216,6 +216,7 @@ class LongTermSemanticMemory:
         self.latent_dim = latent_dim
         self.device = torch.device(device)
         self.rbf_sigma = rbf_sigma
+        self.max_capacity = 4096  # Bounded capacity for 100,000-game scalability
 
         # Core Experience Diary tensors
         self.keys: torch.Tensor = torch.empty((0, latent_dim), dtype=torch.float32, device=self.device)
@@ -232,6 +233,30 @@ class LongTermSemanticMemory:
     def __len__(self) -> int:
         return self.keys.shape[0]
 
+    def _evict_lowest_priority(self) -> None:
+        """Evicts the lowest-value entry when capacity is reached, protecting rare milestones."""
+        if len(self) == 0:
+            return
+        # Milestone protection: add priority bonus to rare tool/combat discoveries
+        priorities = self.returns.clone()
+        for idx, name in enumerate(self.outcome_names):
+            if any(m in name for m in ["pickaxe", "sword", "table", "diamond", "stone", "iron", "zombie", "skeleton", "cow"]):
+                priorities[idx] += 10.0
+
+        evict_idx = int(torch.argmin(priorities).item())
+        keep_mask = torch.ones(len(self), dtype=torch.bool, device=self.device)
+        keep_mask[evict_idx] = False
+
+        self.keys = self.keys[keep_mask]
+        self.inventories = self.inventories[keep_mask]
+        self.actions = self.actions[keep_mask]
+        self.inventory_deltas = self.inventory_deltas[keep_mask]
+        self.returns = self.returns[keep_mask]
+        self.outcome_names.pop(evict_idx)
+        if self.preconditions.shape[0] > 0:
+            self.preconditions = self.preconditions[keep_mask]
+            self.outcomes = self.outcomes[keep_mask]
+
     def add_entry(
         self,
         key: torch.Tensor,
@@ -242,11 +267,11 @@ class LongTermSemanticMemory:
         outcome_name: str = "unknown",
         preconditions: Optional[np.ndarray] = None,
         outcome: Optional[np.ndarray] = None,
-    ) -> None:
+    ) -> str:
         """
         Adds a single experience tuple (z_t, inv_t, a_t, delta_inv_t, G_t) into the diary.
         Performs similarity de-duplication: if an entry with the same action and identical
-        inventory state already exists with visual cosine similarity > 0.95, updates its return
+        resource inventory already exists with visual cosine similarity > 0.90, updates its return
         rather than bloating memory with duplicates.
         """
         if inventory is None:
@@ -304,7 +329,7 @@ class LongTermSemanticMemory:
         else:
             out_arr = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
 
-        # De-duplication check: update existing memory if almost identical
+        # De-duplication check: update existing memory if same action and identical resource state
         if len(self) > 0:
             same_action_mask = (self.actions == action)
             if same_action_mask.any():
@@ -312,9 +337,15 @@ class LongTermSemanticMemory:
                 cand_keys = self.keys[cand_indices]
                 cos_sims = torch.mv(cand_keys, k_norm)
                 cand_invs = self.inventories[cand_indices]
-                inv_dist_sq = ((cand_invs - torch.from_numpy(inv_16).to(self.device).unsqueeze(0)) ** 2).sum(dim=-1)
+                inv_curr_t = torch.from_numpy(inv_16).to(self.device)
 
-                match_mask = (cos_sims >= 0.95) & (inv_dist_sq < 0.10)
+                # Physical resources/tools (indices 0..11) must match exactly
+                res_dist_sq = ((cand_invs[:, :12] - inv_curr_t[:12].unsqueeze(0)) ** 2).sum(dim=-1)
+                # Vitals variations (indices 12..15) weighted lightly so minor hunger does not duplicate crafting rules
+                vital_diff = (cand_invs[:, 12:16] - inv_curr_t[12:16].unsqueeze(0)) * 0.10
+                vital_dist_sq = (vital_diff ** 2).sum(dim=-1)
+
+                match_mask = (cos_sims >= 0.90) & (res_dist_sq < 0.05) & (vital_dist_sq < 1.0)
                 if match_mask.any():
                     match_idx = cand_indices[torch.where(match_mask)[0][0]]
                     # Update existing return with max return achieved
@@ -322,6 +353,10 @@ class LongTermSemanticMemory:
                     new_ret = max(old_ret, float(realized_return))
                     self.returns[match_idx] = new_ret
                     return "updated"
+
+        # Check capacity limit for 100,000-game bounded memory
+        if len(self) >= self.max_capacity:
+            self._evict_lowest_priority()
 
         # Append new memory entry
         inv_t = torch.from_numpy(inv_16).to(self.device).float().flatten()
