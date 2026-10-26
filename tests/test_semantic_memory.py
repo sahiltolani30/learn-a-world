@@ -492,4 +492,73 @@ def test_autonomous_backward_goal_chaining():
     assert subgoal3["target_action"] == 11, "Target action should be Action 11 (Make wood pickaxe)!"
 
 
+def test_dead_reckoning_action_offsets():
+    """Verify dead-reckoning [dx, dy] spatial tracking in ShortTermWorkingMemory."""
+    wm = ShortTermWorkingMemory()
+    z_0 = torch.randn(128)
+    h_0 = torch.zeros(256)
+
+    # Agent places a table at step 1
+    wm.update(z_t=z_0, action=8, reward=1.0, next_h=h_0, unlocked_event="place_table")
+    assert wm.has_anchor("structure")
+    offset = wm.get_anchor_offset("structure")
+    assert offset is not None
+    assert np.allclose(offset, [0.0, 0.0])
+
+    # Agent walks Right (Action 2) 3 times -> dx = +3
+    for _ in range(3):
+        z_next = torch.randn(128)  # new visual observation
+        wm.update(z_t=z_next, action=2, reward=0.0, next_h=h_0)
+    assert np.allclose(wm.get_anchor_offset("structure"), [3.0, 0.0])
+
+    # Agent walks Down (Action 4) 2 times -> dy = +2
+    for _ in range(2):
+        z_next = torch.randn(128)
+        wm.update(z_t=z_next, action=4, reward=0.0, next_h=h_0)
+    assert np.allclose(wm.get_anchor_offset("structure"), [3.0, 2.0])
+
+    # Agent walks Left (Action 1) 3 times -> dx = -3 (back to x=0)
+    for _ in range(3):
+        z_next = torch.randn(128)
+        wm.update(z_t=z_next, action=1, reward=0.0, next_h=h_0)
+    assert np.allclose(wm.get_anchor_offset("structure"), [0.0, 2.0])
+
+    # Agent walks Up (Action 3) 2 times -> dy = -2 (back to 0,0)
+    for _ in range(2):
+        z_next = torch.randn(128)
+        wm.update(z_t=z_next, action=3, reward=0.0, next_h=h_0)
+    assert np.allclose(wm.get_anchor_offset("structure"), [0.0, 0.0])
+
+
+def test_homeostatic_survival_subgoal():
+    """Verify homeostatic survival alert triggers when thirst/hunger is critical."""
+    ltm = LongTermSemanticMemory(device="cpu")
+    z_water = torch.randn(128)
+    z_water = z_water / z_water.norm()
+
+    delta_drink = np.zeros(NUM_INVENTORY_ITEMS, dtype=np.float32)
+    delta_drink[14] = 9.0  # drink restored
+    ltm.add_entry(
+        key=z_water,
+        inventory=inventory_dict_to_vector({"drink": 2}),
+        action=5,  # collect_drink
+        inventory_delta=delta_drink,
+        realized_return=2.5,
+        outcome_name="collect_drink",
+    )
+
+    # Normal state: thirst is 7.0 -> no survival alert
+    normal_inv = inventory_dict_to_vector({"wood": 0, "drink": 7})
+    subgoal_norm = ltm.deduce_active_subgoal(normal_inv)
+    assert subgoal_norm is None or subgoal_norm.get("missing_resource_name") != "drink"
+
+    # Critical state: thirst is 2.0 (<= 3.0) -> triggers immediate survival alert
+    critical_inv = inventory_dict_to_vector({"wood": 0, "drink": 2})
+    subgoal_crit = ltm.deduce_active_subgoal(critical_inv)
+    assert subgoal_crit is not None
+    assert subgoal_crit["status"] == "HARVESTING_INPUT"
+    assert subgoal_crit["missing_resource_name"] == "drink"
+    assert subgoal_crit["producer_action"] == 5
+
+
 

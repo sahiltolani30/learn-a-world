@@ -78,10 +78,19 @@ def vector_to_inventory_dict(vec: np.ndarray) -> Dict[str, int]:
     return {key: int(round(float(vec[i]))) for i, key in enumerate(CRAFTER_INVENTORY_KEYS)}
 
 
+ACTION_DELTAS = {
+    1: np.array([-1.0, 0.0], dtype=np.float32),  # Move Left
+    2: np.array([1.0, 0.0], dtype=np.float32),   # Move Right
+    3: np.array([0.0, -1.0], dtype=np.float32),  # Move Up
+    4: np.array([0.0, 1.0], dtype=np.float32),   # Move Down
+}
+
+
 class ShortTermWorkingMemory:
     """
     Short-Term Working Memory (System 1 - Within-Episode Context).
     Maintains rolling sensory history, dynamic 16-D backpack state, landmark anchors,
+    action-displacement [dx, dy] dead-reckoning spatial tracking,
     and the full episode trajectory buffer for backward credit assignment.
     """
 
@@ -102,9 +111,11 @@ class ShortTermWorkingMemory:
         # Full episode trajectory buffer for retrospective Monte Carlo backpropagation
         self.episode_trajectory: List[Dict[str, Any]] = []
 
-        # Spatial/Landmark Anchors: stores latent representation of key structures
+        # Spatial/Landmark Anchors: stores latent representation and dead-reckoning [dx, dy] offset of key structures
         self.landmark_anchors: Dict[str, torch.Tensor] = {}
         self.landmark_step_created: Dict[str, int] = {}
+        self.anchor_offsets: Dict[str, np.ndarray] = {}
+        self.prev_z: Optional[torch.Tensor] = None
         self.current_step: int = 0
         self.vital_trend: float = 0.0
 
@@ -120,8 +131,25 @@ class ShortTermWorkingMemory:
         self.current_inv = inventory_dict_to_vector(None)
         self.landmark_anchors.clear()
         self.landmark_step_created.clear()
+        self.anchor_offsets.clear()
+        self.prev_z = None
         self.current_step = 0
         self.vital_trend = 0.0
+
+    def set_anchor(self, name: str, z_tensor: torch.Tensor, offset: Optional[np.ndarray] = None) -> None:
+        """Sets a landmark anchor and initializes its spatial dead-reckoning offset counter."""
+        z_cpu = z_tensor.detach().cpu().flatten()
+        self.landmark_anchors[name] = z_cpu
+        self.landmark_step_created[name] = self.current_step
+        self.anchor_offsets[name] = np.array([0.0, 0.0], dtype=np.float32) if offset is None else np.array(offset, dtype=np.float32)
+
+    def get_anchor_offset(self, name: str = "structure") -> Optional[np.ndarray]:
+        """Retrieves dead-reckoning [dx, dy] spatial offset for a landmark anchor."""
+        if name in self.anchor_offsets:
+            return self.anchor_offsets[name].copy()
+        if name == "structure" and "structure" in self.anchor_offsets:
+            return self.anchor_offsets["structure"].copy()
+        return None
 
     def update(
         self,
@@ -165,15 +193,38 @@ class ShortTermWorkingMemory:
             "event": unlocked_event,
         })
 
+        # Dead-reckoning spatial tracking: update [dx, dy] offsets on successful movement actions
+        moved = False
+        if self.prev_z is None:
+            moved = True
+        else:
+            latent_diff = float(torch.norm(z_cpu - self.prev_z).item())
+            if latent_diff > 0.03:
+                moved = True
+
+        if action in ACTION_DELTAS and moved:
+            delta = ACTION_DELTAS[action]
+            for key in list(self.anchor_offsets.keys()):
+                self.anchor_offsets[key] = self.anchor_offsets[key] + delta
+
+        self.prev_z = z_cpu.clone()
+
         # Generic Object Permanence: track placed structures until subsequent breakthrough
         if unlocked_event is not None:
             if "place_" in unlocked_event:
                 self.landmark_anchors["structure"] = z_cpu.clone()
                 self.landmark_step_created["structure"] = self.current_step
+                self.anchor_offsets["structure"] = np.array([0.0, 0.0], dtype=np.float32)
+            elif "stone" in unlocked_event:
+                # Stone collected -> release stone anchor
+                self.landmark_anchors.pop("stone", None)
+                self.landmark_step_created.pop("stone", None)
+                self.anchor_offsets.pop("stone", None)
             else:
-                # Any milestone breakthrough fulfills the structure's potential -> release anchor
-                self.landmark_anchors.clear()
-                self.landmark_step_created.clear()
+                # Milestone breakthrough (e.g. pickaxe crafted) fulfills structure potential -> release structure anchor
+                self.landmark_anchors.pop("structure", None)
+                self.landmark_step_created.pop("structure", None)
+                self.anchor_offsets.pop("structure", None)
 
         # Update vital trend (damage slope over last 5 steps)
         if len(self.reward_window) >= 5:
@@ -182,8 +233,14 @@ class ShortTermWorkingMemory:
 
     def has_anchor(self, name: str = "structure", max_age: int = 250) -> bool:
         """Checks if a landmark anchor exists and is within temporal relevance."""
-        key = name if name in self.landmark_anchors else ("structure" if "structure" in self.landmark_anchors else None)
-        if key is None:
+        if name in self.landmark_anchors:
+            key = name
+        elif name == "structure" or "place_" in name:
+            key = "structure" if "structure" in self.landmark_anchors else None
+        else:
+            key = None
+
+        if key is None or key not in self.landmark_anchors:
             return False
         age = self.current_step - self.landmark_step_created.get(key, 0)
         return age <= max_age
@@ -192,7 +249,9 @@ class ShortTermWorkingMemory:
         """Retrieves a landmark anchor latent vector."""
         if name in self.landmark_anchors:
             return self.landmark_anchors[name]
-        return self.landmark_anchors.get("structure", None)
+        if name == "structure" or "place_" in name:
+            return self.landmark_anchors.get("structure", None)
+        return None
 
 
 class LongTermSemanticMemory:
@@ -503,6 +562,13 @@ class LongTermSemanticMemory:
 
         return best_action, best_sim, name
 
+    def get_prototype_key(self, outcome_name: str) -> Optional[torch.Tensor]:
+        """Retrieves normalized visual prototype key for an outcome name."""
+        for i, name in enumerate(self.outcome_names):
+            if name == outcome_name:
+                return self.keys[i]
+        return None
+
     def deduce_active_subgoal(
         self,
         current_inv: Union[np.ndarray, torch.Tensor],
@@ -535,6 +601,7 @@ class LongTermSemanticMemory:
         # Handle legacy 22-D calls
         if len(inv_curr) == NUM_ACHIEVEMENTS:
             inv_16 = torch.zeros(NUM_INVENTORY_ITEMS, device=self.device)
+            inv_16[12:16] = 9.0  # Initialize nominal full vitals for legacy tests
             for idx, ach_name in enumerate(CRAFTER_ACHIEVEMENTS):
                 if inv_curr[idx] > 0.5:
                     for inv_key in CRAFTER_INVENTORY_KEYS[:12]:
@@ -544,6 +611,47 @@ class LongTermSemanticMemory:
             inv_curr = inv_16
         else:
             inv_curr = inv_curr[:NUM_INVENTORY_ITEMS]
+
+        # Homeostatic Survival Priority (Bug 3 Fix):
+        # In Crafter, drink (index 14) and food (index 13) decay silently for 150+ steps.
+        # When either drops to <= 3.0, proactively trigger survival subgoals before health drops.
+        if len(inv_curr) >= 15 and float(inv_curr[14].item()) <= 3.0:
+            drink_mask = (self.inventory_deltas[:, 14] > 0.01)
+            if drink_mask.any():
+                prod_indices = torch.where(drink_mask)[0]
+                best_drink_idx = int(prod_indices[torch.argmax(self.returns[prod_indices])].item())
+                return {
+                    "status": "HARVESTING_INPUT",
+                    "target_milestone": "collect_drink",
+                    "target_action": int(self.actions[best_drink_idx].item()),
+                    "target_return": 3.0,
+                    "missing_resource_dim": 14,
+                    "missing_resource_name": "drink",
+                    "deficit": float(9.0 - inv_curr[14].item()),
+                    "producer_action": int(self.actions[best_drink_idx].item()),
+                    "producer_key": self.keys[best_drink_idx],
+                    "producer_return": max(float(self.returns[best_drink_idx].item()), 2.5),
+                    "producer_name": self.outcome_names[best_drink_idx] if best_drink_idx < len(self.outcome_names) else "drink",
+                }
+
+        if len(inv_curr) >= 14 and float(inv_curr[13].item()) <= 3.0:
+            food_mask = (self.inventory_deltas[:, 13] > 0.01)
+            if food_mask.any():
+                prod_indices = torch.where(food_mask)[0]
+                best_food_idx = int(prod_indices[torch.argmax(self.returns[prod_indices])].item())
+                return {
+                    "status": "HARVESTING_INPUT",
+                    "target_milestone": "eat_plant",
+                    "target_action": int(self.actions[best_food_idx].item()),
+                    "target_return": 3.0,
+                    "missing_resource_dim": 13,
+                    "missing_resource_name": "food",
+                    "deficit": float(9.0 - inv_curr[13].item()),
+                    "producer_action": int(self.actions[best_food_idx].item()),
+                    "producer_key": self.keys[best_food_idx],
+                    "producer_return": max(float(self.returns[best_food_idx].item()), 2.5),
+                    "producer_name": self.outcome_names[best_food_idx] if best_food_idx < len(self.outcome_names) else "eat",
+                }
 
         # 1. Filter Candidate Target Milestones
         # Memories with return >= min_return and non-zero causal utility

@@ -146,8 +146,8 @@ class RecurrentMPCPlanner:
             q_memory_all = None
             sim_memory_all = None
             active_subgoal = None
+            inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
             if self.semantic_memory is not None and len(self.semantic_memory) > 0:
-                inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
                 retrieved_action, match_sim, target_milestone = self.semantic_memory.query(
                     z_t=z_0,
                     active_inventory=inv_context,
@@ -171,10 +171,57 @@ class RecurrentMPCPlanner:
 
             # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
             structure_anchor = None
+            structure_offset = None
             if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("structure"):
                 anc = belief.working_memory.get_anchor("structure")
                 if anc is not None:
                     structure_anchor = anc.to(self.device).flatten().unsqueeze(0)
+                if hasattr(belief.working_memory, "get_anchor_offset"):
+                    structure_offset = belief.working_memory.get_anchor_offset("structure")
+
+            # Passive visual landmark spotting for stone deposits (Bug 3 Fix)
+            if (
+                hasattr(belief, "working_memory")
+                and not belief.working_memory.has_anchor("stone")
+                and self.semantic_memory is not None
+                and hasattr(self.semantic_memory, "get_prototype_key")
+            ):
+                stone_proto = self.semantic_memory.get_prototype_key("collect_stone")
+                if stone_proto is not None:
+                    sim_stone = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), stone_proto.to(self.device).flatten().unsqueeze(0)).item())
+                    if sim_stone >= 0.65:
+                        belief.working_memory.set_anchor("stone", z_0.flatten().cpu())
+
+            # Stone landmark anchor guidance (Working Memory: return to spotted rock once pickaxe is crafted)
+            stone_anchor = None
+            stone_offset = None
+            if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("stone"):
+                anc_s = belief.working_memory.get_anchor("stone")
+                if anc_s is not None:
+                    stone_anchor = anc_s.to(self.device).flatten().unsqueeze(0)
+                if hasattr(belief.working_memory, "get_anchor_offset"):
+                    stone_offset = belief.working_memory.get_anchor_offset("stone")
+
+            # Backpack inventory checks for landmark gating (0: wood, 6: wood_pickaxe)
+            has_wood = False
+            has_pickaxe = False
+            if inv_context is not None:
+                if torch.is_tensor(inv_context):
+                    inv_cpu = inv_context.detach().cpu().flatten()
+                else:
+                    inv_cpu = torch.from_numpy(np.array(inv_context, dtype=np.float32).flatten())
+                if len(inv_cpu) >= 1:
+                    has_wood = bool(inv_cpu[0] >= 1.0)
+                if len(inv_cpu) >= 7:
+                    has_pickaxe = bool(inv_cpu[6] >= 1.0)
+
+            # Action displacement mapping for dead-reckoning:
+            # 1: Left (-1, 0), 2: Right (1, 0), 3: Up (0, -1), 4: Down (0, 1)
+            action_deltas_tensor = torch.zeros((self.num_actions, 2), dtype=torch.float32, device=self.device)
+            action_deltas_tensor[1] = torch.tensor([-1.0, 0.0], device=self.device)
+            action_deltas_tensor[2] = torch.tensor([1.0, 0.0], device=self.device)
+            action_deltas_tensor[3] = torch.tensor([0.0, -1.0], device=self.device)
+            action_deltas_tensor[4] = torch.tensor([0.0, 1.0], device=self.device)
 
             # Determine action injection: direct affordance or backward subgoal intention
             inject_action = retrieved_action
@@ -248,8 +295,22 @@ class RecurrentMPCPlanner:
                 cumulative_reward = torch.zeros(C, device=self.device)
                 gamma_prod = torch.ones(C, device=self.device)
 
+                pos_struct_t = None
+                if structure_offset is not None:
+                    pos_struct_t = torch.tensor(structure_offset, dtype=torch.float32, device=self.device).unsqueeze(0).expand(C, -1).clone()
+
+                pos_stone_t = None
+                if stone_offset is not None:
+                    pos_stone_t = torch.tensor(stone_offset, dtype=torch.float32, device=self.device).unsqueeze(0).expand(C, -1).clone()
+
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
+                    delta_move = action_deltas_tensor[a_t]
+                    if pos_struct_t is not None:
+                        pos_struct_t = pos_struct_t + delta_move
+                    if pos_stone_t is not None:
+                        pos_stone_t = pos_stone_t + delta_move
+
                     r_hat, decomp = self.model.predict_reward(
                         s_t,
                         a_t,
@@ -299,11 +360,34 @@ class RecurrentMPCPlanner:
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
                             subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
 
-                    # Landmark anchor persistence bonus: keep agent oriented near placed structure until breakthrough
+                    # Landmark anchor guidance (Bug 1 & Bug 2 Fix: Gated by inventory + Dead-reckoning spatial pull)
                     landmark_reward = 0.0
                     if structure_anchor is not None:
                         struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
-                        landmark_reward = 0.15 * torch.clamp(struct_sim, min=0.0)
+                        if has_wood:
+                            # We have wood (>= 1)! Pull HARD back to the table to craft pickaxe/sword
+                            # Visual alignment pull when table is on-screen
+                            vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
+                            # Dead-reckoning spatial pull when table is off-screen
+                            offset_pull = 0.0
+                            if pos_struct_t is not None:
+                                dist_to_table = torch.norm(pos_struct_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_table
+                            landmark_reward = vis_pull + offset_pull
+                        else:
+                            # We have 0 wood! Do NOT glue agent to the table with +1.5 reward!
+                            # Push slightly away so the agent explores to harvest trees
+                            landmark_reward = -0.05 * torch.clamp(struct_sim - 0.85, min=0.0)
+
+                    # Stone landmark pull (Bug 3 Fix: Return to spotted rock once pickaxe is in hand)
+                    if stone_anchor is not None and has_pickaxe:
+                        stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
+                        vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
+                        offset_pull = 0.0
+                        if pos_stone_t is not None:
+                            dist_to_stone = torch.norm(pos_stone_t, dim=-1)
+                            offset_pull = -0.10 * dist_to_stone
+                        landmark_reward = landmark_reward + vis_pull + offset_pull
 
                     step_reward = (
                         effective_ach_reward
