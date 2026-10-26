@@ -234,7 +234,10 @@ class RecurrentMPCPlanner:
                 elif active_subgoal["status"] == "READY_TO_EXECUTE":
                     tgt_key = active_subgoal["target_key"].to(self.device)
                     cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), tgt_key.flatten().unsqueeze(0)).item())
-                    if cue_sim >= 0.35:
+                    struct_sim_curr = 0.0
+                    if structure_anchor is not None:
+                        struct_sim_curr = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), structure_anchor.flatten().unsqueeze(0)).item())
+                    if cue_sim >= 0.35 or struct_sim_curr >= 0.50:
                         inject_action = active_subgoal["target_action"]
 
             # Initialize categorical CEM action distribution [H, 17]
@@ -353,11 +356,15 @@ class RecurrentMPCPlanner:
                             prod_key = active_subgoal["producer_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, prod_key, dim=-1), min=0.0)
                             # Pull agent towards producer visual cues while executing producer action
-                            subgoal_reward = (a_t == prod_act).float() * (0.25 * sim_cue * min(active_subgoal["producer_return"], 2.0))
-                        elif active_subgoal["status"] == "READY_TO_EXECUTE" and t == 0:
+                            action_reward = (a_t == prod_act).float() * (0.25 * sim_cue * min(active_subgoal["producer_return"], 2.0))
+                            # Continuous visual navigation gradient pulling candidate trajectories toward harvest cues (trees/water)
+                            nav_reward = 0.10 * sim_cue
+                            subgoal_reward = action_reward + nav_reward
+                        elif active_subgoal["status"] == "READY_TO_EXECUTE":
                             tgt_act = active_subgoal["target_action"]
                             tgt_key = active_subgoal["target_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
+                            # Multi-step crafting affordance: rewards crafting at any point in the lookahead horizon
                             subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
 
                     # Landmark anchor guidance (Bug 1 & Bug 2 Fix: Gated by inventory + Dead-reckoning spatial pull)

@@ -367,7 +367,12 @@ def run_dual_memory_screening(
     # Save updated memory bank
     if save_updated_memory and new_memories_count > 0:
         is_tabula_rasa = empty_memory or (memory_bank_path and memory_bank_path.lower() in ("none", "empty"))
-        save_dest = "checkpoints/tabula_rasa_memory_bank.pt" if is_tabula_rasa else memory_bank_path
+        if is_tabula_rasa:
+            save_dest = "checkpoints/tabula_rasa_memory_bank.pt"
+        elif memory_bank_path and "clean" in Path(memory_bank_path).name.lower():
+            save_dest = str(Path(memory_bank_path).parent / "updated_discovery_memory_bank.pt")
+        else:
+            save_dest = memory_bank_path
         saved_bank_p = memory_bank.save(save_dest)
         print(f"[Memory Bank] Successfully saved newly built memory bank with discoveries: {saved_bank_p}")
         if drive_dir and Path(drive_dir).exists():
