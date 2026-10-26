@@ -82,6 +82,7 @@ def run_dual_memory_screening(
     action_persistence: float = 0.5,
     memory_sim_threshold: float = 0.58,
     memory_inject_ratio: float = 0.50,
+    empty_memory: bool = False,
     save_updated_memory: bool = True,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
@@ -116,7 +117,10 @@ def run_dual_memory_screening(
 
     # 2. Load Long-Term Semantic Memory (System 2)
     memory_bank = LongTermSemanticMemory(latent_dim=128, device=dev)
-    if Path(resolved_bank).exists():
+    if empty_memory or (memory_bank_path and memory_bank_path.lower() in ("none", "empty")):
+        print("[Memory Bank] Starting in TABULA RASA mode (0 entries). The agent will build its memory 100% live from scratch!")
+        resolved_bank = "empty_memory (Tabula Rasa)"
+    elif Path(resolved_bank).exists():
         memory_bank.load(resolved_bank)
         print(f"[Memory Bank] Successfully loaded {len(memory_bank)} affordance memories from {resolved_bank}")
     else:
@@ -347,10 +351,12 @@ def run_dual_memory_screening(
 
     # Save updated memory bank
     if save_updated_memory and new_memories_count > 0:
-        saved_bank_p = memory_bank.save(memory_bank_path)
-        print(f"[Memory Bank] Successfully updated memory bank with new discoveries: {saved_bank_p}")
+        is_tabula_rasa = empty_memory or (memory_bank_path and memory_bank_path.lower() in ("none", "empty"))
+        save_dest = "checkpoints/tabula_rasa_memory_bank.pt" if is_tabula_rasa else memory_bank_path
+        saved_bank_p = memory_bank.save(save_dest)
+        print(f"[Memory Bank] Successfully saved newly built memory bank with discoveries: {saved_bank_p}")
         if drive_dir and Path(drive_dir).exists():
-            drive_bank_out = Path(drive_dir) / "checkpoints" / Path(memory_bank_path).name
+            drive_bank_out = Path(drive_dir) / "checkpoints" / Path(save_dest).name
             shutil.copy2(str(saved_bank_p), str(drive_bank_out))
             print(f"[Drive] Mirrored updated memory bank to: {drive_bank_out}")
 
@@ -387,6 +393,7 @@ if __name__ == "__main__":
     parser.add_argument("--action_persistence", type=float, default=0.5)
     parser.add_argument("--memory_sim_threshold", type=float, default=0.58)
     parser.add_argument("--memory_inject_ratio", type=float, default=0.50)
+    parser.add_argument("--empty_memory", action="store_true", default=False, help="Start with 0 memories (Tabula Rasa).")
     parser.add_argument("--save_updated_memory", action="store_true", default=True)
     args = parser.parse_args()
 
@@ -412,5 +419,6 @@ if __name__ == "__main__":
         action_persistence=args.action_persistence,
         memory_sim_threshold=args.memory_sim_threshold,
         memory_inject_ratio=args.memory_inject_ratio,
+        empty_memory=args.empty_memory,
         save_updated_memory=args.save_updated_memory,
     )
