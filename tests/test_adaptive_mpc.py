@@ -79,9 +79,9 @@ def test_planner_adaptive_threshold_offline():
     
     idx_pick = CRAFTER_ACHIEVEMENTS.index("make_wood_pickaxe")
     assert planner.event_thresholds[0, idx_pick].item() == 0.25
-    assert planner.denormalize_q is True
-    assert planner.vital_weight == 2.0
-    assert planner.death_risk_factor == 2.5
+    assert planner.denormalize_q is False
+    assert planner.vital_weight == 0.5
+    assert planner.death_risk_factor == 0.0
     assert planner.harvest_bonus == 0.15
 
 

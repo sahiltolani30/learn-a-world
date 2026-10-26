@@ -70,13 +70,13 @@ def run_screening(
     device: str = "cpu",
     output_json: str = "results/screen_v3_50eps_results.json",
     drive_dir: Optional[str] = None,
-    denormalize_q: bool = True,
+    denormalize_q: bool = False,
     tte_weight: float = 0.0,
     standardize_scores: bool = False,
     frontier_threshold: float = 0.25,
     common_threshold: float = 0.50,
-    vital_weight: float = 2.0,
-    death_risk_factor: float = 2.5,
+    vital_weight: float = 0.5,
+    death_risk_factor: float = 0.0,
     harvest_bonus: float = 0.15,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
@@ -279,13 +279,13 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output_json", type=str, default="results/screen_v3_step1_results.json")
     parser.add_argument("--drive_dir", type=str, default=None)
-    parser.add_argument("--denormalize_q", action="store_true", default=True, help="Denormalize terminal Q to raw return scale.")
+    parser.add_argument("--denormalize_q", action="store_true", default=False, help="Denormalize terminal Q to raw return scale.")
     parser.add_argument("--no_denormalize_q", dest="denormalize_q", action="store_false", help="Disable Q denormalization.")
     parser.add_argument("--tte_weight", type=float, default=0.0, help="Weight for learned time-to-event proximity gain.")
     parser.add_argument("--frontier_threshold", type=float, default=0.25, help="Activation threshold for rare frontier achievements.")
     parser.add_argument("--common_threshold", type=float, default=0.50, help="Activation threshold for common survival achievements.")
-    parser.add_argument("--vital_weight", type=float, default=2.0, help="Scaling factor for vital health damage/healing.")
-    parser.add_argument("--death_risk_factor", type=float, default=2.5, help="Continuation decay rate for lethal damage in imagination.")
+    parser.add_argument("--vital_weight", type=float, default=0.5, help="Scaling factor for vital health damage/healing.")
+    parser.add_argument("--death_risk_factor", type=float, default=0.0, help="Continuation decay rate for lethal damage in imagination.")
     parser.add_argument("--harvest_bonus", type=float, default=0.15, help="Utility bonus for repeat harvesting of essential inputs.")
     parser.add_argument(
         "--standardize-scores",
