@@ -234,13 +234,24 @@ class LongTermSemanticMemory:
         return self.keys.shape[0]
 
     def _evict_lowest_priority(self) -> None:
-        """Evicts the lowest-value entry when capacity is reached, protecting rare milestones."""
+        """
+        Evicts the lowest-value entry when capacity is reached.
+        Permanent Priority Shields:
+        1. Survival Invariants: Any memory that restores food, drink, energy, or health is NEVER evicted.
+        2. Rare Tool & Combat Breakthroughs: Pickaxes, swords, tables, defeated mobs are NEVER evicted.
+        Only redundant, low-return exploration steps with no vital or resource utility are evicted.
+        """
         if len(self) == 0:
             return
-        # Milestone protection: add priority bonus to rare tool/combat discoveries
         priorities = self.returns.clone()
+        
+        # 1. Permanent Homeostatic Survival Shield: never forget how to eat, drink, sleep, heal!
+        vital_restoration_mask = (self.inventory_deltas[:, 12:16] > 0.0).any(dim=-1)
+        priorities[vital_restoration_mask] += 20.0
+
+        # 2. Permanent Tool, Resource & Combat Milestone Shield
         for idx, name in enumerate(self.outcome_names):
-            if any(m in name for m in ["pickaxe", "sword", "table", "diamond", "stone", "iron", "zombie", "skeleton", "cow"]):
+            if any(m in name for m in ["pickaxe", "sword", "table", "diamond", "stone", "iron", "zombie", "skeleton", "cow", "plant", "drink", "eat"]):
                 priorities[idx] += 10.0
 
         evict_idx = int(torch.argmin(priorities).item())
