@@ -1,0 +1,37 @@
+{
+  "cell": 5,
+  "phase": "phase1_transition_learning",
+  "status": "completed",
+  "dataset_transitions": 1985,
+  "metrics": {
+    "state_delta_mse": 0.014680476568173617,
+    "state_delta_persistence_mse": 0.016876220703125,
+    "state_delta_valid_transitions": 4096.0,
+    "reward_mae": 0.35379588324576616,
+    "termination_accuracy": 0.999755859375,
+    "counterfactual_action_separation": 0.00048047341260826215
+  },
+  "verification_gates": {
+    "gate1_jepa_active": {
+      "initial_loss": 0.5449,
+      "final_loss": 0.1352,
+      "passed": true
+    },
+    "gate2_beat_persistence": {
+      "model_mse": 0.01468,
+      "persistence_mse": 0.01688,
+      "relative_improvement_pct": 13.01,
+      "passed": true
+    },
+    "gate3_counterfactual_separation": {
+      "value": 0.00048047,
+      "threshold": 0.0,
+      "passed": true
+    },
+    "gate4_termination_accuracy": {
+      "value": 0.99975586,
+      "threshold": 0.99,
+      "passed": true
+    }
+  }
+}

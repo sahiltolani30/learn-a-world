@@ -1,0 +1,57 @@
+[JEPAv3 Checkpoint Audit] Loaded from: /content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt (version: v3)
+-> Successfully Loaded (10): encoder, target_encoder, recurrent_core, predictor, event_head, health_head, q_ensemble, q_target_ensemble, policy_prior, normalizer
+-> Skipped / Fresh (3): state_delta_head (not in checkpoint), transition_head (not in checkpoint), time_to_event_head (not in checkpoint)
+[JEPAv3] Event-head calibrator successfully loaded from /content/learn-a-world/results/calibration/event_head_calibrator.json and attached.
+[Planner] Loaded default EventHeadCalibrator from /content/learn-a-world/results/calibration/event_head_calibrator.json
+[CollectorV3] Starting T1 collection: target=2000 new transitions | seed_start=5000 | device=cuda
+[CollectorV3] Checkpoint saved: train_state_t01_step0001000.pt
+[T1-Ep 0010] Seed 5009 | Steps: 190 | r_ep: 3.10 | mean_r100: 2.80 | cur_loss: 0.0772 | new_trans: 1705/2000 | cur_bonus: 0.2489
+[CollectorV3] Checkpoint saved: train_state_t01_step0002000.pt
+[T1-Ep 0013] Seed 5012 | Steps: 15 | r_ep: 1.00 | mean_r100: 2.78 | cur_loss: 0.0833 | new_trans: 2000/2000 | cur_bonus: 0.1685
+[CollectorV3] Shard 0 written → shard_curiosity_v3_t01_0000.npz (2000 transitions)
+============================================================
+T1 COLLECTION COMPLETE
+New transitions: 2,000
+Total transitions: 2,000
+Episodes: 13
+Shards written: 1
+collect_stone: 0
+collect_coal: 0
+collect_iron: 0
+============================================================
+Collection summary:
+{
+  "tranche_id": 1,
+  "new_transitions": 2000,
+  "total_transitions": 2000,
+  "total_episodes": 13,
+  "num_shards": 1,
+  "seed_range": [
+    5000,
+    5012
+  ],
+  "event_counts": {
+    "collect_coal": 0,
+    "collect_diamond": 0,
+    "collect_drink": 5,
+    "collect_iron": 0,
+    "collect_sapling": 8,
+    "collect_stone": 0,
+    "collect_wood": 11,
+    "defeat_skeleton": 0,
+    "defeat_zombie": 0,
+    "eat_cow": 0,
+    "eat_plant": 0,
+    "make_iron_pickaxe": 0,
+    "make_iron_sword": 0,
+    "make_stone_pickaxe": 0,
+    "make_stone_sword": 0,
+    "make_wood_pickaxe": 0,
+    "make_wood_sword": 0,
+    "place_furnace": 0,
+    "place_plant": 6,
+    "place_stone": 0,
+    "place_table": 5,
+    "wake_up": 12
+  }
+}

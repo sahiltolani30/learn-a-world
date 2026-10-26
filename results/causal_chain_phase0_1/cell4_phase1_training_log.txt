@@ -1,0 +1,23 @@
+[JEPAv3 Checkpoint Audit] Loaded from: /content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt (version: v3)
+-> Successfully Loaded (10): encoder, target_encoder, recurrent_core, predictor, event_head, health_head, q_ensemble, q_target_ensemble, policy_prior, normalizer
+-> Skipped / Fresh (3): state_delta_head (not in checkpoint), transition_head (not in checkpoint), time_to_event_head (not in checkpoint)
+[JEPAv3] Event-head calibrator successfully loaded from /content/learn-a-world/results/calibration/event_head_calibrator.json and attached.
+[Phase 1] step 1/1000 total=1.4144 jepa=0.5449 delta=0.0148
+[Phase 1] step 100/1000 total=0.1520 jepa=0.3429 delta=0.0059
+[Phase 1] step 200/1000 total=0.1396 jepa=0.2963 delta=0.0067
+[Phase 1] step 300/1000 total=-0.0804 jepa=0.1850 delta=0.0052
+[Phase 1] step 400/1000 total=-0.0460 jepa=0.2742 delta=0.0060
+[Phase 1] step 500/1000 total=-0.0957 jepa=0.2491 delta=0.0049
+[Phase 1] step 600/1000 total=-0.1046 jepa=0.2342 delta=0.0055
+[Phase 1] step 700/1000 total=-0.1681 jepa=0.1675 delta=0.0072
+[Phase 1] step 800/1000 total=-0.1929 jepa=0.1535 delta=0.0068
+[Phase 1] step 900/1000 total=-0.1918 jepa=0.1898 delta=0.0051
+[Phase 1] step 1000/1000 total=-0.2398 jepa=0.1352 delta=0.0050
+{
+  "state_delta_mse": 0.014680476568173617,
+  "state_delta_persistence_mse": 0.016876220703125,
+  "state_delta_valid_transitions": 4096.0,
+  "reward_mae": 0.35379588324576616,
+  "termination_accuracy": 0.999755859375,
+  "counterfactual_action_separation": 0.00048047341260826215
+}
