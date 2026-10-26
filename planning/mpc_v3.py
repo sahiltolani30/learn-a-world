@@ -49,6 +49,9 @@ class RecurrentMPCPlanner:
         vital_weight: float = 0.5,
         death_risk_factor: float = 0.0,
         harvest_bonus: float = 0.15,
+        semantic_memory: Optional[Any] = None,
+        memory_sim_threshold: float = 0.70,
+        memory_inject_ratio: float = 0.50,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -70,6 +73,9 @@ class RecurrentMPCPlanner:
         self.vital_weight = vital_weight
         self.death_risk_factor = death_risk_factor
         self.harvest_bonus = harvest_bonus
+        self.semantic_memory = semantic_memory
+        self.memory_sim_threshold = memory_sim_threshold
+        self.memory_inject_ratio = memory_inject_ratio
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
         # Adaptive Frontier Event Thresholds
@@ -135,6 +141,25 @@ class RecurrentMPCPlanner:
             N_prior = int(round(C * self.prior_mix))
             N_cem = C - N_prior
 
+            # Query Long-Term Semantic Memory for learned affordances
+            retrieved_action = None
+            match_sim = 0.0
+            target_milestone = None
+            if self.semantic_memory is not None and len(self.semantic_memory) > 0:
+                retrieved_action, match_sim, target_milestone = self.semantic_memory.query(
+                    z_t=z_0,
+                    active_inventory=belief.get_binary_mask(),
+                    sim_threshold=self.memory_sim_threshold,
+                )
+
+            # Landmark anchor guidance (Working Memory: keep agent oriented near table if tools needed)
+            table_anchor = None
+            if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("place_table"):
+                if m_bin_0[0, 15] < 0.5 or m_bin_0[0, 16] < 0.5:
+                    anc = belief.working_memory.get_anchor("place_table")
+                    if anc is not None:
+                        table_anchor = anc.to(self.device).flatten().unsqueeze(0)
+
             # Initialize categorical CEM action distribution [H, 17]
             action_dist = torch.ones(self.horizon, self.num_actions, device=self.device) / self.num_actions
 
@@ -156,6 +181,12 @@ class RecurrentMPCPlanner:
                         prev_actions = prior_actions[:, h_step - 1]
                         move_mask = (prev_actions >= 1) & (prev_actions <= 4)
                         a_h = torch.where(repeat_mask & move_mask, prev_actions, a_h)
+
+                    # Inject retrieved affordance action at step 0 during initial iteration
+                    if h_step == 0 and retrieved_action is not None and iteration == 0:
+                        n_inject = max(1, int(N_prior * self.memory_inject_ratio))
+                        a_h[:n_inject] = retrieved_action
+
                     prior_actions[:, h_step] = a_h
                     p_h = self.model.event_head.predict_proba(s_roll, a_h, m_bin_roll, use_calibration=self.use_calibration)
                     m_bin_roll = torch.where(p_h > self.event_thresholds, torch.tensor(1.0, device=self.device), m_bin_roll)
@@ -173,6 +204,11 @@ class RecurrentMPCPlanner:
                         cem_actions[:, h_step] = torch.where(repeat_mask & move_mask, prev_actions, fresh_actions)
                     else:
                         cem_actions[:, h_step] = fresh_actions
+
+                    # Inject retrieved affordance into CEM candidates at step 0 during initial iteration
+                    if h_step == 0 and retrieved_action is not None and iteration == 0:
+                        n_inject_cem = max(1, int(N_cem * self.memory_inject_ratio))
+                        cem_actions[:n_inject_cem, 0] = retrieved_action
 
                 # Combine candidates: [C, horizon]
                 actions_seq = torch.cat([prior_actions, cem_actions], dim=0)
@@ -218,7 +254,25 @@ class RecurrentMPCPlanner:
                     # Night survival bonus: in darkness, reward health restoration (e.g. resting/sleeping through night)
                     night_rest_reward = night_factor * torch.clamp(health_delta, min=0.0) * 0.5
 
-                    step_reward = effective_ach_reward + repeat_harvest_reward + vital_reward + night_rest_reward
+                    # Affordance guidance bonus: reward executing the retrieved milestone action
+                    affordance_reward = 0.0
+                    if retrieved_action is not None and t == 0:
+                        affordance_reward = (a_t == retrieved_action).float() * (0.35 * match_sim)
+
+                    # Landmark anchor persistence bonus: prevent wandering away from table before tool craft
+                    landmark_reward = 0.0
+                    if table_anchor is not None:
+                        table_sim = F.cosine_similarity(z_t, table_anchor, dim=-1)
+                        landmark_reward = 0.15 * torch.clamp(table_sim, min=0.0)
+
+                    step_reward = (
+                        effective_ach_reward
+                        + repeat_harvest_reward
+                        + vital_reward
+                        + night_rest_reward
+                        + affordance_reward
+                        + landmark_reward
+                    )
                     cumulative_reward = cumulative_reward + gamma_prod * step_reward
 
                     # Continuation discounting: state-dependent survival in imagination
@@ -295,6 +349,8 @@ class RecurrentMPCPlanner:
                     "tte_gain": float(raw_tte[best_idx].item() if self.standardize_scores else tte_gain[best_idx].item()),
                     "best_score": float(scores[best_idx].item()),
                     "mean_q_std": float(q_std_term.mean().item()),
+                    "memory_retrieved_action": float(retrieved_action if retrieved_action is not None else -1),
+                    "memory_match_sim": float(match_sim),
                 }
                 if self.standardize_scores:
                     best_debug.update({

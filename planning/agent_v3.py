@@ -47,6 +47,10 @@ class AgentBeliefV3:
             frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
             self.thresholds[frontier_indices] = frontier_threshold
 
+        # Cognitive Working Memory (System 1 - Within-Episode Context & Landmark Anchors)
+        from planning.semantic_memory import ShortTermWorkingMemory
+        self.working_memory = ShortTermWorkingMemory(capacity=16, recurrent_dim=recurrent_dim)
+
     @property
     def mask(self) -> np.ndarray:
         """Binary mask property for backward compatibility."""
@@ -57,11 +61,30 @@ class AgentBeliefV3:
         self.m_bin = np.array(val, dtype=np.float32)
 
     def reset(self) -> None:
-        """Resets belief masks and recurrent hidden state at episode start."""
+        """Resets belief masks, recurrent hidden state, and working memory at episode start."""
         self.m_bin.fill(0.0)
         self.m_soft.fill(0.0)
         self.h.fill(0.0)
         self.history.clear()
+        self.working_memory.reset()
+
+    def update_working_memory(
+        self,
+        z_t: torch.Tensor,
+        action: int,
+        reward: float,
+        next_h: torch.Tensor,
+        unlocked_event: Optional[str] = None,
+    ) -> None:
+        """Explicit hook to update short-term working memory with latent z_t and landmark anchors."""
+        self.working_memory.update(
+            z_t=z_t,
+            action=action,
+            reward=reward,
+            next_h=next_h,
+            inventory_mask=self.m_bin,
+            unlocked_event=unlocked_event,
+        )
 
     def update(
         self,
