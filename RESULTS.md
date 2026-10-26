@@ -149,3 +149,23 @@ To maintain strict scientific integrity, all data files are version-controlled i
 
 3. **Disabling Score Standardization Restored Milestone Signal:**
    - Previous score standardization forced variance equalization across reward, curiosity, and uncertainty. Visual novelty noise was suppressing the +1.0 Crafter achievement signal. Disabling standardization immediately lifted the Crafter score from 2.64% to **3.35%**.
+
+### 6.3 Champion Clean Screening Benchmark (`results/screen_v3_champion_clean_50ep.json`)
+
+**Evaluation Run:** 50 episodes, seeds 2050..2099, `checkpoint: jepa_crafter_v3_t2_final.pt`  
+**Parameters:** `denormalize_q=False`, `vital_weight=0.5`, `death_risk_factor=0.0`, `harvest_bonus=0.15`, `frontier_threshold=0.25`, `common_threshold=0.50`, `standardize_scores=False`.
+
+| Metric | Result | Context / Milestone |
+|:---|:---:|:---|
+| **Official Crafter Score** | **3.17%** | Strong recovery from 2.66% degraded run; closes gap to PPO (4.2%) and Rainbow (4.3%) |
+| **Mean Episode Reward** | **3.34 +/- 1.63** | **All-time project high** (up from 2.52 baseline) |
+| **Mean Achievements / Ep** | **4.24** | **All-time project high** (up from 3.38 baseline) |
+| **Unique Achievements** | **10 / 22** | Wood, Sapling, Plant, Table, Drink, Pickaxe, Sword, Stone, Skeleton, Wake Up |
+| **`place_table`** | **52.0%** | 26 out of 50 episodes placed crafting table |
+| **`make_wood_pickaxe`** | **8.0%** | 4 episodes (Seeds 2062, 2078, 2081, 2086) |
+| **`make_wood_sword`** | **6.0%** | 3 episodes (Seeds 2057, 2062, 2063) |
+| **Combined Tool Craft** | **14.0%** | 7 tool-crafting events across 50 episodes |
+| **`collect_stone`** | **2.0%** | **Episode 13 (Seed 2062): 214 steps, 8 achievements, reward +7.1** |
+| **`defeat_skeleton`** | **2.0%** | **Episode 12 (Seed 2061): 120 steps, combat victory** |
+| **High-Reward Rate ($\ge 4.1$)** | **42.0%** | 21 of 50 episodes achieved $\ge 4.1$ reward |
+
