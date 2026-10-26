@@ -357,8 +357,9 @@ def run_dual_memory_screening(
         print(f"[Memory Bank] Successfully saved newly built memory bank with discoveries: {saved_bank_p}")
         if drive_dir and Path(drive_dir).exists():
             drive_bank_out = Path(drive_dir) / "checkpoints" / Path(save_dest).name
-            shutil.copy2(str(saved_bank_p), str(drive_bank_out))
-            print(f"[Drive] Mirrored updated memory bank to: {drive_bank_out}")
+            if Path(saved_bank_p).resolve() != Path(drive_bank_out).resolve():
+                shutil.copy2(str(saved_bank_p), str(drive_bank_out))
+                print(f"[Drive] Mirrored updated memory bank to: {drive_bank_out}")
 
     print("\n" + "=" * 80)
     print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")
