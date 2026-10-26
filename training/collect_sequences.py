@@ -27,6 +27,7 @@ from training.sequence_buffer import (
     EpisodeBuffer,
     save_achievement_index,
 )
+from planning.semantic_memory import inventory_dict_to_vector
 
 def build_policy(
     policy_name: str,
@@ -221,8 +222,11 @@ def collect_episodes(
         ep_dones: List[bool] = []
         ep_events: List[np.ndarray] = []
         ep_masks: List[np.ndarray] = []
+        ep_state_deltas: List[np.ndarray] = []
+        ep_state_valid: List[bool] = []
 
         prev_ach = dict(info.get("achievements", {})) if isinstance(info, dict) else {}
+        prev_state = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
 
         for step in range(max_steps_per_ep):
             mask_before = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
@@ -235,6 +239,7 @@ def collect_episodes(
             done = bool(terminated or truncated)
 
             curr_ach = dict(info.get("achievements", {})) if isinstance(info, dict) else {}
+            curr_state = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
             event_vec = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
             for ach, idx in ACHIEVEMENT_TO_IDX.items():
                 if curr_ach.get(ach, 0) > prev_ach.get(ach, 0):
@@ -246,9 +251,12 @@ def collect_episodes(
             ep_dones.append(done)
             ep_events.append(event_vec)
             ep_masks.append(mask_before)
+            ep_state_deltas.append(curr_state - prev_state)
+            ep_state_valid.append(bool(isinstance(info, dict) and "inventory" in info))
 
             total_steps += 1
             prev_ach = curr_ach
+            prev_state = curr_state
             obs = next_obs
 
             if done or total_steps >= n_transitions:
@@ -262,6 +270,8 @@ def collect_episodes(
                 dones=np.array(ep_dones, dtype=np.bool_),
                 events=np.array(ep_events, dtype=np.uint8),
                 mask_before=np.array(ep_masks, dtype=np.uint8),
+                state_delta=np.array(ep_state_deltas, dtype=np.float32),
+                state_delta_valid=np.array(ep_state_valid, dtype=np.bool_),
                 source=policy_name,
             )
             ep_count += 1

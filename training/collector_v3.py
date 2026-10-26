@@ -45,6 +45,7 @@ from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
 from training.sequence_buffer import ACHIEVEMENT_TO_IDX, EpisodeBuffer, NUM_ACHIEVEMENTS
+from planning.semantic_memory import inventory_dict_to_vector
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -490,7 +491,10 @@ class CollectorV3:
                 ep_obs, ep_acts, ep_rews, ep_dones = [], [], [], []
                 ep_events = []
                 ep_masks = []
+                ep_state_deltas = []
+                ep_state_valid = []
                 prev_ach = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
+                prev_state = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
                 ep_reward = 0.0
                 ep_steps = 0
 
@@ -508,6 +512,13 @@ class CollectorV3:
                     event = np.clip(curr_ach - prev_ach, 0, 1).astype(np.uint8)
                     mask_before = prev_ach.astype(np.uint8)
                     prev_ach = np.maximum(prev_ach, curr_ach)
+
+                    # Optional privileged training label only. The model never
+                    # receives this vector while acting or planning.
+                    curr_state = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
+                    ep_state_deltas.append(curr_state - prev_state)
+                    ep_state_valid.append(bool(isinstance(info, dict) and "inventory" in info))
+                    prev_state = curr_state
 
                     ep_obs.append(obs)
                     ep_acts.append(action)
@@ -549,6 +560,8 @@ class CollectorV3:
                         "dones": np.array(ep_dones, dtype=np.bool_),
                         "events": np.stack(ep_events, axis=0).astype(np.uint8),
                         "mask_before": np.stack(ep_masks, axis=0).astype(np.uint8),
+                        "state_delta": np.stack(ep_state_deltas, axis=0).astype(np.float32),
+                        "state_delta_valid": np.array(ep_state_valid, dtype=np.bool_),
                     }
                     current_shard_buf.add_episode(**ep_data, source="curiosity_v3")
                     self._accumulated_buffer.add_episode(**ep_data, source="curiosity_v3")
@@ -654,15 +667,22 @@ class CollectorV3:
 
 def _load_jepa_v3(checkpoint_path: str, device: str = "cpu") -> JEPAv3:
     """Load JEPAv3 from checkpoint with eval mode."""
-    ckpt = torch.load(checkpoint_path, map_location=device)
     model = JEPAv3(
         latent_dim=128,
         recurrent_dim=256,
         num_actions=17,
         action_emb_dim=32,
     )
-    state_dict = ckpt.get("model_state_dict", ckpt.get("state_dict", ckpt))
-    model.load_state_dict(state_dict, strict=False)
+    # Native v3 checkpoints store one state dict per component (encoder,
+    # predictor, heads, ...), while older collection checkpoints may wrap a
+    # flat model state under model_state_dict/state_dict. Use the canonical
+    # loader first so native checkpoints do not silently become random models.
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    if ckpt.get("version") == "v3" or "encoder" in ckpt:
+        model.load_checkpoint(checkpoint_path, device=device)
+    else:
+        state_dict = ckpt.get("model_state_dict", ckpt.get("state_dict", ckpt))
+        model.load_state_dict(state_dict, strict=False)
     model.to(device)
     model.eval()
     return model

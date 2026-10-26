@@ -90,6 +90,7 @@ def run_dual_memory_screening(
     memory_inject_ratio: float = 0.50,
     empty_memory: bool = False,
     save_updated_memory: bool = True,
+    privileged_diagnostic: bool = False,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
     resolved_ckpt = _resolve_checkpoint(checkpoint_path, drive_dir=drive_dir)
@@ -103,6 +104,7 @@ def run_dual_memory_screening(
     print(f"      Planner     : Recurrent MPC (H={horizon}, C={num_candidates}, CEM={cem_iterations})")
     print(f"      Affordance  : sim_thresh={memory_sim_threshold}, inject_ratio={memory_inject_ratio}")
     print(f"      Thresholds  : frontier={frontier_threshold}, common={common_threshold}")
+    print(f"      Track       : {'privileged_diagnostic' if privileged_diagnostic else 'strict_visual_jepa'}")
     print(f"      Device      : {dev}")
     print("=" * 80)
 
@@ -194,7 +196,7 @@ def run_dual_memory_screening(
         seed = seed_start + ep_idx
         obs, info = env.reset(seed=seed)
         belief.reset()
-        if info and "inventory" in info:
+        if privileged_diagnostic and info and "inventory" in info:
             belief.update_inventory(info["inventory"])
         writer.reset()
 
@@ -225,11 +227,12 @@ def run_dual_memory_screening(
                 event_probs = model.event_head.predict_proba(s_t, act_t, mask_t).squeeze(0)
 
             # Online Autonomous Memory Writer detects milestone breakthroughs and triggers Dopamine surges
+            writer_info = info if privileged_diagnostic else {"achievements": {}}
             newly_unlocked_event, dopamine_surge = writer.step(
                 z_t=z_t.squeeze(0),
                 action=action,
                 reward=reward,
-                info=info,
+                info=writer_info,
             )
             if newly_unlocked_event:
                 dopamine_tag = f" (+{dopamine_surge:.1f} Dopamine PB!)" if dopamine_surge > 0 else ""
@@ -242,7 +245,7 @@ def run_dual_memory_screening(
                 action=action,
                 reward=reward,
                 next_h=next_h.squeeze(0),
-                inventory_dict=info.get("inventory") if isinstance(info, dict) else None,
+                inventory_dict=(info.get("inventory") if privileged_diagnostic and isinstance(info, dict) else None),
                 unlocked_event=newly_unlocked_event,
                 dopamine_surge=dopamine_surge,
             )
@@ -302,6 +305,8 @@ def run_dual_memory_screening(
 
     summary = {
         "checkpoint": resolved_ckpt,
+        "track": "privileged_diagnostic" if privileged_diagnostic else "strict_visual_jepa",
+        "privileged_inventory_used": bool(privileged_diagnostic),
         "memory_bank": resolved_bank,
         "initial_memory_entries": initial_bank_size,
         "final_memory_entries": len(memory_bank),
@@ -416,6 +421,11 @@ if __name__ == "__main__":
     parser.add_argument("--memory_inject_ratio", type=float, default=0.50)
     parser.add_argument("--empty_memory", action="store_true", default=False, help="Start with 0 memories (Tabula Rasa).")
     parser.add_argument("--save_updated_memory", action="store_true", default=True)
+    parser.add_argument(
+        "--privileged_diagnostic",
+        action="store_true",
+        help="Allow engine inventory/achievement state to update cognitive memory; never use for strict claims.",
+    )
     args = parser.parse_args()
 
     run_dual_memory_screening(
@@ -442,4 +452,5 @@ if __name__ == "__main__":
         memory_inject_ratio=args.memory_inject_ratio,
         empty_memory=args.empty_memory,
         save_updated_memory=args.save_updated_memory,
+        privileged_diagnostic=args.privileged_diagnostic,
     )

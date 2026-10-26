@@ -1,0 +1,66 @@
+{
+  "checkpoint": "checkpoints/jepa_crafter_v3_phase2.pt",
+  "memory_bank": "empty_memory (Tabula Rasa)",
+  "initial_memory_entries": 0,
+  "final_memory_entries": 3,
+  "newly_logged_memories": 3,
+  "num_episodes": 1,
+  "seed_range": [
+    2050,
+    2050
+  ],
+  "total_runtime_seconds": 0.54,
+  "mean_survival_length": 15.0,
+  "std_survival_length": 0.0,
+  "mean_episode_reward": 0.0,
+  "std_episode_reward": 0.0,
+  "crafter_score": 0.0,
+  "mean_achievements_per_ep": 0.0,
+  "unlocked_achievement_count": 0,
+  "unlock_percentages": {
+    "collect_coal": 0.0,
+    "collect_diamond": 0.0,
+    "collect_drink": 0.0,
+    "collect_iron": 0.0,
+    "collect_sapling": 0.0,
+    "collect_stone": 0.0,
+    "collect_wood": 0.0,
+    "defeat_skeleton": 0.0,
+    "defeat_zombie": 0.0,
+    "eat_cow": 0.0,
+    "eat_plant": 0.0,
+    "make_iron_pickaxe": 0.0,
+    "make_iron_sword": 0.0,
+    "make_stone_pickaxe": 0.0,
+    "make_stone_sword": 0.0,
+    "make_wood_pickaxe": 0.0,
+    "make_wood_sword": 0.0,
+    "place_furnace": 0.0,
+    "place_plant": 0.0,
+    "place_stone": 0.0,
+    "place_table": 0.0,
+    "wake_up": 0.0
+  },
+  "table_episodes": 0,
+  "pickaxe_episodes": 0,
+  "sword_episodes": 0,
+  "stone_episodes": 0,
+  "zombie_episodes": 0,
+  "pickaxe_conversion_percent": 0.0,
+  "dopamine_lifetime_best_reward": 0.0,
+  "dopamine_lifetime_best_milestones": 0,
+  "dopamine_lifetime_best_steps": 15,
+  "episodes": [
+    {
+      "episode": 1,
+      "seed": 2050,
+      "steps": 15,
+      "reward": 0.0,
+      "unlocked": [],
+      "discoveries": [
+        "4 Consolidated Memories"
+      ],
+      "duration_sec": 0.2
+    }
+  ]
+}

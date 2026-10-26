@@ -57,6 +57,7 @@ from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
 from training.sequence_buffer import ACHIEVEMENT_TO_IDX, EpisodeBuffer, NUM_ACHIEVEMENTS
+from planning.semantic_memory import inventory_dict_to_vector
 from training.run_step1_value_fix import compute_n_step_bellman_targets
 
 
@@ -140,8 +141,11 @@ def collect_self_play_episodes(
         ep_dones: List[bool] = []
         ep_events: List[np.ndarray] = []
         ep_mask: List[np.ndarray] = []
+        ep_state_deltas: List[np.ndarray] = []
+        ep_state_valid: List[bool] = []
 
         ach_prev = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
+        state_prev = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
         ep_reward = 0.0
         steps = 0
         t_ep_start = time.time()
@@ -155,6 +159,7 @@ def collect_self_play_episodes(
 
             # Record event transitions
             ach_dict = dict(info.get("achievements", {})) if isinstance(info, dict) else {}
+            state_curr = inventory_dict_to_vector(info.get("inventory", {}) if isinstance(info, dict) else None)
             ach_curr = np.zeros(NUM_ACHIEVEMENTS, dtype=np.uint8)
             for a_name, a_val in ach_dict.items():
                 if a_val > 0 and a_name in ACHIEVEMENT_TO_IDX:
@@ -169,6 +174,8 @@ def collect_self_play_episodes(
             ep_dones.append(done)
             ep_events.append(ev_step)
             ep_mask.append(mask_step)
+            ep_state_deltas.append(state_curr - state_prev)
+            ep_state_valid.append(bool(isinstance(info, dict) and "inventory" in info))
 
             # Update belief state
             with torch.no_grad():
@@ -183,6 +190,7 @@ def collect_self_play_episodes(
 
             belief.update(event_probs, reward, next_h=next_h.squeeze(0))
             obs = next_obs
+            state_prev = state_curr
             if done:
                 break
 
@@ -202,6 +210,8 @@ def collect_self_play_episodes(
             dones=np.array(ep_dones, dtype=np.bool_),
             events=np.array(ep_events, dtype=np.uint8),
             mask_before=np.array(ep_mask, dtype=np.uint8),
+            state_delta=np.array(ep_state_deltas, dtype=np.float32),
+            state_delta_valid=np.array(ep_state_valid, dtype=np.bool_),
             source="self_play_mpc",
         )
 
@@ -244,6 +254,8 @@ def load_joint_buffer(
             dones=ep["dones"],
             events=ep["events"],
             mask_before=ep["mask_before"],
+            state_delta=ep.get("state_delta"),
+            state_delta_valid=ep.get("state_delta_valid"),
             source="self_play_mpc",
         )
     print(f"  [Loader] Self-Play Trajectories : {self_play_buffer.total_transitions:,} transitions ({len(self_play_buffer.episodes)} eps)")

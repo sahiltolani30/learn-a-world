@@ -28,6 +28,8 @@ from models.heads import (
     QEnsemble,
     ReturnNormalizer,
     TimeToEventHead,
+    StateDeltaHead,
+    TransitionHead,
     NUM_ACHIEVEMENTS,
 )
 
@@ -204,6 +206,7 @@ class JEPAv3(nn.Module):
         q_bins: int = 51,
         q_max: float = 12.0,
         ema_decay: float = 0.99,
+        transition_state_dim: int = 16,
     ):
         super().__init__()
         self.latent_dim = latent_dim
@@ -212,6 +215,7 @@ class JEPAv3(nn.Module):
         self.num_actions = num_actions
         self.action_emb_dim = action_emb_dim
         self.ema_decay = ema_decay
+        self.transition_state_dim = transition_state_dim
 
         # 1. Observation Online Encoder
         self.encoder = ConvEncoder(in_channels=3, latent_dim=latent_dim)
@@ -247,6 +251,22 @@ class JEPAv3(nn.Module):
         )
 
         self.health_head = HealthHead(
+            latent_dim=self.state_dim,
+            num_actions=num_actions,
+            action_emb_dim=action_emb_dim,
+            hidden_dim=hidden_dim,
+        )
+
+        # Generic action-conditioned consequences. These heads are auxiliary to
+        # JEPA and never receive environment state as an inference input.
+        self.state_delta_head = StateDeltaHead(
+            latent_dim=self.state_dim,
+            num_actions=num_actions,
+            action_emb_dim=action_emb_dim,
+            state_dim=transition_state_dim,
+            hidden_dim=hidden_dim,
+        )
+        self.transition_head = TransitionHead(
             latent_dim=self.state_dim,
             num_actions=num_actions,
             action_emb_dim=action_emb_dim,
@@ -355,6 +375,22 @@ class JEPAv3(nn.Module):
             }
         return total_reward
 
+    def predict_transition(
+        self,
+        s: torch.Tensor,
+        action: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        """Predict generic state delta, reward, termination, and uncertainty."""
+        state_delta = self.state_delta_head(s, action)
+        reward, done_logits, uncertainty = self.transition_head(s, action)
+        return {
+            "state_delta": state_delta,
+            "reward": reward,
+            "done_logits": done_logits,
+            "done_prob": torch.sigmoid(done_logits),
+            "uncertainty": uncertainty,
+        }
+
     def q_min(self, s: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
         """Clipped Double-Q minimum return across ensemble heads."""
         ensemble = self.q_target_ensemble if use_target else self.q_ensemble
@@ -458,6 +494,8 @@ class JEPAv3(nn.Module):
             "predictor": self.predictor.state_dict(),
             "event_head": self.event_head.state_dict(),
             "health_head": self.health_head.state_dict(),
+            "state_delta_head": self.state_delta_head.state_dict(),
+            "transition_head": self.transition_head.state_dict(),
             "q_ensemble": self.q_ensemble.state_dict(),
             "q_target_ensemble": self.q_target_ensemble.state_dict(),
             "policy_prior": self.policy_prior.state_dict(),
@@ -495,6 +533,8 @@ class JEPAv3(nn.Module):
             "predictor": self.predictor,
             "event_head": self.event_head,
             "health_head": self.health_head,
+            "state_delta_head": self.state_delta_head,
+            "transition_head": self.transition_head,
             "q_ensemble": self.q_ensemble,
             "q_target_ensemble": self.q_target_ensemble,
             "policy_prior": self.policy_prior,
@@ -545,6 +585,8 @@ class JEPAv3(nn.Module):
             "predictor": ["predictor"],
             "event_head": ["event_head", "event_head_state"],
             "health_head": ["health_head", "health_head_state"],
+            "state_delta_head": ["state_delta_head", "state_delta_head_state"],
+            "transition_head": ["transition_head", "transition_head_state"],
             "q_ensemble": ["q_ensemble", "q_ensemble_state"],
             "q_target_ensemble": ["q_target_ensemble", "q_target_ensemble_state"],
             "policy_prior": ["policy_prior", "policy_prior_state"],
@@ -623,4 +665,3 @@ class JEPAv3(nn.Module):
             "skipped_components": skipped_components,
             "audit": audit,
         }
-

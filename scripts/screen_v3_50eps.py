@@ -220,6 +220,8 @@ def run_screening(
 
     summary = {
         "checkpoint": checkpoint_path,
+        "track": "strict_visual_jepa",
+        "privileged_inventory_used": False,
         "num_episodes": num_episodes,
         "seed_range": [seed_start, seed_start + num_episodes - 1],
         "total_runtime_seconds": round(total_time, 2),

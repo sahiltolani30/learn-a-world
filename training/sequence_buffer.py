@@ -25,6 +25,9 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS
 
 ACHIEVEMENT_TO_IDX: Dict[str, int] = {ach: i for i, ach in enumerate(CRAFTER_ACHIEVEMENTS)}
 NUM_ACHIEVEMENTS = len(CRAFTER_ACHIEVEMENTS)  # 22
+# Optional diagnostic state adapter width. It is deliberately a dimension, not
+# a list of Crafter names; other environments can use another width.
+DEFAULT_STATE_DELTA_DIM = 16
 
 def save_achievement_index(out_dir: Union[str, Path]) -> Path:
     """Saves standard achievement name to index mapping next to dataset."""
@@ -80,6 +83,9 @@ class EpisodeBuffer:
         events: np.ndarray,
         mask_before: np.ndarray,
         source: str = "structured_random",
+        state_delta: Optional[np.ndarray] = None,
+        state_delta_valid: Optional[np.ndarray] = None,
+        inventory_deltas: Optional[np.ndarray] = None,
     ) -> None:
         """
         Adds a complete episode to the buffer.
@@ -100,6 +106,21 @@ class EpisodeBuffer:
         assert events.shape == (T, NUM_ACHIEVEMENTS), f"Events shape {events.shape} != {(T, NUM_ACHIEVEMENTS)}"
         assert mask_before.shape == (T, NUM_ACHIEVEMENTS)
 
+        if state_delta is None and inventory_deltas is not None:
+            state_delta = inventory_deltas
+        if state_delta is None:
+            state_delta = np.zeros((T, DEFAULT_STATE_DELTA_DIM), dtype=np.float32)
+            state_delta_valid = np.zeros(T, dtype=np.bool_)
+        else:
+            state_delta = np.asarray(state_delta, dtype=np.float32)
+            assert state_delta.shape[0] == T, f"State-delta length {state_delta.shape[0]} != {T}"
+            if state_delta.ndim != 2:
+                raise ValueError(f"state_delta must be [T, D], got {state_delta.shape}")
+            if state_delta_valid is None:
+                state_delta_valid = np.ones(T, dtype=np.bool_)
+        state_delta_valid = np.asarray(state_delta_valid, dtype=np.bool_)
+        assert state_delta_valid.shape == (T,)
+
         episode = {
             "obs": obs.astype(np.uint8, copy=False),
             "actions": actions.astype(np.int64, copy=False),
@@ -107,6 +128,8 @@ class EpisodeBuffer:
             "dones": dones.astype(np.bool_, copy=False),
             "events": events.astype(np.uint8, copy=False),
             "mask_before": mask_before.astype(np.uint8, copy=False),
+            "state_delta": state_delta.astype(np.float32, copy=False),
+            "state_delta_valid": state_delta_valid,
             "source": str(source),
         }
 
@@ -266,6 +289,9 @@ class EpisodeBuffer:
         b_dones = np.empty((batch_size, seq_len), dtype=np.bool_)
         b_events = np.empty((batch_size, seq_len, NUM_ACHIEVEMENTS), dtype=np.uint8)
         b_mask = np.empty((batch_size, seq_len, NUM_ACHIEVEMENTS), dtype=np.uint8)
+        state_dim = int(self.episodes[0].get("state_delta", np.zeros((1, DEFAULT_STATE_DELTA_DIM))).shape[-1])
+        b_state_delta = np.zeros((batch_size, seq_len, state_dim), dtype=np.float32)
+        b_state_valid = np.zeros((batch_size, seq_len), dtype=np.bool_)
 
         for i, (ep_idx, start_t) in enumerate(chosen_windows):
             ep = self.episodes[ep_idx]
@@ -276,6 +302,14 @@ class EpisodeBuffer:
             b_dones[i] = ep["dones"][start_t:end_t]
             b_events[i] = ep["events"][start_t:end_t]
             b_mask[i] = ep["mask_before"][start_t:end_t]
+            ep_delta = ep.get("state_delta")
+            if ep_delta is not None:
+                if ep_delta.shape[-1] != state_dim:
+                    raise ValueError("All episodes in a buffer must use the same state_delta width")
+                b_state_delta[i] = ep_delta[start_t:end_t]
+                b_state_valid[i] = ep.get(
+                    "state_delta_valid", np.ones(len(ep["actions"]), dtype=np.bool_)
+                )[start_t:end_t]
 
         # Convert obs from [B, T, H, W, C] uint8 to [B, T, C, H, W] float32 in [0, 1]
         obs_tensor = torch.from_numpy(b_obs).permute(0, 1, 4, 2, 3).contiguous().float() / 255.0
@@ -284,6 +318,8 @@ class EpisodeBuffer:
         dones_tensor = torch.from_numpy(b_dones).bool()
         events_tensor = torch.from_numpy(b_events).float()
         mask_tensor = torch.from_numpy(b_mask).float()
+        state_delta_tensor = torch.from_numpy(b_state_delta).float()
+        state_valid_tensor = torch.from_numpy(b_state_valid).bool()
 
         if device is not None:
             dev = torch.device(device)
@@ -293,6 +329,8 @@ class EpisodeBuffer:
             dones_tensor = dones_tensor.to(dev)
             events_tensor = events_tensor.to(dev)
             mask_tensor = mask_tensor.to(dev)
+            state_delta_tensor = state_delta_tensor.to(dev)
+            state_valid_tensor = state_valid_tensor.to(dev)
 
         return {
             "obs": obs_tensor,
@@ -301,6 +339,8 @@ class EpisodeBuffer:
             "dones": dones_tensor,
             "events": events_tensor,
             "mask_before": mask_tensor,
+            "state_delta": state_delta_tensor,
+            "state_delta_valid": state_valid_tensor,
         }
 
     def save_shard(self, path: Union[str, Path]) -> Path:
@@ -317,6 +357,8 @@ class EpisodeBuffer:
                 dones=np.empty((0,), dtype=np.bool_),
                 events=np.empty((0, NUM_ACHIEVEMENTS), dtype=np.uint8),
                 mask_before=np.empty((0, NUM_ACHIEVEMENTS), dtype=np.uint8),
+                state_delta=np.empty((0, DEFAULT_STATE_DELTA_DIM), dtype=np.float32),
+                state_delta_valid=np.empty((0,), dtype=np.bool_),
                 episode_lengths=np.empty((0,), dtype=np.int64),
                 sources=np.array([], dtype=object),
             )
@@ -328,6 +370,14 @@ class EpisodeBuffer:
         cat_dones = np.concatenate([ep["dones"] for ep in self.episodes], axis=0)
         cat_events = np.concatenate([ep["events"] for ep in self.episodes], axis=0)
         cat_mask = np.concatenate([ep["mask_before"] for ep in self.episodes], axis=0)
+        state_dims = {ep["state_delta"].shape[-1] for ep in self.episodes}
+        if len(state_dims) != 1:
+            raise ValueError(f"Inconsistent state_delta widths in buffer: {state_dims}")
+        cat_state_delta = np.concatenate([ep["state_delta"] for ep in self.episodes], axis=0)
+        cat_state_valid = np.concatenate([
+            ep.get("state_delta_valid", np.ones(len(ep["actions"]), dtype=np.bool_))
+            for ep in self.episodes
+        ], axis=0)
         ep_lens = np.array([len(ep["actions"]) for ep in self.episodes], dtype=np.int64)
         sources = np.array([ep["source"] for ep in self.episodes], dtype=object)
 
@@ -339,6 +389,8 @@ class EpisodeBuffer:
             dones=cat_dones,
             events=cat_events,
             mask_before=cat_mask,
+            state_delta=cat_state_delta,
+            state_delta_valid=cat_state_valid,
             episode_lengths=ep_lens,
             sources=sources,
         )
@@ -359,6 +411,8 @@ class EpisodeBuffer:
         cat_dones = data["dones"]
         cat_events = data["events"]
         cat_mask = data["mask_before"]
+        cat_state_delta = data["state_delta"] if "state_delta" in data else None
+        cat_state_valid = data["state_delta_valid"] if "state_delta_valid" in data else None
         sources = data["sources"]
 
         offset = 0
@@ -371,6 +425,8 @@ class EpisodeBuffer:
                 dones=cat_dones[offset : offset + length],
                 events=cat_events[offset : offset + length],
                 mask_before=cat_mask[offset : offset + length],
+                state_delta=(cat_state_delta[offset : offset + length] if cat_state_delta is not None else None),
+                state_delta_valid=(cat_state_valid[offset : offset + length] if cat_state_valid is not None else None),
                 source=str(sources[i]) if i < len(sources) else "unknown",
             )
             offset += length
@@ -404,11 +460,13 @@ class EpisodeBuffer:
         """Calculates per-achievement positive counts and source breakdown."""
         ach_counts = {ach: 0 for ach in CRAFTER_ACHIEVEMENTS}
         source_counts: Dict[str, int] = {}
+        state_delta_valid_count = 0
 
         for ep in self.episodes:
             src = ep["source"]
             source_counts[src] = source_counts.get(src, 0) + len(ep["actions"])
             ep_event_sums = ep["events"].sum(axis=0)
+            state_delta_valid_count += int(np.sum(ep.get("state_delta_valid", np.zeros(len(ep["actions"]), dtype=np.bool_))))
             for i, ach in enumerate(CRAFTER_ACHIEVEMENTS):
                 ach_counts[ach] += int(ep_event_sums[i])
 
@@ -417,6 +475,7 @@ class EpisodeBuffer:
             "total_transitions": self._total_transitions,
             "per_achievement_positive_counts": ach_counts,
             "per_source_counts": source_counts,
+            "state_delta_valid_transitions": state_delta_valid_count,
         }
 
     def save_dataset_index(self, out_dir: Union[str, Path], shard_names: Optional[List[str]] = None) -> Path:

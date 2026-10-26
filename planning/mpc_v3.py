@@ -53,6 +53,8 @@ class RecurrentMPCPlanner:
         semantic_memory: Optional[Any] = None,
         memory_sim_threshold: float = 0.58,
         memory_inject_ratio: float = 0.50,
+        use_landmark_guidance: bool = True,
+        use_policy_prior: bool = True,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -77,6 +79,8 @@ class RecurrentMPCPlanner:
         self.semantic_memory = semantic_memory
         self.memory_sim_threshold = memory_sim_threshold
         self.memory_inject_ratio = memory_inject_ratio
+        self.use_landmark_guidance = use_landmark_guidance
+        self.use_policy_prior = use_policy_prior
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
         # Adaptive Frontier Event Thresholds
@@ -136,7 +140,7 @@ class RecurrentMPCPlanner:
             s_0 = torch.cat([z_0, h_0], dim=-1)  # [1, 384]
 
             C = self.num_candidates
-            N_prior = int(round(C * self.prior_mix))
+            N_prior = int(round(C * self.prior_mix)) if self.use_policy_prior else 0
             N_cem = C - N_prior
 
             # Query Long-Term Semantic Memory (Experience Diary) for learned affordances
@@ -235,7 +239,7 @@ class RecurrentMPCPlanner:
                     tgt_key = active_subgoal["target_key"].to(self.device)
                     cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), tgt_key.flatten().unsqueeze(0)).item())
                     struct_sim_curr = 0.0
-                    if structure_anchor is not None:
+                    if self.use_landmark_guidance and structure_anchor is not None:
                         struct_sim_curr = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), structure_anchor.flatten().unsqueeze(0)).item())
                     if cue_sim >= 0.35 or struct_sim_curr >= 0.50:
                         inject_action = active_subgoal["target_action"]
@@ -369,7 +373,7 @@ class RecurrentMPCPlanner:
 
                     # Landmark anchor guidance (Bug 1 & Bug 2 Fix: Gated by inventory + Dead-reckoning spatial pull)
                     landmark_reward = 0.0
-                    if structure_anchor is not None:
+                    if self.use_landmark_guidance and structure_anchor is not None:
                         struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
                         if has_wood:
                             # We have wood (>= 1)! Pull HARD back to the table to craft pickaxe/sword
@@ -387,7 +391,7 @@ class RecurrentMPCPlanner:
                             landmark_reward = -0.05 * torch.clamp(struct_sim - 0.85, min=0.0)
 
                     # Stone landmark pull (Bug 3 Fix: Return to spotted rock once pickaxe is in hand)
-                    if stone_anchor is not None and has_pickaxe:
+                    if self.use_landmark_guidance and stone_anchor is not None and has_pickaxe:
                         stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
                         vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
                         offset_pull = 0.0
@@ -482,6 +486,12 @@ class RecurrentMPCPlanner:
                     "memory_retrieved_action": float(retrieved_action if retrieved_action is not None else -1),
                     "memory_match_sim": float(match_sim),
                     "memory_best_q": float(q_memory_all.max().item()) if q_memory_all is not None else 0.0,
+                    "active_subgoal_status": str(active_subgoal.get("status", "") if active_subgoal else ""),
+                    "active_subgoal_target": str(active_subgoal.get("target_name", "") if active_subgoal else ""),
+                    "structure_offset_x": float(structure_offset[0]) if structure_offset is not None else 0.0,
+                    "structure_offset_y": float(structure_offset[1]) if structure_offset is not None else 0.0,
+                    "stone_offset_x": float(stone_offset[0]) if stone_offset is not None else 0.0,
+                    "stone_offset_y": float(stone_offset[1]) if stone_offset is not None else 0.0,
                 }
                 if self.standardize_scores:
                     best_debug.update({

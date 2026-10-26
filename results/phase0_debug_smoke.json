@@ -1,0 +1,310 @@
+{
+  "phase": "phase0",
+  "status": "completed",
+  "checkpoint": "does-not-exist.pt",
+  "num_episodes": 1,
+  "seed_range": [
+    7,
+    7
+  ],
+  "inventory_used_by_strict_track": false,
+  "results": [
+    {
+      "track": "strict_visual_jepa",
+      "ablation": "strict_no_memory",
+      "episodes": 1,
+      "first_failed_link_counts": {
+        "wood_acquisition": 1
+      },
+      "episodes_detail": [
+        {
+          "seed": 7,
+          "steps": [
+            {
+              "step": 0,
+              "action": 13,
+              "reward": 0.0,
+              "done": false,
+              "planner": {
+                "reward_sum": 22.69938087463379,
+                "terminal_value": 5.322857856750488,
+                "uncertainty_penalty": 0.037586819380521774,
+                "tte_gain": 0.0,
+                "best_score": 28.735435485839844,
+                "mean_q_std": 0.06778115034103394,
+                "memory_retrieved_action": -1.0,
+                "memory_match_sim": 0.0,
+                "memory_best_q": 0.0,
+                "active_subgoal_status": "",
+                "active_subgoal_target": "",
+                "structure_offset_x": 0.0,
+                "structure_offset_y": 0.0,
+                "stone_offset_x": 0.0,
+                "stone_offset_y": 0.0
+              },
+              "predicted_transition": {
+                "state_delta": [
+                  0.26427024602890015,
+                  0.05568213760852814,
+                  -0.14791442453861237,
+                  -0.152509868144989,
+                  0.042347654700279236,
+                  -0.1071961298584938,
+                  -0.14821341633796692,
+                  0.1587757170200348,
+                  0.0165056474506855,
+                  0.1939706653356552,
+                  0.02418888546526432,
+                  0.011489436030387878,
+                  -0.15497209131717682,
+                  0.08093784749507904,
+                  -0.07018746435642242,
+                  -0.0740276649594307
+                ],
+                "reward": -0.02715466171503067,
+                "done_logits": 0.17571179568767548,
+                "done_prob": 0.5438152551651001,
+                "uncertainty": 0.6314247846603394
+              }
+            }
+          ],
+          "actual_state_recorded": false,
+          "total_reward": 0.0,
+          "steps_taken": 1,
+          "final_achievements": {},
+          "first_failed_link": "wood_acquisition"
+        }
+      ],
+      "config": {
+        "name": "strict_no_memory",
+        "track": "strict_visual_jepa",
+        "memory_mode": "off",
+        "landmarks": true,
+        "policy_prior": true
+      }
+    },
+    {
+      "track": "strict_visual_jepa",
+      "ablation": "strict_empty_memory",
+      "episodes": 1,
+      "first_failed_link_counts": {
+        "wood_acquisition": 1
+      },
+      "episodes_detail": [
+        {
+          "seed": 7,
+          "steps": [
+            {
+              "step": 0,
+              "action": 13,
+              "reward": 0.0,
+              "done": false,
+              "planner": {
+                "reward_sum": 22.627113342285156,
+                "terminal_value": 5.3282880783081055,
+                "uncertainty_penalty": 0.04314945265650749,
+                "tte_gain": 0.0,
+                "best_score": 28.651269912719727,
+                "mean_q_std": 0.06331389397382736,
+                "memory_retrieved_action": -1.0,
+                "memory_match_sim": 0.0,
+                "memory_best_q": 0.0,
+                "active_subgoal_status": "",
+                "active_subgoal_target": "",
+                "structure_offset_x": 0.0,
+                "structure_offset_y": 0.0,
+                "stone_offset_x": 0.0,
+                "stone_offset_y": 0.0
+              },
+              "predicted_transition": {
+                "state_delta": [
+                  0.26427024602890015,
+                  0.05568213760852814,
+                  -0.14791442453861237,
+                  -0.152509868144989,
+                  0.042347654700279236,
+                  -0.1071961298584938,
+                  -0.14821341633796692,
+                  0.1587757170200348,
+                  0.0165056474506855,
+                  0.1939706653356552,
+                  0.02418888546526432,
+                  0.011489436030387878,
+                  -0.15497209131717682,
+                  0.08093784749507904,
+                  -0.07018746435642242,
+                  -0.0740276649594307
+                ],
+                "reward": -0.02715466171503067,
+                "done_logits": 0.17571179568767548,
+                "done_prob": 0.5438152551651001,
+                "uncertainty": 0.6314247846603394
+              }
+            }
+          ],
+          "actual_state_recorded": false,
+          "total_reward": 0.0,
+          "steps_taken": 1,
+          "final_achievements": {},
+          "first_failed_link": "wood_acquisition"
+        }
+      ],
+      "config": {
+        "name": "strict_empty_memory",
+        "track": "strict_visual_jepa",
+        "memory_mode": "empty",
+        "landmarks": true,
+        "policy_prior": true
+      }
+    },
+    {
+      "track": "strict_visual_jepa",
+      "ablation": "strict_landmarks_off",
+      "episodes": 1,
+      "first_failed_link_counts": {
+        "wood_acquisition": 1
+      },
+      "episodes_detail": [
+        {
+          "seed": 7,
+          "steps": [
+            {
+              "step": 0,
+              "action": 0,
+              "reward": 0.0,
+              "done": false,
+              "planner": {
+                "reward_sum": 22.482986450195312,
+                "terminal_value": 5.342630863189697,
+                "uncertainty_penalty": 0.03085901401937008,
+                "tte_gain": 0.0,
+                "best_score": 28.554189682006836,
+                "mean_q_std": 0.059221625328063965,
+                "memory_retrieved_action": -1.0,
+                "memory_match_sim": 0.0,
+                "memory_best_q": 0.0,
+                "active_subgoal_status": "",
+                "active_subgoal_target": "",
+                "structure_offset_x": 0.0,
+                "structure_offset_y": 0.0,
+                "stone_offset_x": 0.0,
+                "stone_offset_y": 0.0
+              },
+              "predicted_transition": {
+                "state_delta": [
+                  0.2482585608959198,
+                  -0.05029189586639404,
+                  -0.11362883448600769,
+                  -0.15158772468566895,
+                  0.008735068142414093,
+                  -0.19657427072525024,
+                  -0.08327274769544601,
+                  -0.0021962113678455353,
+                  0.013085823506116867,
+                  0.07213438302278519,
+                  0.03354443609714508,
+                  0.12066490948200226,
+                  -0.21489232778549194,
+                  0.09527601301670074,
+                  -0.3399505019187927,
+                  -0.12233179062604904
+                ],
+                "reward": 0.022654280066490173,
+                "done_logits": 0.22060626745224,
+                "done_prob": 0.5549289584159851,
+                "uncertainty": 0.6713181138038635
+              }
+            }
+          ],
+          "actual_state_recorded": false,
+          "total_reward": 0.0,
+          "steps_taken": 1,
+          "final_achievements": {},
+          "first_failed_link": "wood_acquisition"
+        }
+      ],
+      "config": {
+        "name": "strict_landmarks_off",
+        "track": "strict_visual_jepa",
+        "memory_mode": "off",
+        "landmarks": false,
+        "policy_prior": true
+      }
+    },
+    {
+      "track": "strict_visual_jepa",
+      "ablation": "strict_policy_prior_off",
+      "episodes": 1,
+      "first_failed_link_counts": {
+        "wood_acquisition": 1
+      },
+      "episodes_detail": [
+        {
+          "seed": 7,
+          "steps": [
+            {
+              "step": 0,
+              "action": 16,
+              "reward": 0.0,
+              "done": false,
+              "planner": {
+                "reward_sum": 22.530927658081055,
+                "terminal_value": 5.3787970542907715,
+                "uncertainty_penalty": 0.03277955949306488,
+                "tte_gain": 0.0,
+                "best_score": 28.60915184020996,
+                "mean_q_std": 0.0656055361032486,
+                "memory_retrieved_action": -1.0,
+                "memory_match_sim": 0.0,
+                "memory_best_q": 0.0,
+                "active_subgoal_status": "",
+                "active_subgoal_target": "",
+                "structure_offset_x": 0.0,
+                "structure_offset_y": 0.0,
+                "stone_offset_x": 0.0,
+                "stone_offset_y": 0.0
+              },
+              "predicted_transition": {
+                "state_delta": [
+                  0.26941436529159546,
+                  -0.13310477137565613,
+                  -0.09710247814655304,
+                  -0.03811829537153244,
+                  0.022572621703147888,
+                  -0.23126307129859924,
+                  -0.24593333899974823,
+                  -0.046157337725162506,
+                  -0.07942970097064972,
+                  -0.02673983946442604,
+                  0.0022551966831088066,
+                  -0.04984179139137268,
+                  -0.18926994502544403,
+                  0.05509016662836075,
+                  -0.15405285358428955,
+                  -0.07232455164194107
+                ],
+                "reward": 0.10091383755207062,
+                "done_logits": 0.14270977675914764,
+                "done_prob": 0.5356170535087585,
+                "uncertainty": 0.6352023482322693
+              }
+            }
+          ],
+          "actual_state_recorded": false,
+          "total_reward": 0.0,
+          "steps_taken": 1,
+          "final_achievements": {},
+          "first_failed_link": "wood_acquisition"
+        }
+      ],
+      "config": {
+        "name": "strict_policy_prior_off",
+        "track": "strict_visual_jepa",
+        "memory_mode": "off",
+        "landmarks": true,
+        "policy_prior": false
+      }
+    }
+  ],
+  "elapsed_seconds": 0.5377449989318848
+}

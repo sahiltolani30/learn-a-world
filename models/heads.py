@@ -172,6 +172,111 @@ class HealthHead(nn.Module):
         """Computes Huber (Smooth L1) loss."""
         return F.smooth_l1_loss(pred, targets, beta=1.0)
 
+
+class StateDeltaHead(nn.Module):
+    """Predicts a generic action-conditioned state/resource delta.
+
+    The head has no Crafter names or recipe logic.  ``state_dim`` is an adapter
+    dimension supplied by the dataset (16 for the optional Crafter diagnostic
+    inventory target).  At inference it consumes only the learned latent state
+    and action, never the ground-truth state.
+    """
+
+    def __init__(
+        self,
+        latent_dim: int,
+        num_actions: int = 17,
+        action_emb_dim: int = 32,
+        state_dim: int = 16,
+        hidden_dim: int = 256,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.state_dim = state_dim
+        self.action_emb = nn.Embedding(num_actions, action_emb_dim)
+        self.net = nn.Sequential(
+            nn.Linear(latent_dim + action_emb_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, state_dim),
+        )
+
+    def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        if action.dtype in (torch.int64, torch.int32):
+            action = self.action_emb(action.squeeze(-1) if action.ndim > 1 else action)
+        features = torch.cat([state, action], dim=-1)
+        return self.net(features)
+
+    def compute_loss(
+        self,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        valid_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        loss = F.smooth_l1_loss(prediction, target, reduction="none", beta=1.0)
+        if valid_mask is not None:
+            mask = valid_mask.float().reshape(-1, 1)
+            loss = loss.reshape(-1, self.state_dim) * mask
+            denom = mask.sum().clamp_min(1.0) * self.state_dim
+            return loss.sum() / denom
+        return loss.mean()
+
+
+class TransitionHead(nn.Module):
+    """Generic reward, termination, and uncertainty prediction head.
+
+    ``reward`` is an environment-observed scalar target and ``done`` is the
+    transition boundary target.  The uncertainty output is a learned positive
+    scale (used for diagnostics and future risk-aware planning), not an input
+    from the environment.
+    """
+
+    def __init__(
+        self,
+        latent_dim: int,
+        num_actions: int = 17,
+        action_emb_dim: int = 32,
+        hidden_dim: int = 256,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.action_emb = nn.Embedding(num_actions, action_emb_dim)
+        self.net = nn.Sequential(
+            nn.Linear(latent_dim + action_emb_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 3),
+        )
+
+    def forward(self, state: torch.Tensor, action: torch.Tensor):
+        if action.dtype in (torch.int64, torch.int32):
+            action = self.action_emb(action.squeeze(-1) if action.ndim > 1 else action)
+        out = self.net(torch.cat([state, action], dim=-1))
+        reward = out[..., 0]
+        done_logits = out[..., 1]
+        uncertainty = F.softplus(out[..., 2]) + 1e-4
+        return reward, done_logits, uncertainty
+
+    def compute_loss(
+        self,
+        reward_pred: torch.Tensor,
+        done_logits: torch.Tensor,
+        uncertainty: torch.Tensor,
+        reward_target: torch.Tensor,
+        done_target: torch.Tensor,
+    ) -> torch.Tensor:
+        reward_loss = F.smooth_l1_loss(reward_pred, reward_target, beta=1.0)
+        done_loss = F.binary_cross_entropy_with_logits(done_logits, done_target.float())
+        # Gaussian NLL gives the uncertainty head a meaningful training signal.
+        residual = reward_pred - reward_target
+        scale = uncertainty.clamp_min(1e-4)
+        uncertainty_loss = (residual.square() / (2.0 * scale.square()) + scale.log()).mean()
+        return reward_loss + done_loss + 0.1 * uncertainty_loss
+
 def two_hot_encode(
     x: torch.Tensor,
     num_bins: int = 51,
@@ -488,6 +593,4 @@ class TimeToEventHead(nn.Module):
     def compute_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Huber loss across all 22 heads by index."""
         return F.smooth_l1_loss(pred, target)
-
-
 
