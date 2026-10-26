@@ -12,7 +12,8 @@ This document separates verified facts, hypotheses, permitted learned additions,
 
 - **Phase 0: implemented.** Run `python3 scripts/run_phase0_chain_diagnostics.py` to produce same-seed traces and controller ablations in `results/phase0_chain_diagnostics.json`.
 - **Phase 1: implemented.** Run `python3 training/run_phase1_transition_learning.py --shards_dir <sequence-shards>` to fine-tune an existing v3 checkpoint while retaining and logging the JEPA latent objective.
-- Existing shards remain readable. New state-delta labels are optional; old data still trains latent, event, reward, health, and termination objectives, but cannot provide state-delta supervision until advanced labeled data is collected.
+- **Phase 1.5: implemented.** Run `python3 scripts/run_phase1_5.py --data_root <data-root> --manifest <manifest.json> --audit_only` to create a reproducible deduplicated multi-directory manifest, or omit `--audit_only` to run the combined Phase 1 fine-tune.
+- Existing shards remain readable. New state-delta labels are optional; old data still trains latent, event, reward, health, and termination objectives. The Phase 1.5 manifest prefers final cumulative shards, collapses duplicate transition content, and prefers labeled copies when available.
 - No result is called a learned causal relation until held-out transition metrics and intervention/ablation evidence are recorded.
 
 ## 1. True-JEPA contract

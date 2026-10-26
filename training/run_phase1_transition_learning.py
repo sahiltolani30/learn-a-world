@@ -30,35 +30,27 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from models.jepa_v3 import JEPAv3
+from training.phase1_5_data import (
+    discover_active_shards,
+    selected_paths_from_manifest,
+)
 from training.sequence_buffer import EpisodeBuffer
 
 
 def load_sequence_shards(
-    shards_dir: Union[str, Path],
+    shards_dir: Union[str, Path, Sequence[Union[str, Path]]],
     capacity_transitions: int = 1_000_000,
+    manifest_path: Optional[Union[str, Path]] = None,
 ) -> EpisodeBuffer:
-    """Load all ``.npz`` sequence shards, preserving old shard compatibility."""
-    root = Path(shards_dir)
-    shards = sorted(root.glob("*.npz"))
-    # ``collect_sequences.py`` writes cumulative numbered snapshots plus a
-    # final cumulative snapshot. Prefer the final snapshot for that family so
-    # Phase 1 does not silently train twice on the same transitions. CollectorV3
-    # shards are disjoint and do not use this suffix.
-    final_prefixes = {
-        p.stem[: -len("_final")]
-        for p in shards
-        if p.stem.endswith("_final")
-    }
-    if final_prefixes:
-        shards = [
-            p for p in shards
-            if not any(
-                p.stem.startswith(prefix + "_") and p.stem[len(prefix) + 1 :].isdigit()
-                for prefix in final_prefixes
-            )
-        ]
+    """Load deduplicated sequence shards from roots or a Phase 1.5 manifest."""
+    if manifest_path is not None:
+        shards = selected_paths_from_manifest(manifest_path)
+    else:
+        roots = [shards_dir] if isinstance(shards_dir, (str, Path)) else list(shards_dir)
+        discovery = discover_active_shards(roots)
+        shards = [Path(item["path"]) for item in discovery["selected_shards"]]
     if not shards:
-        raise FileNotFoundError(f"No sequence shards found in {root}")
+        raise FileNotFoundError(f"No sequence shards found in {shards_dir}")
     buffer = EpisodeBuffer(capacity_transitions=capacity_transitions)
     for shard in shards:
         buffer.load_shard(shard)
@@ -196,13 +188,20 @@ def train_phase1_transitions(
     device: Union[str, torch.device] = "cpu",
     val_ratio: float = 0.1,
     transition_state_dim: Optional[int] = None,
+    manifest_path: Optional[Union[str, Path]] = None,
+    split_seed: int = 0,
+    capacity_transitions: int = 1_000_000,
 ) -> Dict[str, Any]:
     """Fine-tune v3 with JEPA plus generic transition losses."""
     dev = torch.device(device)
     if seq_len <= max(horizons):
         raise ValueError(f"seq_len={seq_len} must be > max horizon={max(horizons)}")
-    buffer = load_sequence_shards(shards_dir)
-    train_buffer, val_buffer = buffer.split_train_val(val_ratio=val_ratio)
+    buffer = load_sequence_shards(
+        shards_dir,
+        capacity_transitions=capacity_transitions,
+        manifest_path=manifest_path,
+    )
+    train_buffer, val_buffer = buffer.split_train_val(val_ratio=val_ratio, seed=split_seed)
     if train_buffer.num_episodes == 0:
         raise ValueError("Training split is empty")
     inferred_state_dim = int(train_buffer.episodes[0]["state_delta"].shape[-1])
@@ -319,6 +318,7 @@ def train_phase1_transitions(
     config = {
         "phase": "phase1_transition_learning",
         "shards_dir": str(shards_dir),
+        "manifest_path": str(manifest_path) if manifest_path else None,
         "checkpoint_init": str(checkpoint_path) if checkpoint_path else None,
         "horizons": list(horizons),
         "seq_len": seq_len,
@@ -326,6 +326,7 @@ def train_phase1_transitions(
         "consistency_weight": consistency_weight,
         "state_delta_labels_are_training_targets_only": True,
         "strict_inference_uses_inventory_input": False,
+        "split_seed": split_seed,
     }
     model.save_checkpoint(str(output_checkpoint), step=total_steps, optimizer=optimizer, config=config)
     result = {
@@ -348,7 +349,8 @@ def train_phase1_transitions(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train JEPA-v3 generic transition heads")
-    parser.add_argument("--shards_dir", required=True)
+    parser.add_argument("--shards_dir", nargs="+", default=[])
+    parser.add_argument("--manifest", default=None)
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--output_checkpoint", default="checkpoints/jepa_crafter_v3_phase1_transitions.pt")
     parser.add_argument("--output_json", default="results/phase1_transition_training.json")
@@ -357,8 +359,12 @@ def main() -> None:
     parser.add_argument("--seq_len", type=int, default=16)
     parser.add_argument("--horizons", type=int, nargs="+", default=[1, 5, 10])
     parser.add_argument("--transition_state_dim", type=int, default=None)
+    parser.add_argument("--split_seed", type=int, default=0)
+    parser.add_argument("--capacity_transitions", type=int, default=1_000_000)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
+    if not args.shards_dir and args.manifest is None:
+        parser.error("provide --shards_dir or --manifest")
     result = train_phase1_transitions(
         shards_dir=args.shards_dir,
         checkpoint_path=args.checkpoint,
@@ -370,6 +376,9 @@ def main() -> None:
         horizons=tuple(args.horizons),
         device=args.device,
         transition_state_dim=args.transition_state_dim,
+        manifest_path=args.manifest,
+        split_seed=args.split_seed,
+        capacity_transitions=args.capacity_transitions,
     )
     print(json.dumps(result["metrics"], indent=2))
 

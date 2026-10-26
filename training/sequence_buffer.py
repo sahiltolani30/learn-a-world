@@ -431,22 +431,32 @@ class EpisodeBuffer:
             )
             offset += length
 
-    def split_train_val(self, val_ratio: float = 0.05) -> Tuple["EpisodeBuffer", "EpisodeBuffer"]:
+    def split_train_val(
+        self,
+        val_ratio: float = 0.05,
+        seed: int = 0,
+    ) -> Tuple["EpisodeBuffer", "EpisodeBuffer"]:
         """
-        Splits buffer by held-out last val_ratio of episodes in-place with zero memory copy.
+        Splits by held-out episodes in-place with zero array copying.
+
+        The deterministic episode shuffle prevents validation from becoming an
+        accidental source-policy holdout when shards are loaded directory by
+        directory. It is still an episode split; transition windows never cross
+        episode boundaries.
         """
         n_eps = len(self.episodes)
         n_val = max(1, int(round(n_eps * val_ratio))) if n_eps > 1 else 0
-        n_train = n_eps - n_val
+        order = np.random.RandomState(seed).permutation(n_eps)
+        val_indices = set(int(i) for i in order[:n_val])
 
         train_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
         val_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
 
-        # Move episode references directly without copying arrays
-        train_buf.episodes = self.episodes[:n_train]
+        # Move episode references directly without copying arrays.
+        train_buf.episodes = [ep for i, ep in enumerate(self.episodes) if i not in val_indices]
         train_buf._total_transitions = sum(len(ep["actions"]) for ep in train_buf.episodes)
 
-        val_buf.episodes = self.episodes[n_train:]
+        val_buf.episodes = [ep for i, ep in enumerate(self.episodes) if i in val_indices]
         val_buf._total_transitions = sum(len(ep["actions"]) for ep in val_buf.episodes)
 
         # Clear original buffer to release any duplicate references

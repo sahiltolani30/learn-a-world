@@ -1,0 +1,571 @@
+{
+  "timestamp": "2026-10-27 05:03:03",
+  "drive_root": "/Users/harshitatolani/Sahil/ML",
+  "disk_storage": {
+    "total_gb": 460.38,
+    "used_gb": 188.09,
+    "free_gb": 272.3
+  },
+  "hardware": {
+    "cuda_available": false,
+    "device_count": 0,
+    "device_name": "N/A (CPU)",
+    "vram_total_gb": 0.0
+  },
+  "datasets_summary": {
+    "dataset_directories_count": 2,
+    "total_shards_found": 5,
+    "active_unique_shards_count": 3,
+    "duplicate_numbered_shards_count": 2,
+    "total_transitions_raw": 38000,
+    "active_transitions_deduped": 34000,
+    "active_episodes_deduped": 204
+  },
+  "aggregate_causal_events_active": {
+    "collect_wood": 126,
+    "place_table": 11,
+    "make_wood_pickaxe": 1,
+    "collect_stone": 1,
+    "make_stone_pickaxe": 0,
+    "collect_coal": 0,
+    "collect_iron": 0,
+    "collect_diamond": 0
+  },
+  "advanced_chain_trajectories_exist": true,
+  "checkpoints_summary": {
+    "total_checkpoints_found": 9,
+    "latest_verified_champion_baseline": "checkpoints/jepa_crafter_v3_t2_final.pt",
+    "latest_phase1_state_delta_checkpoint": "None",
+    "all_checkpoints": [
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/curiosity_t2.pt",
+        "filename": "curiosity_t2.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 2.38,
+        "modified": "2026-10-24 04:23:50",
+        "version": "v1/v2",
+        "keys": [
+          "predictors",
+          "optimizers",
+          "timestamp"
+        ],
+        "step": null,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_crafter.pt",
+        "filename": "jepa_crafter.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 20.31,
+        "modified": "2026-10-22 23:55:14",
+        "version": "v1/v2",
+        "keys": [
+          "step",
+          "model_state",
+          "optimizer_state",
+          "config",
+          "history"
+        ],
+        "step": 20,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_crafter_v2.pt",
+        "filename": "jepa_crafter_v2.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 12.49,
+        "modified": "2026-10-22 10:34:52",
+        "version": "v1/v2",
+        "keys": [
+          "step",
+          "base_model_state",
+          "event_head_state",
+          "health_head_state",
+          "optimizer_state"
+        ],
+        "step": 500,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_crafter_v2_best.pt",
+        "filename": "jepa_crafter_v2_best.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 14.36,
+        "modified": "2026-10-22 23:23:10",
+        "version": "v1/v2",
+        "keys": [
+          "step",
+          "base_model_state",
+          "event_head_state",
+          "health_head_state",
+          "q_ensemble_state",
+          "q_target_ensemble_state",
+          "policy_prior_state",
+          "gru_belief_state"
+        ],
+        "step": 1000,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_crafter_v3_phase2.pt",
+        "filename": "jepa_crafter_v3_phase2.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 18.1,
+        "modified": "2026-10-23 01:59:25",
+        "version": "v3",
+        "keys": [
+          "version",
+          "step",
+          "encoder",
+          "target_encoder",
+          "recurrent_core",
+          "predictor",
+          "event_head",
+          "health_head",
+          "q_ensemble",
+          "q_target_ensemble",
+          "policy_prior",
+          "normalizer"
+        ],
+        "step": 5000,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_crafter_v3_step1_value.pt",
+        "filename": "jepa_crafter_v3_step1_value.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 14.36,
+        "modified": "2026-10-23 00:21:43",
+        "version": "v1/v2",
+        "keys": [
+          "step",
+          "base_model_state",
+          "event_head_state",
+          "health_head_state",
+          "q_ensemble_state",
+          "q_target_ensemble_state",
+          "policy_prior_state",
+          "gru_belief_state"
+        ],
+        "step": 100,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/jepa_maze.pt",
+        "filename": "jepa_maze.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 20.3,
+        "modified": "2026-10-22 01:31:25",
+        "version": "v1/v2",
+        "keys": [
+          "step",
+          "model_state",
+          "optimizer_state",
+          "config",
+          "history"
+        ],
+        "step": 2500,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/semantic_memory_bank.pt",
+        "filename": "semantic_memory_bank.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 0.09,
+        "modified": "2026-10-27 00:28:37",
+        "version": "v1/v2",
+        "keys": [
+          "keys",
+          "preconditions",
+          "actions",
+          "outcomes",
+          "returns",
+          "outcome_names",
+          "latent_dim"
+        ],
+        "step": null,
+        "has_state_delta_head": false
+      },
+      {
+        "path": "/Users/harshitatolani/Sahil/ML/checkpoints/tabula_rasa_memory_bank.pt",
+        "filename": "tabula_rasa_memory_bank.pt",
+        "relative_dir": "checkpoints",
+        "size_mb": 0.01,
+        "modified": "2026-10-27 02:06:51",
+        "version": "v1/v2",
+        "keys": [
+          "keys",
+          "inventories",
+          "actions",
+          "inventory_deltas",
+          "returns",
+          "outcome_names",
+          "preconditions",
+          "outcomes",
+          "latent_dim",
+          "rbf_sigma"
+        ],
+        "step": null,
+        "has_state_delta_head": false
+      }
+    ]
+  },
+  "dataset_directories": [
+    {
+      "directory": "/Users/harshitatolani/Sahil/ML/data/sequences",
+      "shard_count": 4,
+      "transitions": 8000,
+      "has_state_delta": false,
+      "shards": [
+        "shard_structured_random_0000.npz",
+        "shard_structured_random_final.npz",
+        "shard_teacher_hybrid_0000.npz",
+        "shard_teacher_hybrid_final.npz"
+      ]
+    },
+    {
+      "directory": "/Users/harshitatolani/Sahil/ML/results/sequences",
+      "shard_count": 1,
+      "transitions": 30000,
+      "has_state_delta": false,
+      "shards": [
+        "shard_planner_v2_final.npz"
+      ]
+    }
+  ],
+  "duplicate_detection": {
+    "duplicate_count": 2,
+    "duplicates": [
+      {
+        "shard": "shard_structured_random_0000.npz",
+        "superseded_by": "shard_structured_random_final.npz",
+        "parent_dir": "sequences",
+        "transitions": 2000
+      },
+      {
+        "shard": "shard_teacher_hybrid_0000.npz",
+        "superseded_by": "shard_teacher_hybrid_final.npz",
+        "parent_dir": "sequences",
+        "transitions": 2000
+      }
+    ],
+    "active_unique_count": 3
+  },
+  "shards_detail": [
+    {
+      "path": "/Users/harshitatolani/Sahil/ML/data/sequences/shard_structured_random_0000.npz",
+      "filename": "shard_structured_random_0000.npz",
+      "parent_dir": "sequences",
+      "size_mb": 2.81,
+      "modified": "2026-10-22 10:34:37",
+      "transitions": 2000,
+      "episodes": 13,
+      "sources": [
+        "structured_random"
+      ],
+      "keys": [
+        "obs",
+        "actions",
+        "rewards",
+        "dones",
+        "events",
+        "mask_before",
+        "episode_lengths",
+        "sources"
+      ],
+      "has_state_delta": false,
+      "has_state_delta_valid": false,
+      "valid_state_delta_count": 0,
+      "has_inventory_labels": false,
+      "has_events": true,
+      "has_rewards": true,
+      "has_dones": true,
+      "target_event_counts": {
+        "collect_wood": 16,
+        "place_table": 2,
+        "make_wood_pickaxe": 0,
+        "collect_stone": 0,
+        "make_stone_pickaxe": 0,
+        "collect_coal": 0,
+        "collect_iron": 0,
+        "collect_diamond": 0
+      },
+      "all_event_counts": {
+        "collect_coal": 0,
+        "collect_diamond": 0,
+        "collect_drink": 13,
+        "collect_iron": 0,
+        "collect_sapling": 44,
+        "collect_stone": 0,
+        "collect_wood": 16,
+        "defeat_skeleton": 0,
+        "defeat_zombie": 0,
+        "eat_cow": 1,
+        "eat_plant": 0,
+        "make_iron_pickaxe": 0,
+        "make_iron_sword": 0,
+        "make_stone_pickaxe": 0,
+        "make_stone_sword": 0,
+        "make_wood_pickaxe": 0,
+        "make_wood_sword": 1,
+        "place_furnace": 0,
+        "place_plant": 13,
+        "place_stone": 0,
+        "place_table": 2,
+        "wake_up": 8
+      }
+    },
+    {
+      "path": "/Users/harshitatolani/Sahil/ML/data/sequences/shard_structured_random_final.npz",
+      "filename": "shard_structured_random_final.npz",
+      "parent_dir": "sequences",
+      "size_mb": 2.81,
+      "modified": "2026-10-23 23:27:42",
+      "transitions": 2000,
+      "episodes": 13,
+      "sources": [
+        "structured_random"
+      ],
+      "keys": [
+        "obs",
+        "actions",
+        "rewards",
+        "dones",
+        "events",
+        "mask_before",
+        "episode_lengths",
+        "sources"
+      ],
+      "has_state_delta": false,
+      "has_state_delta_valid": false,
+      "valid_state_delta_count": 0,
+      "has_inventory_labels": false,
+      "has_events": true,
+      "has_rewards": true,
+      "has_dones": true,
+      "target_event_counts": {
+        "collect_wood": 16,
+        "place_table": 2,
+        "make_wood_pickaxe": 0,
+        "collect_stone": 0,
+        "make_stone_pickaxe": 0,
+        "collect_coal": 0,
+        "collect_iron": 0,
+        "collect_diamond": 0
+      },
+      "all_event_counts": {
+        "collect_coal": 0,
+        "collect_diamond": 0,
+        "collect_drink": 13,
+        "collect_iron": 0,
+        "collect_sapling": 44,
+        "collect_stone": 0,
+        "collect_wood": 16,
+        "defeat_skeleton": 0,
+        "defeat_zombie": 0,
+        "eat_cow": 1,
+        "eat_plant": 0,
+        "make_iron_pickaxe": 0,
+        "make_iron_sword": 0,
+        "make_stone_pickaxe": 0,
+        "make_stone_sword": 0,
+        "make_wood_pickaxe": 0,
+        "make_wood_sword": 1,
+        "place_furnace": 0,
+        "place_plant": 13,
+        "place_stone": 0,
+        "place_table": 2,
+        "wake_up": 8
+      }
+    },
+    {
+      "path": "/Users/harshitatolani/Sahil/ML/data/sequences/shard_teacher_hybrid_0000.npz",
+      "filename": "shard_teacher_hybrid_0000.npz",
+      "parent_dir": "sequences",
+      "size_mb": 2.94,
+      "modified": "2026-10-22 10:34:42",
+      "transitions": 2000,
+      "episodes": 11,
+      "sources": [
+        "teacher_hybrid"
+      ],
+      "keys": [
+        "obs",
+        "actions",
+        "rewards",
+        "dones",
+        "events",
+        "mask_before",
+        "episode_lengths",
+        "sources"
+      ],
+      "has_state_delta": false,
+      "has_state_delta_valid": false,
+      "valid_state_delta_count": 0,
+      "has_inventory_labels": false,
+      "has_events": true,
+      "has_rewards": true,
+      "has_dones": true,
+      "target_event_counts": {
+        "collect_wood": 9,
+        "place_table": 2,
+        "make_wood_pickaxe": 1,
+        "collect_stone": 1,
+        "make_stone_pickaxe": 0,
+        "collect_coal": 0,
+        "collect_iron": 0,
+        "collect_diamond": 0
+      },
+      "all_event_counts": {
+        "collect_coal": 0,
+        "collect_diamond": 0,
+        "collect_drink": 21,
+        "collect_iron": 0,
+        "collect_sapling": 63,
+        "collect_stone": 1,
+        "collect_wood": 9,
+        "defeat_skeleton": 0,
+        "defeat_zombie": 2,
+        "eat_cow": 1,
+        "eat_plant": 0,
+        "make_iron_pickaxe": 0,
+        "make_iron_sword": 0,
+        "make_stone_pickaxe": 0,
+        "make_stone_sword": 0,
+        "make_wood_pickaxe": 1,
+        "make_wood_sword": 0,
+        "place_furnace": 0,
+        "place_plant": 22,
+        "place_stone": 0,
+        "place_table": 2,
+        "wake_up": 6
+      }
+    },
+    {
+      "path": "/Users/harshitatolani/Sahil/ML/data/sequences/shard_teacher_hybrid_final.npz",
+      "filename": "shard_teacher_hybrid_final.npz",
+      "parent_dir": "sequences",
+      "size_mb": 2.94,
+      "modified": "2026-10-23 23:27:42",
+      "transitions": 2000,
+      "episodes": 11,
+      "sources": [
+        "teacher_hybrid"
+      ],
+      "keys": [
+        "obs",
+        "actions",
+        "rewards",
+        "dones",
+        "events",
+        "mask_before",
+        "episode_lengths",
+        "sources"
+      ],
+      "has_state_delta": false,
+      "has_state_delta_valid": false,
+      "valid_state_delta_count": 0,
+      "has_inventory_labels": false,
+      "has_events": true,
+      "has_rewards": true,
+      "has_dones": true,
+      "target_event_counts": {
+        "collect_wood": 9,
+        "place_table": 2,
+        "make_wood_pickaxe": 1,
+        "collect_stone": 1,
+        "make_stone_pickaxe": 0,
+        "collect_coal": 0,
+        "collect_iron": 0,
+        "collect_diamond": 0
+      },
+      "all_event_counts": {
+        "collect_coal": 0,
+        "collect_diamond": 0,
+        "collect_drink": 21,
+        "collect_iron": 0,
+        "collect_sapling": 63,
+        "collect_stone": 1,
+        "collect_wood": 9,
+        "defeat_skeleton": 0,
+        "defeat_zombie": 2,
+        "eat_cow": 1,
+        "eat_plant": 0,
+        "make_iron_pickaxe": 0,
+        "make_iron_sword": 0,
+        "make_stone_pickaxe": 0,
+        "make_stone_sword": 0,
+        "make_wood_pickaxe": 1,
+        "make_wood_sword": 0,
+        "place_furnace": 0,
+        "place_plant": 22,
+        "place_stone": 0,
+        "place_table": 2,
+        "wake_up": 6
+      }
+    },
+    {
+      "path": "/Users/harshitatolani/Sahil/ML/results/sequences/shard_planner_v2_final.npz",
+      "filename": "shard_planner_v2_final.npz",
+      "parent_dir": "sequences",
+      "size_mb": 37.81,
+      "modified": "2026-10-23 23:23:03",
+      "transitions": 30000,
+      "episodes": 180,
+      "sources": [
+        "planner_v2"
+      ],
+      "keys": [
+        "obs",
+        "actions",
+        "rewards",
+        "dones",
+        "events",
+        "mask_before",
+        "episode_lengths",
+        "sources"
+      ],
+      "has_state_delta": false,
+      "has_state_delta_valid": false,
+      "valid_state_delta_count": 0,
+      "has_inventory_labels": false,
+      "has_events": true,
+      "has_rewards": true,
+      "has_dones": true,
+      "target_event_counts": {
+        "collect_wood": 101,
+        "place_table": 7,
+        "make_wood_pickaxe": 0,
+        "collect_stone": 0,
+        "make_stone_pickaxe": 0,
+        "collect_coal": 0,
+        "collect_iron": 0,
+        "collect_diamond": 0
+      },
+      "all_event_counts": {
+        "collect_coal": 0,
+        "collect_diamond": 0,
+        "collect_drink": 30,
+        "collect_iron": 0,
+        "collect_sapling": 1002,
+        "collect_stone": 0,
+        "collect_wood": 101,
+        "defeat_skeleton": 1,
+        "defeat_zombie": 56,
+        "eat_cow": 24,
+        "eat_plant": 0,
+        "make_iron_pickaxe": 0,
+        "make_iron_sword": 0,
+        "make_stone_pickaxe": 0,
+        "make_stone_sword": 0,
+        "make_wood_pickaxe": 0,
+        "make_wood_sword": 0,
+        "place_furnace": 0,
+        "place_plant": 208,
+        "place_stone": 0,
+        "place_table": 7,
+        "wake_up": 426
+      }
+    }
+  ]
+}
