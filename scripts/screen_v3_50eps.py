@@ -78,6 +78,7 @@ def run_screening(
     vital_weight: float = 0.5,
     death_risk_factor: float = 0.0,
     harvest_bonus: float = 0.15,
+    action_persistence: float = 0.5,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -89,7 +90,7 @@ def run_screening(
     print(f"      Frontier Threshold: {frontier_threshold} | Common Threshold: {common_threshold}")
     print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight} | Standardize Scores: {standardize_scores}")
     print(f"      Vital Weight: {vital_weight} | Death Risk Factor: {death_risk_factor} | Harvest Bonus: {harvest_bonus}")
-    print(f"      Device: {dev}")
+    print(f"      Action Persistence: {action_persistence} | Device: {dev}")
     print("=" * 80)
 
     # 1. Load Model
@@ -118,6 +119,7 @@ def run_screening(
         uncertainty_weight=uncertainty_weight,
         novelty_weight=novelty_weight,
         prior_mix=prior_mix,
+        action_persistence=action_persistence,
         num_actions=17,
         denormalize_q=denormalize_q,
         tte_weight=tte_weight,
@@ -287,6 +289,7 @@ if __name__ == "__main__":
     parser.add_argument("--vital_weight", type=float, default=0.5, help="Scaling factor for vital health damage/healing.")
     parser.add_argument("--death_risk_factor", type=float, default=0.0, help="Continuation decay rate for lethal damage in imagination.")
     parser.add_argument("--harvest_bonus", type=float, default=0.15, help="Utility bonus for repeat harvesting of essential inputs.")
+    parser.add_argument("--action_persistence", type=float, default=0.5, help="Directional action persistence probability in MPC.")
     parser.add_argument(
         "--standardize-scores",
         "--standardize_scores",
@@ -325,4 +328,5 @@ if __name__ == "__main__":
         vital_weight=args.vital_weight,
         death_risk_factor=args.death_risk_factor,
         harvest_bonus=args.harvest_bonus,
+        action_persistence=args.action_persistence,
     )

@@ -83,6 +83,7 @@ def test_planner_adaptive_threshold_offline():
     assert planner.vital_weight == 0.5
     assert planner.death_risk_factor == 0.0
     assert planner.harvest_bonus == 0.15
+    assert planner.action_persistence == 0.5
 
 
 def test_mpc_continuation_discounting_execution():
