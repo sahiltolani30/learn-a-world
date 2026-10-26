@@ -48,8 +48,9 @@ class AgentBeliefV3:
             self.thresholds[frontier_indices] = frontier_threshold
 
         # Cognitive Working Memory (System 1 - Within-Episode Context & Landmark Anchors)
-        from planning.semantic_memory import ShortTermWorkingMemory
+        from planning.semantic_memory import ShortTermWorkingMemory, inventory_dict_to_vector
         self.working_memory = ShortTermWorkingMemory(capacity=16, recurrent_dim=recurrent_dim)
+        self.inv_vec = inventory_dict_to_vector(None)
 
     @property
     def mask(self) -> np.ndarray:
@@ -67,6 +68,29 @@ class AgentBeliefV3:
         self.h.fill(0.0)
         self.history.clear()
         self.working_memory.reset()
+        from planning.semantic_memory import inventory_dict_to_vector
+        self.inv_vec = inventory_dict_to_vector(None)
+
+    def update_inventory(self, inv: Union[Dict[str, Any], np.ndarray, torch.Tensor]) -> None:
+        """Updates internal 16-D backpack vector from environment inventory info."""
+        if isinstance(inv, dict):
+            from planning.semantic_memory import inventory_dict_to_vector
+            self.inv_vec = inventory_dict_to_vector(inv)
+        elif isinstance(inv, torch.Tensor):
+            self.inv_vec = inv.detach().cpu().numpy().astype(np.float32).reshape(-1)
+        elif isinstance(inv, np.ndarray):
+            self.inv_vec = inv.astype(np.float32).reshape(-1)
+
+    def get_inv_vector(self) -> np.ndarray:
+        """Returns copy of current 16-D backpack vector."""
+        return self.inv_vec.copy()
+
+    def get_inv_tensor(self, device: Optional[Union[str, torch.device]] = None) -> torch.Tensor:
+        """Returns current 16-D backpack vector as PyTorch tensor."""
+        t = torch.from_numpy(self.inv_vec).float()
+        if device is not None:
+            t = t.to(device)
+        return t
 
     def update_working_memory(
         self,
@@ -74,16 +98,22 @@ class AgentBeliefV3:
         action: int,
         reward: float,
         next_h: torch.Tensor,
+        inventory_dict: Optional[Dict[str, Any]] = None,
         unlocked_event: Optional[str] = None,
+        dopamine_surge: float = 0.0,
     ) -> None:
-        """Explicit hook to update short-term working memory with latent z_t and landmark anchors."""
+        """Explicit hook to update short-term working memory with latent z_t, backpack state, and landmark anchors."""
+        if inventory_dict is not None:
+            self.update_inventory(inventory_dict)
         self.working_memory.update(
             z_t=z_t,
             action=action,
             reward=reward,
             next_h=next_h,
             inventory_mask=self.m_bin,
+            inventory_dict=inventory_dict,
             unlocked_event=unlocked_event,
+            dopamine_surge=dopamine_surge,
         )
 
     def update(
@@ -154,6 +184,15 @@ class AgentBeliefV3:
             m = np.array(mask, dtype=np.float32).reshape(-1)
         assert len(m) == NUM_ACHIEVEMENTS, f"Expected {NUM_ACHIEVEMENTS} elements, got {len(m)}"
         self.m_bin = m.copy()
+
+        # Keep 16-D backpack vector synchronized with mask updates
+        from planning.semantic_memory import CRAFTER_INVENTORY_KEYS
+        for idx, ach_name in enumerate(CRAFTER_ACHIEVEMENTS):
+            if m[idx] > 0.5:
+                for inv_key in CRAFTER_INVENTORY_KEYS[:12]:
+                    if ach_name == f"collect_{inv_key}" or ach_name == f"make_{inv_key}":
+                        inv_idx = CRAFTER_INVENTORY_KEYS.index(inv_key)
+                        self.inv_vec[inv_idx] = max(self.inv_vec[inv_idx], 1.0)
 
         if soft_mask is not None:
             if isinstance(soft_mask, torch.Tensor):

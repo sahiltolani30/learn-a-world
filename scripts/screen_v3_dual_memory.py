@@ -188,6 +188,8 @@ def run_dual_memory_screening(
         seed = seed_start + ep_idx
         obs, info = env.reset(seed=seed)
         belief.reset()
+        if info and "inventory" in info:
+            belief.update_inventory(info["inventory"])
         writer.reset()
 
         ep_reward = 0.0
@@ -234,12 +236,19 @@ def run_dual_memory_screening(
                 action=action,
                 reward=reward,
                 next_h=next_h.squeeze(0),
+                inventory_dict=info.get("inventory") if isinstance(info, dict) else None,
                 unlocked_event=newly_unlocked_event,
+                dopamine_surge=dopamine_surge,
             )
 
             obs = next_obs
             if done:
                 break
+
+        # Retrospective Monte Carlo Credit Assignment & Memory Consolidation at game over
+        consolidated_count = writer.end_episode(final_reward=ep_reward)
+        if consolidated_count > 0:
+            ep_discoveries.append(f"{consolidated_count} Consolidated Memories")
 
         ep_duration = time.time() - t_ep_start
         ach = dict(info.get("achievements", {})) if isinstance(info, dict) else {}

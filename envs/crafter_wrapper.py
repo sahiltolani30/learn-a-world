@@ -112,7 +112,12 @@ class CrafterEnv(gym.Env):
             self._seed = seed
             self._env = crafter.Env(seed=seed)
         obs = self._env.reset()
-        info: Dict[str, Any] = {}
+        info: Dict[str, Any] = {
+            "inventory": dict(self._env._player.inventory) if hasattr(self._env, "_player") and hasattr(self._env._player, "inventory") else {},
+            "achievements": {},
+            "discount": 1.0,
+            "reward": 0.0,
+        }
         return obs, info
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:

@@ -20,10 +20,14 @@ from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
 from planning.semantic_memory import (
     AutonomousMemoryWriter,
+    CRAFTER_INVENTORY_KEYS,
     DopaminePersonalBestTracker,
     LongTermSemanticMemory,
     NUM_ACHIEVEMENTS,
+    NUM_INVENTORY_ITEMS,
     ShortTermWorkingMemory,
+    inventory_dict_to_vector,
+    vector_to_inventory_dict,
 )
 
 
@@ -221,4 +225,189 @@ def test_dopamine_personal_best_tracker():
     surge_2 = tracker.update_step(reward=1.0, newly_unlocked=["place_table"])
     assert surge_2 > 0.0, "Breaking milestone count PB should trigger dopamine surge!"
     assert tracker.lifetime_best_milestones == 2
+
+
+def test_dynamic_backpack_16d_vector_conversion():
+    # Test None / empty dict starts with standard Crafter initial vital stats
+    default_vec = inventory_dict_to_vector(None)
+    assert len(default_vec) == NUM_INVENTORY_ITEMS
+    assert default_vec[CRAFTER_INVENTORY_KEYS.index("health")] == 9.0
+    assert default_vec[CRAFTER_INVENTORY_KEYS.index("food")] == 9.0
+    assert default_vec[CRAFTER_INVENTORY_KEYS.index("drink")] == 9.0
+    assert default_vec[CRAFTER_INVENTORY_KEYS.index("energy")] == 9.0
+    assert default_vec[CRAFTER_INVENTORY_KEYS.index("wood")] == 0.0
+
+    # Test conversion of active game inventory dict
+    inv_dict = {"wood": 3, "stone": 1, "wood_pickaxe": 1, "health": 8}
+    vec = inventory_dict_to_vector(inv_dict)
+    assert vec[CRAFTER_INVENTORY_KEYS.index("wood")] == 3.0
+    assert vec[CRAFTER_INVENTORY_KEYS.index("stone")] == 1.0
+    assert vec[CRAFTER_INVENTORY_KEYS.index("wood_pickaxe")] == 1.0
+    assert vec[CRAFTER_INVENTORY_KEYS.index("health")] == 8.0
+    assert vec[CRAFTER_INVENTORY_KEYS.index("sapling")] == 0.0
+
+    # Test roundtrip reconstruction
+    recon_dict = vector_to_inventory_dict(vec)
+    assert recon_dict["wood"] == 3
+    assert recon_dict["stone"] == 1
+    assert recon_dict["wood_pickaxe"] == 1
+    assert recon_dict["health"] == 8
+
+
+def test_gaussian_rbf_kernel_regression_backpack_conditioning():
+    """
+    Pillar 4 Test: Verifies that Gaussian RBF Nadaraya-Watson kernel regression
+    correctly evaluates candidate actions purely based on visual and 16-D backpack similarity,
+    with zero hardcoded rules.
+    """
+    ltm = LongTermSemanticMemory(latent_dim=128, device="cpu", rbf_sigma=0.80)
+
+    # Visual key for a crafting table tile
+    torch.manual_seed(42)
+    key_table = torch.randn(128)
+    key_table = key_table / key_table.norm()
+
+    # Experience 1: Agent stood at table with wood=1, pressed craft pickaxe (action 15) -> G = 1.0
+    inv_with_wood = inventory_dict_to_vector({"wood": 1, "health": 9, "food": 9, "drink": 9, "energy": 9})
+    ltm.add_entry(
+        key=key_table,
+        inventory=inv_with_wood,
+        action=15,  # craft pickaxe
+        inventory_delta=inventory_dict_to_vector({"wood": -1, "wood_pickaxe": 1}),
+        realized_return=1.0,
+        outcome_name="make_wood_pickaxe",
+    )
+
+    # Experience 2: Agent stood at table with wood=0, pressed craft pickaxe (action 15) -> G = 0.0 (Failed!)
+    inv_without_wood = inventory_dict_to_vector({"wood": 0, "health": 9, "food": 9, "drink": 9, "energy": 9})
+    ltm.add_entry(
+        key=key_table,
+        inventory=inv_without_wood,
+        action=15,  # craft pickaxe
+        inventory_delta=np.zeros(16, dtype=np.float32),
+        realized_return=0.0,
+        outcome_name="fruitless_craft",
+    )
+
+    # SCENARIO A: Agent is currently standing at the table with wood=0
+    current_inv_0 = inventory_dict_to_vector({"wood": 0, "health": 9, "food": 9, "drink": 9, "energy": 9})
+    q_all_0, sim_all_0 = ltm.query_all_actions(key_table, current_inv_0)
+    # The failed memory (G=0.0) is matched strongly (distance 0), while success memory (wood=1) is distant
+    # Expected return for crafting with wood=0 is strongly suppressed!
+    assert q_all_0[15].item() < 0.40, f"Expected low Q for craft with 0 wood, got {q_all_0[15].item()}"
+
+    # SCENARIO B: Agent is currently standing at the table with wood=1
+    current_inv_1 = inventory_dict_to_vector({"wood": 1, "health": 9, "food": 9, "drink": 9, "energy": 9})
+    q_all_1, sim_all_1 = ltm.query_all_actions(key_table, current_inv_1)
+    # The success memory (G=1.0) is matched strongly (distance 0)
+    assert q_all_1[15].item() > 0.60, f"Expected high Q for craft with 1 wood, got {q_all_1[15].item()}"
+    assert sim_all_1[15].item() > 0.95
+
+    # Query directly returns action 15 when holding wood
+    best_act, best_sim, best_name = ltm.query(key_table, current_inv_1, sim_threshold=0.50)
+    assert best_act == 15
+    assert best_sim > 0.95
+
+
+def test_mistake_learning_and_counterfactual_failure_suppression():
+    """
+    Pillar 2 Test: Learning from mistakes.
+    When an action produces delta_inv = 0 and r = 0, it is recorded with G = 0.0.
+    Gaussian RBF naturally suppresses it without any handcrafted 'if wood == 0' rules.
+    """
+    ltm = LongTermSemanticMemory(latent_dim=128, device="cpu", rbf_sigma=1.50)
+    key_stone = torch.randn(128)
+    key_stone = key_stone / key_stone.norm()
+
+    # Fruitless attempt to mine stone with bare hands (wood_pickaxe=0): G = 0.0
+    inv_bare_hands = inventory_dict_to_vector({"wood_pickaxe": 0, "health": 9, "food": 9, "drink": 9, "energy": 9})
+    ltm.add_entry(
+        key=key_stone,
+        inventory=inv_bare_hands,
+        action=2,  # do/mine
+        inventory_delta=np.zeros(16, dtype=np.float32),
+        realized_return=0.0,
+        outcome_name="fruitless_act_2",
+    )
+
+    q_vals, max_sims = ltm.query_all_actions(key_stone, inv_bare_hands)
+    assert q_vals[2].item() == 0.0, "Action that failed should have Q_memory = 0.0"
+    best_act, _, _ = ltm.query(key_stone, inv_bare_hands, sim_threshold=0.50)
+    assert best_act is None, "Fruitless action with Q=0 must never be recommended as a breakthrough!"
+
+
+def test_temporal_monte_carlo_return_backpropagation():
+    """
+    Pillar 3 Test: Retrospective Monte Carlo Credit Assignment.
+    Future dopamine surge and tool reward flow backward along the trajectory:
+    G_t = sum_k gamma^k (r_{t+k} + dopamine_{t+k})
+    Elevates the estimated return of tree-chopping naturally!
+    """
+    ltm = LongTermSemanticMemory(latent_dim=128, device="cpu")
+    dopamine_tracker = DopaminePersonalBestTracker(dopamine_scale=0.50)
+    writer = AutonomousMemoryWriter(memory_bank=ltm, dopamine_tracker=dopamine_tracker, gamma=0.90)
+    writer.reset()
+
+    # Step 0: Agent chops tree -> collects wood (reward = 1.0, inv wood 0 -> 1)
+    z_tree = torch.randn(128)
+    info_step0 = {
+        "inventory": {"wood": 1, "health": 9, "food": 9, "drink": 9, "energy": 9},
+        "achievements": {"collect_wood": 1},
+    }
+    writer.step(z_t=z_tree, action=2, reward=1.0, info=info_step0)
+
+    # Step 1: Agent moves towards clearing (reward = 0.0)
+    z_move = torch.randn(128)
+    info_step1 = {
+        "inventory": {"wood": 1, "health": 9, "food": 9, "drink": 9, "energy": 9},
+        "achievements": {"collect_wood": 1},
+    }
+    writer.step(z_t=z_move, action=4, reward=0.0, info=info_step1)
+
+    # Step 2: Agent crafts pickaxe at table (reward = 1.0 + dopamine surge PB!)
+    z_table = torch.randn(128)
+    info_step2 = {
+        "inventory": {"wood": 0, "wood_pickaxe": 1, "health": 9, "food": 9, "drink": 9, "energy": 9},
+        "achievements": {"collect_wood": 1, "make_wood_pickaxe": 1},
+    }
+    _, surge = writer.step(z_t=z_table, action=15, reward=1.0, info=info_step2)
+    assert surge > 0.0, "Crafting pickaxe for the first time should trigger dopamine PB surge!"
+
+    # Game over: call end_episode consolidation
+    consolidated_count = writer.end_episode(final_reward=2.0 + surge, gamma=0.90)
+    assert consolidated_count >= 1
+
+    # Check that tree-chopping step received the discounted future return from pickaxe
+    # Step 2 return: 1.0 + surge
+    # Step 1 return: 0.9 * (1.0 + surge)
+    # Step 0 return: 1.0 + 0.9^2 * (1.0 + surge) > 1.80!
+    expected_g0 = 1.0 + (0.90 ** 2) * (1.0 + surge)
+
+    # Find the tree chopping memory in the memory bank
+    tree_mem_idx = [i for i, name in enumerate(ltm.outcome_names) if "wood" in name]
+    assert len(tree_mem_idx) > 0
+    tree_return = ltm.returns[tree_mem_idx[0]].item()
+    assert tree_return >= 1.50, f"Tree chopping return should be elevated by future pickaxe, got {tree_return}"
+
+
+def test_experience_diary_de_duplication():
+    """
+    Verifies that identical transitions do not duplicate memory entries,
+    and update return with max return achieved.
+    """
+    ltm = LongTermSemanticMemory(latent_dim=128, device="cpu")
+    key = torch.randn(128)
+    key = key / key.norm()
+    inv = inventory_dict_to_vector({"wood": 1})
+
+    # Add first entry with return 1.0
+    ltm.add_entry(key=key, inventory=inv, action=2, realized_return=1.0, outcome_name="tree_1")
+    assert len(ltm) == 1
+    assert ltm.returns[0].item() == 1.0
+
+    # Add almost identical entry (cosine sim ~ 1.0, same inv, same action) with higher return 2.5
+    ltm.add_entry(key=key, inventory=inv, action=2, realized_return=2.5, outcome_name="tree_2")
+    assert len(ltm) == 1, "Memory bank must not duplicate identical entries!"
+    assert ltm.returns[0].item() == 2.5, "Return should be updated to higher return!"
+
 

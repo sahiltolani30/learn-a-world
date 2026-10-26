@@ -138,16 +138,24 @@ class RecurrentMPCPlanner:
             N_prior = int(round(C * self.prior_mix))
             N_cem = C - N_prior
 
-            # Query Long-Term Semantic Memory for learned affordances
+            # Query Long-Term Semantic Memory (Experience Diary) for learned affordances
             retrieved_action = None
             match_sim = 0.0
             target_milestone = None
+            q_memory_all = None
+            sim_memory_all = None
             if self.semantic_memory is not None and len(self.semantic_memory) > 0:
+                inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
                 retrieved_action, match_sim, target_milestone = self.semantic_memory.query(
                     z_t=z_0,
-                    active_inventory=belief.get_binary_mask(),
+                    active_inventory=inv_context,
                     sim_threshold=self.memory_sim_threshold,
                 )
+                if hasattr(self.semantic_memory, "query_all_actions"):
+                    q_memory_all, sim_memory_all = self.semantic_memory.query_all_actions(
+                        z_t=z_0,
+                        active_inventory=inv_context,
+                    )
 
             # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
             structure_anchor = None
@@ -239,9 +247,15 @@ class RecurrentMPCPlanner:
                     lethal_combat_damage = torch.clamp(health_delta + 0.12, max=0.0)
                     vital_reward = self.vital_weight * health_delta + 1.5 * lethal_combat_damage
 
-                    # Affordance guidance bonus: reward executing the retrieved milestone action
+                    # Affordance guidance bonus from Neural Episodic Memory (Pillar 4):
                     affordance_reward = 0.0
-                    if retrieved_action is not None and t == 0:
+                    if q_memory_all is not None and t == 0:
+                        q_a = q_memory_all[a_t]  # [C]
+                        sim_a = sim_memory_all[a_t]  # [C]
+                        # Reward actions with high historical return in similar visual/backpack states
+                        # Fruitless/failed actions (q_a == 0.0) receive 0.0
+                        affordance_reward = 0.25 * torch.clamp(q_a, min=0.0, max=2.5) * sim_a
+                    elif retrieved_action is not None and t == 0:
                         affordance_reward = (a_t == retrieved_action).float() * (0.35 * match_sim)
 
                     # Landmark anchor persistence bonus: keep agent oriented near placed structure until breakthrough
@@ -334,6 +348,7 @@ class RecurrentMPCPlanner:
                     "mean_q_std": float(q_std_term.mean().item()),
                     "memory_retrieved_action": float(retrieved_action if retrieved_action is not None else -1),
                     "memory_match_sim": float(match_sim),
+                    "memory_best_q": float(q_memory_all.max().item()) if q_memory_all is not None else 0.0,
                 }
                 if self.standardize_scores:
                     best_debug.update({
