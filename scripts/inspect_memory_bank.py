@@ -29,9 +29,9 @@ from planning.semantic_memory import CRAFTER_INVENTORY_KEYS, vector_to_inventory
 CRAFTER_ACTION_NAMES = [
     "No-Op (0)", "Move Left (1)", "Move Right (2)", "Move Up (3)", "Move Down (4)",
     "Do / Attack / Harvest (5)", "Sleep (6)", "Place Stone (7)", "Place Table (8)",
-    "Place Furnace (9)", "Place Plant (10)", "Make Wood Pickaxe (11-wrong/old)",
+    "Place Furnace (9)", "Place Plant (10)", "Make Wood Pickaxe (11)",
     "Make Stone Pickaxe (12)", "Make Iron Pickaxe (13)", "Make Wood Sword (14)",
-    "Make Wood Pickaxe (15)", "Make Wood Sword (16)"
+    "Make Stone Sword (15)", "Make Iron Sword (16)"
 ]
 
 
