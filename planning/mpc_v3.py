@@ -40,12 +40,15 @@ class RecurrentMPCPlanner:
         action_persistence: float = 0.0,
         num_actions: int = 17,
         use_calibration: bool = True,
-        denormalize_q: bool = False,
+        denormalize_q: bool = True,
         tte_weight: float = 0.0,
         standardize_scores: bool = True,
         frontier_threshold: float = 0.25,
         common_threshold: float = 0.50,
         event_thresholds: Optional[Union[float, torch.Tensor]] = None,
+        vital_weight: float = 2.0,
+        death_risk_factor: float = 2.5,
+        harvest_bonus: float = 0.15,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -64,6 +67,9 @@ class RecurrentMPCPlanner:
         self.denormalize_q = denormalize_q
         self.tte_weight = tte_weight
         self.standardize_scores = standardize_scores
+        self.vital_weight = vital_weight
+        self.death_risk_factor = death_risk_factor
+        self.harvest_bonus = harvest_bonus
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
         # Adaptive Frontier Event Thresholds
@@ -169,6 +175,7 @@ class RecurrentMPCPlanner:
                 m_bin_t = m_bin_0.expand(C, -1).clone()
                 m_soft_t = m_soft_0.expand(C, -1).clone()
                 cumulative_reward = torch.zeros(C, device=self.device)
+                gamma_prod = torch.ones(C, device=self.device)
 
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
@@ -181,15 +188,28 @@ class RecurrentMPCPlanner:
                         use_calibration=self.use_calibration,
                     )
                     p_t = decomp["event_probs"]
+                    health_delta = decomp["health_reward"]
 
                     # Compute newly unlocked achievements in imagination using adaptive thresholds
                     newly_unlocked = (p_t > self.event_thresholds) & (m_bin_t < 0.5)
                     discrete_ach_reward = newly_unlocked.float().sum(dim=-1)
                     soft_ach_reward = torch.clamp(p_t - m_soft_t.float(), min=0.0).sum(dim=-1)
                     effective_ach_reward = torch.maximum(discrete_ach_reward, soft_ach_reward)
-                    step_reward = effective_ach_reward + decomp["health_reward"]
 
-                    cumulative_reward = cumulative_reward + (self.gamma ** t) * step_reward
+                    # Repeat harvest utility: reward harvesting wood even if unlocked, enabling table & tool crafting
+                    harvest_wood = (p_t[:, 6] > self.event_thresholds[0, 6]) & (m_bin_t[:, 6] >= 0.5)
+                    repeat_harvest_reward = harvest_wood.float() * self.harvest_bonus
+
+                    # Scaled vital reward: proper opportunity cost of damage/healing
+                    vital_reward = self.vital_weight * health_delta
+
+                    step_reward = effective_ach_reward + repeat_harvest_reward + vital_reward
+                    cumulative_reward = cumulative_reward + gamma_prod * step_reward
+
+                    # Continuation discounting: state-dependent survival in imagination
+                    # Negative health_delta (damage) lowers continuation probability, collapsing hallucinated future returns
+                    p_continue = torch.clamp(1.0 + self.death_risk_factor * torch.clamp(health_delta, max=0.0), min=0.0, max=1.0)
+                    gamma_prod = gamma_prod * (self.gamma * p_continue)
 
                     # Simulated belief progression:
                     # Soft mask updated by running maximum of predicted probability (used for reward)
@@ -198,7 +218,7 @@ class RecurrentMPCPlanner:
                     m_bin_t = torch.where(p_t > self.event_thresholds, torch.tensor(1.0, device=self.device), m_bin_t)
                     z_t, h_t, s_t = self.model.predict_next_step(z_t, h_t, a_t)
 
-                # 5. Terminal Clipped Double-Q evaluation at horizon H
+                # 5. Terminal Clipped Double-Q evaluation at horizon H discounted by cumulative continuation
                 a_terminal = self.model.sample_prior_action(s_t, m_bin_t, temperature=self.prior_temperature)
                 q_term = self.model.q_min(s_t, a_terminal, use_target=True)
                 q_std_term = self.model.q_std(s_t, a_terminal, use_target=True)
@@ -209,7 +229,7 @@ class RecurrentMPCPlanner:
                     scale = max(norm.high - norm.low, 1.0)
                     q_std_term = q_std_term / (norm.target_max * 0.8) * scale
 
-                terminal_value = (self.gamma ** self.horizon) * q_term
+                terminal_value = gamma_prod * q_term
                 raw_uncertainty = q_std_term
                 raw_novelty = torch.norm(z_t - z_0, dim=-1)
 
