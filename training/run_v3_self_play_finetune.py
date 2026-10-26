@@ -254,28 +254,34 @@ def load_joint_buffer(
         base_dirs.extend([
             Path(drive_dir) / "data" / "sequences",
             Path(drive_dir) / "data" / "combined_shards",
-            Path(drive_dir) / "data" / "screening_shards",
         ])
     base_dirs.extend([
         REPO_ROOT / "data" / "sequences",
-        REPO_ROOT / "results" / "screening_shards",
     ])
 
     loaded_shards = 0
     total_base_trans = 0
+    loaded_names = set()
     for b_dir in base_dirs:
-        if b_dir.exists():
-            for shard_file in sorted(b_dir.glob("*.npz")):
-                try:
-                    init_trans = joint_buffer.total_transitions
-                    joint_buffer.load_shard(shard_file)
-                    added = joint_buffer.total_transitions - init_trans
-                    if added > 0:
-                        loaded_shards += 1
-                        total_base_trans += added
-                        print(f"  [Loader] Base Shard: {shard_file.name} (+{added:,} trans)")
-                except Exception:
-                    pass
+        if not b_dir.exists():
+            continue
+        all_npz = sorted(b_dir.glob("*.npz"))
+        final_shards = [p for p in all_npz if "final" in p.name]
+        target_shards = final_shards if final_shards else all_npz
+        for shard_file in target_shards:
+            if shard_file.name in loaded_names:
+                continue
+            try:
+                init_trans = joint_buffer.total_transitions
+                joint_buffer.load_shard(shard_file)
+                added = joint_buffer.total_transitions - init_trans
+                if added > 0:
+                    loaded_shards += 1
+                    total_base_trans += added
+                    loaded_names.add(shard_file.name)
+                    print(f"  [Loader] Base Shard: {shard_file.name} (+{added:,} trans)")
+            except Exception as e:
+                print(f"  [Loader] Warning: could not load {shard_file.name}: {e}")
 
     print(f"  [Loader] Total Base Transitions : {total_base_trans:,} ({loaded_shards} shards)")
     print(f"  [Loader] Total Combined Buffer  : {joint_buffer.total_transitions:,} transitions ({len(joint_buffer.episodes)} eps)")
@@ -436,6 +442,8 @@ def run_pipeline(
     drive_dir: Optional[str] = None,
     collect_episodes: int = 50,
     seed_start: int = 5000,
+    skip_collection: bool = False,
+    self_play_shard: Optional[str] = None,
     train_steps: int = 5000,
     batch_size: int = 16,
     seq_len: int = 16,
@@ -458,23 +466,55 @@ def run_pipeline(
     # Attach calibrated event probabilities if available
     model.load_default_calibrator()
 
-    # Phase A: Collect autonomous self-play data
-    self_play_buffer, stats = collect_self_play_episodes(
-        model=model,
-        num_episodes=collect_episodes,
-        seed_start=seed_start,
-        device=device,
-    )
+    # Phase A: Collect autonomous self-play data (or reuse existing shard if requested)
+    self_play_buffer = EpisodeBuffer(capacity_transitions=collect_episodes * 1000 + 10000)
+    existing_shard = None
 
-    # Save self-play shard to disk & Drive
-    shard_out = Path("data/self_play_shards") / f"shard_self_play_{seed_start}_{seed_start + collect_episodes - 1}.npz"
-    shard_p = self_play_buffer.save_shard(shard_out)
-    print(f"[Pipeline] Saved self-play shard to: {shard_p}")
-    if drive_dir and Path(drive_dir).exists():
-        drive_shard = Path(drive_dir) / "data" / "self_play_shards" / shard_p.name
-        drive_shard.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(shard_p), str(drive_shard))
-        print(f"[Drive] Mirrored self-play shard to: {drive_shard}")
+    if skip_collection:
+        candidate_shards = []
+        if self_play_shard:
+            candidate_shards.append(Path(self_play_shard))
+        default_name = f"shard_self_play_{seed_start}_{seed_start + collect_episodes - 1}.npz"
+        candidate_shards.append(Path("data/self_play_shards") / default_name)
+        if drive_dir:
+            dp = Path(drive_dir) / "data" / "self_play_shards"
+            candidate_shards.append(dp / default_name)
+            if dp.exists():
+                candidate_shards.extend(sorted(dp.glob("*.npz")))
+        local_p = Path("data/self_play_shards")
+        if local_p.exists():
+            candidate_shards.extend(sorted(local_p.glob("*.npz")))
+
+        for cs in candidate_shards:
+            if cs.exists():
+                existing_shard = cs
+                break
+
+    if skip_collection and existing_shard is not None:
+        print("\n" + "=" * 80)
+        print("PHASE A: REUSING SAVED AUTONOMOUS SELF-PLAY SHARD")
+        print("=" * 80)
+        print(f"  Shard File : {existing_shard}")
+        self_play_buffer.load_shard(existing_shard)
+        print(f"  Loaded     : {self_play_buffer.total_transitions:,} transitions ({len(self_play_buffer.episodes)} eps)")
+        print("=" * 80)
+    else:
+        self_play_buffer, stats = collect_self_play_episodes(
+            model=model,
+            num_episodes=collect_episodes,
+            seed_start=seed_start,
+            device=device,
+        )
+
+        # Save self-play shard to disk & Drive
+        shard_out = Path("data/self_play_shards") / f"shard_self_play_{seed_start}_{seed_start + collect_episodes - 1}.npz"
+        shard_p = self_play_buffer.save_shard(shard_out)
+        print(f"[Pipeline] Saved self-play shard to: {shard_p}")
+        if drive_dir and Path(drive_dir).exists():
+            drive_shard = Path(drive_dir) / "data" / "self_play_shards" / shard_p.name
+            drive_shard.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(shard_p), str(drive_shard))
+            print(f"[Drive] Mirrored self-play shard to: {drive_shard}")
 
     # Phase B: Merge into joint buffer
     joint_buffer = load_joint_buffer(self_play_buffer, drive_dir=drive_dir)
@@ -526,6 +566,8 @@ if __name__ == "__main__":
     parser.add_argument("--drive_dir", type=str, default="/content/drive/MyDrive/learn-a-world")
     parser.add_argument("--collect_episodes", type=int, default=50, help="Number of self-play episodes to collect.")
     parser.add_argument("--seed_start", type=int, default=5000, help="Starting seed for training self-play.")
+    parser.add_argument("--skip_collection", action="store_true", help="Skip Phase A rollout and load existing self-play shard.")
+    parser.add_argument("--self_play_shard", type=str, default=None, help="Explicit path to existing self-play shard.")
     parser.add_argument("--train_steps", type=int, default=5000, help="Number of co-training gradient steps.")
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--batch_size", type=int, default=16)
@@ -540,6 +582,8 @@ if __name__ == "__main__":
         drive_dir=args.drive_dir,
         collect_episodes=args.collect_episodes,
         seed_start=args.seed_start,
+        skip_collection=args.skip_collection,
+        self_play_shard=args.self_play_shard,
         train_steps=args.train_steps,
         batch_size=args.batch_size,
         seq_len=args.seq_len,
