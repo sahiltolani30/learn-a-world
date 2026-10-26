@@ -278,8 +278,8 @@ def run_screening(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 50-episode screening of JEPA v3.")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_step1_stone.pt")
-    parser.add_argument("--num_episodes", type=int, default=50)
-    parser.add_argument("--seed_start", type=int, default=2050)
+    parser.add_argument("--num_episodes", "--episodes", dest="num_episodes", type=int, default=50)
+    parser.add_argument("--seed_start", "--start_seed", dest="seed_start", type=int, default=2050)
     parser.add_argument("--max_steps", type=int, default=1000)
     parser.add_argument("--horizon", type=int, default=10)
     parser.add_argument("--num_candidates", type=int, default=64)
