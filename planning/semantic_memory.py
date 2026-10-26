@@ -503,6 +503,133 @@ class LongTermSemanticMemory:
 
         return best_action, best_sim, name
 
+    def deduce_active_subgoal(
+        self,
+        current_inv: Union[np.ndarray, torch.Tensor],
+        achieved_names: Optional[Set[str]] = None,
+        min_return: float = 0.50,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Autonomous Backward Goal Chaining (System 2 Executive Controller).
+        Deduces the active sub-goal intention directly from the Experience Diary
+        WITHOUT hardcoding any recipes, rules, or achievement names.
+
+        Mathematical Workflow:
+        1. Selects the highest-return unachieved milestone k* = argmax(returns[unachieved]).
+        2. Computes the resource deficit vector: deficit = ReLU(inv_{k*}[:12] - inv_curr[:12]).
+        3. If deficit == 0: status is READY_TO_EXECUTE (crafting materials are in hand).
+        4. If deficit > 0: finds the producer memory that historically increased that resource
+           and returns {status: HARVESTING_INPUT, action, producer_key, deficit}.
+
+        Returns:
+            Dictionary containing active sub-goal metadata or None if memory bank is empty.
+        """
+        if len(self) == 0:
+            return None
+
+        if isinstance(current_inv, torch.Tensor):
+            inv_curr = current_inv.detach().to(self.device).float().flatten()
+        else:
+            inv_curr = torch.from_numpy(np.array(current_inv, dtype=np.float32).flatten()).to(self.device)
+
+        # Handle legacy 22-D calls
+        if len(inv_curr) == NUM_ACHIEVEMENTS:
+            inv_16 = torch.zeros(NUM_INVENTORY_ITEMS, device=self.device)
+            for idx, ach_name in enumerate(CRAFTER_ACHIEVEMENTS):
+                if inv_curr[idx] > 0.5:
+                    for inv_key in CRAFTER_INVENTORY_KEYS[:12]:
+                        if ach_name == f"collect_{inv_key}" or ach_name == f"make_{inv_key}":
+                            inv_idx = CRAFTER_INVENTORY_KEYS.index(inv_key)
+                            inv_16[inv_idx] = max(inv_16[inv_idx], 1.0)
+            inv_curr = inv_16
+        else:
+            inv_curr = inv_curr[:NUM_INVENTORY_ITEMS]
+
+        # 1. Filter Candidate Target Milestones
+        # Memories with return >= min_return and non-zero causal utility
+        achieved = achieved_names or set()
+        cand_indices = []
+        for i in range(len(self)):
+            ret = float(self.returns[i].item())
+            if ret < min_return:
+                continue
+            name = self.outcome_names[i] if i < len(self.outcome_names) else ""
+            # Skip if already achieved in this episode
+            if name in achieved:
+                continue
+            # Skip pure mistake entries
+            if ret <= 0.01:
+                continue
+            cand_indices.append(i)
+
+        if not cand_indices:
+            # Fall back to any memory with return >= min_return
+            valid_mask = (self.returns >= min_return)
+            if not valid_mask.any():
+                return None
+            cand_indices = torch.where(valid_mask)[0].tolist()
+
+        cand_tensor = torch.tensor(cand_indices, dtype=torch.long, device=self.device)
+        cand_invs = self.inventories[cand_tensor, :12]
+        # Prioritize higher-order frontier goals that require resource prerequisites (e.g. table, tools)
+        cand_has_prereq = (cand_invs.sum(dim=-1) > 0.5)
+
+        if cand_has_prereq.any():
+            prereq_cand = cand_tensor[cand_has_prereq]
+            k_star = int(prereq_cand[torch.argmax(self.returns[prereq_cand])].item())
+        else:
+            k_star = int(cand_tensor[torch.argmax(self.returns[cand_tensor])].item())
+
+        target_inv = self.inventories[k_star, :12]
+        curr_res = inv_curr[:12]
+
+        # 2. Compute Resource Deficit Vector (indices 0..11)
+        deficit = torch.clamp(target_inv - curr_res, min=0.0)
+
+        # Case A: Deficit is zero -> Ready to execute target action directly!
+        if float(deficit.sum().item()) < 0.01:
+            return {
+                "status": "READY_TO_EXECUTE",
+                "target_milestone": self.outcome_names[k_star] if k_star < len(self.outcome_names) else "milestone",
+                "target_action": int(self.actions[k_star].item()),
+                "target_key": self.keys[k_star],
+                "target_return": float(self.returns[k_star].item()),
+                "deficit": 0.0,
+            }
+
+        # Case B: Deficit > 0 -> Missing raw resources! Find producer in experience diary
+        missing_dim = int(torch.argmax(deficit).item())
+        missing_count = float(deficit[missing_dim].item())
+
+        producer_mask = (self.inventory_deltas[:, missing_dim] > 0.01)
+        if not producer_mask.any():
+            # If no producer found in memory yet, return target directly
+            return {
+                "status": "READY_TO_EXECUTE",
+                "target_milestone": self.outcome_names[k_star] if k_star < len(self.outcome_names) else "milestone",
+                "target_action": int(self.actions[k_star].item()),
+                "target_key": self.keys[k_star],
+                "target_return": float(self.returns[k_star].item()),
+                "deficit": missing_count,
+            }
+
+        prod_indices = torch.where(producer_mask)[0]
+        best_prod_idx = int(prod_indices[torch.argmax(self.returns[prod_indices])].item())
+
+        return {
+            "status": "HARVESTING_INPUT",
+            "target_milestone": self.outcome_names[k_star] if k_star < len(self.outcome_names) else "milestone",
+            "target_action": int(self.actions[k_star].item()),
+            "target_return": float(self.returns[k_star].item()),
+            "missing_resource_dim": missing_dim,
+            "missing_resource_name": CRAFTER_INVENTORY_KEYS[missing_dim],
+            "deficit": missing_count,
+            "producer_action": int(self.actions[best_prod_idx].item()),
+            "producer_key": self.keys[best_prod_idx],
+            "producer_return": float(self.returns[best_prod_idx].item()),
+            "producer_name": self.outcome_names[best_prod_idx] if best_prod_idx < len(self.outcome_names) else "harvest",
+        }
+
     def _query_legacy_mask(
         self,
         z_t: torch.Tensor,

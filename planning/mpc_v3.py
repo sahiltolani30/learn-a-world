@@ -17,6 +17,7 @@ import torch.nn.functional as F
 
 from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
+from eval.metrics import CRAFTER_ACHIEVEMENTS
 
 
 class RecurrentMPCPlanner:
@@ -144,6 +145,7 @@ class RecurrentMPCPlanner:
             target_milestone = None
             q_memory_all = None
             sim_memory_all = None
+            active_subgoal = None
             if self.semantic_memory is not None and len(self.semantic_memory) > 0:
                 inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
                 retrieved_action, match_sim, target_milestone = self.semantic_memory.query(
@@ -156,6 +158,16 @@ class RecurrentMPCPlanner:
                         z_t=z_0,
                         active_inventory=inv_context,
                     )
+                if hasattr(self.semantic_memory, "deduce_active_subgoal"):
+                    achieved_set = set()
+                    if hasattr(belief, "working_memory") and hasattr(belief.working_memory, "active_inventory"):
+                        for ach_i, ach_n in enumerate(CRAFTER_ACHIEVEMENTS):
+                            if belief.working_memory.active_inventory[ach_i] > 0:
+                                achieved_set.add(ach_n)
+                    active_subgoal = self.semantic_memory.deduce_active_subgoal(
+                        current_inv=inv_context,
+                        achieved_names=achieved_set,
+                    )
 
             # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
             structure_anchor = None
@@ -163,6 +175,20 @@ class RecurrentMPCPlanner:
                 anc = belief.working_memory.get_anchor("structure")
                 if anc is not None:
                     structure_anchor = anc.to(self.device).flatten().unsqueeze(0)
+
+            # Determine action injection: direct affordance or backward subgoal intention
+            inject_action = retrieved_action
+            if inject_action is None and active_subgoal is not None:
+                if active_subgoal["status"] == "HARVESTING_INPUT":
+                    prod_key = active_subgoal["producer_key"].to(self.device)
+                    cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), prod_key.flatten().unsqueeze(0)).item())
+                    if cue_sim >= 0.35:
+                        inject_action = active_subgoal["producer_action"]
+                elif active_subgoal["status"] == "READY_TO_EXECUTE":
+                    tgt_key = active_subgoal["target_key"].to(self.device)
+                    cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), tgt_key.flatten().unsqueeze(0)).item())
+                    if cue_sim >= 0.35:
+                        inject_action = active_subgoal["target_action"]
 
             # Initialize categorical CEM action distribution [H, 17]
             action_dist = torch.ones(self.horizon, self.num_actions, device=self.device) / self.num_actions
@@ -185,9 +211,9 @@ class RecurrentMPCPlanner:
                         a_h = torch.where(repeat_mask, prior_actions[:, h_step - 1], a_h)
 
                     # Inject retrieved affordance action at step 0 during initial iteration
-                    if h_step == 0 and retrieved_action is not None and iteration == 0:
+                    if h_step == 0 and inject_action is not None and iteration == 0:
                         n_inject = max(1, int(N_prior * self.memory_inject_ratio))
-                        a_h[:n_inject] = retrieved_action
+                        a_h[:n_inject] = inject_action
 
                     prior_actions[:, h_step] = a_h
                     p_h = self.model.event_head.predict_proba(s_roll, a_h, m_bin_roll, use_calibration=self.use_calibration)
@@ -206,9 +232,9 @@ class RecurrentMPCPlanner:
                         cem_actions[:, h_step] = fresh_actions
 
                     # Inject retrieved affordance into CEM candidates at step 0 during initial iteration
-                    if h_step == 0 and retrieved_action is not None and iteration == 0:
+                    if h_step == 0 and inject_action is not None and iteration == 0:
                         n_inject_cem = max(1, int(N_cem * self.memory_inject_ratio))
-                        cem_actions[:n_inject_cem, 0] = retrieved_action
+                        cem_actions[:n_inject_cem, 0] = inject_action
 
                 # Combine candidates: [C, horizon]
                 actions_seq = torch.cat([prior_actions, cem_actions], dim=0)
@@ -258,6 +284,21 @@ class RecurrentMPCPlanner:
                     elif retrieved_action is not None and t == 0:
                         affordance_reward = (a_t == retrieved_action).float() * (0.35 * match_sim)
 
+                    # Sub-Goal Affordance Pull (Autonomous Backward Goal Chaining):
+                    subgoal_reward = 0.0
+                    if active_subgoal is not None:
+                        if active_subgoal["status"] == "HARVESTING_INPUT":
+                            prod_act = active_subgoal["producer_action"]
+                            prod_key = active_subgoal["producer_key"].to(self.device).flatten().unsqueeze(0)
+                            sim_cue = torch.clamp(F.cosine_similarity(z_t, prod_key, dim=-1), min=0.0)
+                            # Pull agent towards producer visual cues while executing producer action
+                            subgoal_reward = (a_t == prod_act).float() * (0.25 * sim_cue * min(active_subgoal["producer_return"], 2.0))
+                        elif active_subgoal["status"] == "READY_TO_EXECUTE" and t == 0:
+                            tgt_act = active_subgoal["target_action"]
+                            tgt_key = active_subgoal["target_key"].to(self.device).flatten().unsqueeze(0)
+                            sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
+                            subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
+
                     # Landmark anchor persistence bonus: keep agent oriented near placed structure until breakthrough
                     landmark_reward = 0.0
                     if structure_anchor is not None:
@@ -268,6 +309,7 @@ class RecurrentMPCPlanner:
                         effective_ach_reward
                         + vital_reward
                         + affordance_reward
+                        + subgoal_reward
                         + landmark_reward
                     )
                     cumulative_reward = cumulative_reward + gamma_prod * step_reward

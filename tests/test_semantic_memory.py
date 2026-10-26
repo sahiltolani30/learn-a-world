@@ -411,3 +411,85 @@ def test_experience_diary_de_duplication():
     assert ltm.returns[0].item() == 2.5, "Return should be updated to higher return!"
 
 
+def test_autonomous_backward_goal_chaining():
+    """
+    Verifies that the agent autonomously deduces sub-goals backwards from its Experience Diary
+    WITHOUT human hardcoded recipes:
+    1. Empty backpack + Table memory -> deduces it needs wood and selects producer Action 5!
+    2. 2 Wood in backpack -> recognizes deficit is 0 and switches to Action 8 (Place table)!
+    3. Table placed -> automatically shifts frontier goal to Action 11 (Make wood pickaxe)!
+    """
+    ltm = LongTermSemanticMemory(latent_dim=128, device="cpu")
+
+    # Key vectors
+    z_tree = torch.randn(128)
+    z_table = torch.randn(128)
+    z_craft = torch.randn(128)
+
+    # 1. Experience 1: Punching tree gives wood (Action 5)
+    delta_wood = np.zeros(NUM_INVENTORY_ITEMS, dtype=np.float32)
+    delta_wood[0] = 1.0  # wood +1
+    ltm.add_entry(
+        key=z_tree,
+        inventory=inventory_dict_to_vector({}),
+        action=5,
+        inventory_delta=delta_wood,
+        realized_return=5.0,
+        outcome_name="collect_wood",
+    )
+
+    # 2. Experience 2: Placing table consumes 2 wood (Action 8)
+    delta_table = np.zeros(NUM_INVENTORY_ITEMS, dtype=np.float32)
+    delta_table[0] = -2.0  # wood -2
+    ltm.add_entry(
+        key=z_table,
+        inventory=inventory_dict_to_vector({"wood": 2}),
+        action=8,
+        inventory_delta=delta_table,
+        realized_return=2.5,
+        outcome_name="place_table",
+    )
+
+    # 3. Experience 3: Crafting pickaxe at table consumes 1 wood (Action 11)
+    delta_pick = np.zeros(NUM_INVENTORY_ITEMS, dtype=np.float32)
+    delta_pick[0] = -1.0  # wood -1
+    delta_pick[6] = 1.0   # wood_pickaxe +1
+    ltm.add_entry(
+        key=z_craft,
+        inventory=inventory_dict_to_vector({"wood": 1}),
+        action=11,
+        inventory_delta=delta_pick,
+        realized_return=1.8,
+        outcome_name="make_wood_pickaxe",
+    )
+
+    assert len(ltm) == 3
+
+    # Case 1: Agent spawns at step 0 with empty backpack
+    empty_inv = inventory_dict_to_vector({})
+    subgoal = ltm.deduce_active_subgoal(empty_inv)
+    assert subgoal is not None
+    assert subgoal["status"] == "HARVESTING_INPUT", "Empty hands should deduce harvesting input!"
+    assert subgoal["missing_resource_name"] == "wood", "Missing resource should be wood!"
+    assert subgoal["deficit"] == 2.0, "Deficit for table should be 2 wood!"
+    assert subgoal["producer_action"] == 5, "Producer action should be Action 5 (Punch Tree)!"
+    assert subgoal["target_milestone"] == "place_table"
+
+    # Case 2: Agent has gathered 2 wood
+    inv_2_wood = inventory_dict_to_vector({"wood": 2})
+    subgoal2 = ltm.deduce_active_subgoal(inv_2_wood)
+    assert subgoal2 is not None
+    assert subgoal2["status"] == "READY_TO_EXECUTE", "Having 2 wood should switch to ready to execute!"
+    assert subgoal2["target_action"] == 8, "Target action should be Action 8 (Place table)!"
+    assert subgoal2["deficit"] == 0.0
+
+    # Case 3: Table is already placed in this episode, agent has 1 wood
+    inv_1_wood = inventory_dict_to_vector({"wood": 1})
+    subgoal3 = ltm.deduce_active_subgoal(inv_1_wood, achieved_names={"place_table", "collect_wood"})
+    assert subgoal3 is not None
+    assert subgoal3["status"] == "READY_TO_EXECUTE", "With table placed and 1 wood, ready to craft pickaxe!"
+    assert subgoal3["target_milestone"] == "make_wood_pickaxe"
+    assert subgoal3["target_action"] == 11, "Target action should be Action 11 (Make wood pickaxe)!"
+
+
+
