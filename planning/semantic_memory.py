@@ -774,12 +774,21 @@ class AutonomousMemoryWriter:
             step_data = self.episode_buffer[t]
             G_t = float(mc_returns[t])
             delta_inv = step_data["delta_inv"]
-            has_inv_change = bool(np.any(np.abs(delta_inv) > 0.01))
+            
+            # Meaningful causal inventory change:
+            # 1. Physical tools & resources (indices 0..11): wood, stone, tools, saplings, etc.
+            # 2. Deliberate vital replenishment (indices 12..15 > 0): eating, drinking, sleeping, healing
+            # 3. Acute combat injury (health drop > 1.0): learning danger from monster attacks
+            has_resource_change = bool(np.any(np.abs(delta_inv[:12]) > 0.01))
+            has_vital_replenishment = bool(np.any(delta_inv[12:16] > 0.01))
+            has_combat_injury = bool(delta_inv[12] < -1.0)
+            has_causal_inv_change = has_resource_change or has_vital_replenishment or has_combat_injury
+
             is_milestone = bool(step_data["event_name"] is not None)
             is_action_reward = bool(step_data["reward"] > 0.0)
 
             # Case A: Causal Predecessor (e.g. tree-chopping that yielded wood and enabled pickaxe later)
-            if has_inv_change and (G_t >= 0.15 or is_action_reward):
+            if has_causal_inv_change and (G_t >= 0.15 or is_action_reward):
                 inv_changes = []
                 for i, key in enumerate(CRAFTER_INVENTORY_KEYS):
                     d = delta_inv[i]
@@ -802,9 +811,9 @@ class AutonomousMemoryWriter:
                     consolidated_count += 1
 
             # Case B: Counterfactual Failure Memory (Pillar 2: Learning from mistakes)
-            # When an action produced nothing (delta_inv == 0, r == 0) and future return was zero
+            # When an action produced nothing (no causal change, r == 0) and future return was zero
             # Record limited representative samples so Gaussian kernel suppresses fruitless actions
-            elif not has_inv_change and not is_milestone and step_data["reward"] == 0.0 and G_t <= 0.01:
+            elif not has_causal_inv_change and not is_milestone and step_data["reward"] == 0.0 and G_t <= 0.01:
                 # Store up to 4 failed attempts per episode (e.g. crafting with 0 wood)
                 if failure_count < 4 and step_data["action"] in [10, 11, 12, 13, 14, 15, 16]:  # craft/place/interact buttons
                     res = self.memory_bank.add_entry(
