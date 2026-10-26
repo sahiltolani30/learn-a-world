@@ -152,10 +152,11 @@ class RecurrentMPCPlanner:
                     sim_threshold=self.memory_sim_threshold,
                 )
 
-            # Landmark anchor guidance (Working Memory: keep agent oriented near table if tools needed)
+            # Landmark anchor guidance (Working Memory: keep agent oriented near table until tool is crafted)
+            # Once a tool (pickaxe or sword) is crafted, release the anchor so the agent can explore and mine stone!
             table_anchor = None
             if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("place_table"):
-                if m_bin_0[0, 15] < 0.5 or m_bin_0[0, 16] < 0.5:
+                if m_bin_0[0, 15] < 0.5 and m_bin_0[0, 16] < 0.5:
                     anc = belief.working_memory.get_anchor("place_table")
                     if anc is not None:
                         table_anchor = anc.to(self.device).flatten().unsqueeze(0)

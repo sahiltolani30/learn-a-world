@@ -1,0 +1,1075 @@
+{
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+  "memory_bank": "empty_memory (Tabula Rasa)",
+  "initial_memory_entries": 0,
+  "final_memory_entries": 235,
+  "newly_logged_memories": 235,
+  "num_episodes": 50,
+  "seed_range": [
+    2050,
+    2099
+  ],
+  "total_runtime_seconds": 936.83,
+  "mean_survival_length": 184.78,
+  "std_survival_length": 60.283759006883436,
+  "mean_episode_reward": 3.799999999999999,
+  "std_episode_reward": 1.2041594578792296,
+  "crafter_score": 3.594989155299454,
+  "mean_achievements_per_ep": 4.7,
+  "unlocked_achievement_count": 10,
+  "unlock_percentages": {
+    "collect_coal": 0.0,
+    "collect_diamond": 0.0,
+    "collect_drink": 38.0,
+    "collect_iron": 0.0,
+    "collect_sapling": 100.0,
+    "collect_stone": 0.0,
+    "collect_wood": 78.0,
+    "defeat_skeleton": 0.0,
+    "defeat_zombie": 10.0,
+    "eat_cow": 6.0,
+    "eat_plant": 0.0,
+    "make_iron_pickaxe": 0.0,
+    "make_iron_sword": 0.0,
+    "make_stone_pickaxe": 0.0,
+    "make_stone_sword": 0.0,
+    "make_wood_pickaxe": 6.0,
+    "make_wood_sword": 6.0,
+    "place_furnace": 0.0,
+    "place_plant": 100.0,
+    "place_stone": 0.0,
+    "place_table": 32.0,
+    "wake_up": 94.0
+  },
+  "table_episodes": 16,
+  "pickaxe_episodes": 3,
+  "sword_episodes": 3,
+  "stone_episodes": 0,
+  "zombie_episodes": 5,
+  "pickaxe_conversion_percent": 18.8,
+  "dopamine_lifetime_best_reward": 7.0,
+  "dopamine_lifetime_best_milestones": 7,
+  "dopamine_lifetime_best_steps": 356,
+  "episodes": [
+    {
+      "episode": 1,
+      "seed": 2050,
+      "steps": 308,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling (+1.2 Dopamine PB!)",
+        "place_plant (+1.5 Dopamine PB!)",
+        "wake_up (+1.5 Dopamine PB!)",
+        "collect_wood (+1.5 Dopamine PB!)",
+        "collect_drink (+1.5 Dopamine PB!)"
+      ],
+      "duration_sec": 30.85
+    },
+    {
+      "episode": 2,
+      "seed": 2051,
+      "steps": 201,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "collect_drink"
+      ],
+      "duration_sec": 19.59
+    },
+    {
+      "episode": 3,
+      "seed": 2052,
+      "steps": 183,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "wake_up",
+        "collect_wood",
+        "collect_sapling",
+        "place_plant",
+        "place_table (+0.8 Dopamine PB!)",
+        "collect_drink (+0.8 Dopamine PB!)"
+      ],
+      "duration_sec": 18.39
+    },
+    {
+      "episode": 4,
+      "seed": 2053,
+      "steps": 162,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "make_wood_sword",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "eat_cow (+0.8 Dopamine PB!)",
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "make_wood_sword (+1.4 Dopamine PB!)"
+      ],
+      "duration_sec": 16.95
+    },
+    {
+      "episode": 5,
+      "seed": 2054,
+      "steps": 108,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up"
+      ],
+      "duration_sec": 11.73
+    },
+    {
+      "episode": 6,
+      "seed": 2055,
+      "steps": 161,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table"
+      ],
+      "duration_sec": 17.49
+    },
+    {
+      "episode": 7,
+      "seed": 2056,
+      "steps": 175,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up"
+      ],
+      "duration_sec": 17.63
+    },
+    {
+      "episode": 8,
+      "seed": 2057,
+      "steps": 165,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink"
+      ],
+      "duration_sec": 16.38
+    },
+    {
+      "episode": 9,
+      "seed": 2058,
+      "steps": 241,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "collect_drink"
+      ],
+      "duration_sec": 24.03
+    },
+    {
+      "episode": 10,
+      "seed": 2059,
+      "steps": 142,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up"
+      ],
+      "duration_sec": 14.11
+    },
+    {
+      "episode": 11,
+      "seed": 2060,
+      "steps": 188,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_pickaxe",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "place_table",
+        "make_wood_pickaxe (+0.8 Dopamine PB!)"
+      ],
+      "duration_sec": 18.88
+    },
+    {
+      "episode": 12,
+      "seed": 2061,
+      "steps": 204,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_pickaxe",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "make_wood_pickaxe"
+      ],
+      "duration_sec": 20.68
+    },
+    {
+      "episode": 13,
+      "seed": 2062,
+      "steps": 140,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up"
+      ],
+      "duration_sec": 13.82
+    },
+    {
+      "episode": 14,
+      "seed": 2063,
+      "steps": 153,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "place_table",
+        "collect_drink"
+      ],
+      "duration_sec": 15.16
+    },
+    {
+      "episode": 15,
+      "seed": 2064,
+      "steps": 184,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "wake_up",
+        "collect_sapling",
+        "place_plant",
+        "collect_drink",
+        "collect_wood"
+      ],
+      "duration_sec": 18.05
+    },
+    {
+      "episode": 16,
+      "seed": 2065,
+      "steps": 210,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table"
+      ],
+      "duration_sec": 21.17
+    },
+    {
+      "episode": 17,
+      "seed": 2066,
+      "steps": 192,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "collect_drink"
+      ],
+      "duration_sec": 18.64
+    },
+    {
+      "episode": 18,
+      "seed": 2067,
+      "steps": 201,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_sword",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "make_wood_sword",
+        "collect_drink (+0.1 Dopamine PB!)"
+      ],
+      "duration_sec": 19.87
+    },
+    {
+      "episode": 19,
+      "seed": 2068,
+      "steps": 211,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_drink",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 20.63
+    },
+    {
+      "episode": 20,
+      "seed": 2069,
+      "steps": 52,
+      "reward": 1.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "duration_sec": 5.11
+    },
+    {
+      "episode": 21,
+      "seed": 2070,
+      "steps": 223,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink",
+        "defeat_zombie (+0.8 Dopamine PB!)"
+      ],
+      "duration_sec": 21.64
+    },
+    {
+      "episode": 22,
+      "seed": 2071,
+      "steps": 143,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 13.94
+    },
+    {
+      "episode": 23,
+      "seed": 2072,
+      "steps": 142,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 13.81
+    },
+    {
+      "episode": 24,
+      "seed": 2073,
+      "steps": 194,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink"
+      ],
+      "duration_sec": 19.03
+    },
+    {
+      "episode": 25,
+      "seed": 2074,
+      "steps": 216,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 22.0
+    },
+    {
+      "episode": 26,
+      "seed": 2075,
+      "steps": 54,
+      "reward": 1.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "duration_sec": 5.68
+    },
+    {
+      "episode": 27,
+      "seed": 2076,
+      "steps": 356,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "collect_drink"
+      ],
+      "duration_sec": 37.27
+    },
+    {
+      "episode": 28,
+      "seed": 2077,
+      "steps": 201,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_sword",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "make_wood_sword"
+      ],
+      "duration_sec": 21.46
+    },
+    {
+      "episode": 29,
+      "seed": 2078,
+      "steps": 148,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "wake_up",
+        "collect_sapling",
+        "place_plant",
+        "collect_wood"
+      ],
+      "duration_sec": 15.55
+    },
+    {
+      "episode": 30,
+      "seed": 2079,
+      "steps": 170,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 16.84
+    },
+    {
+      "episode": 31,
+      "seed": 2080,
+      "steps": 242,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink",
+        "collect_wood"
+      ],
+      "duration_sec": 24.2
+    },
+    {
+      "episode": 32,
+      "seed": 2081,
+      "steps": 234,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 23.41
+    },
+    {
+      "episode": 33,
+      "seed": 2082,
+      "steps": 87,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 8.69
+    },
+    {
+      "episode": 34,
+      "seed": 2083,
+      "steps": 204,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 21.06
+    },
+    {
+      "episode": 35,
+      "seed": 2084,
+      "steps": 144,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink",
+        "defeat_zombie"
+      ],
+      "duration_sec": 14.27
+    },
+    {
+      "episode": 36,
+      "seed": 2085,
+      "steps": 224,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 22.31
+    },
+    {
+      "episode": 37,
+      "seed": 2086,
+      "steps": 172,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_drink"
+      ],
+      "duration_sec": 17.03
+    },
+    {
+      "episode": 38,
+      "seed": 2087,
+      "steps": 53,
+      "reward": 1.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant"
+      ],
+      "duration_sec": 5.4
+    },
+    {
+      "episode": 39,
+      "seed": 2088,
+      "steps": 187,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "place_table",
+        "collect_drink",
+        "defeat_zombie"
+      ],
+      "duration_sec": 19.08
+    },
+    {
+      "episode": 40,
+      "seed": 2089,
+      "steps": 248,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table"
+      ],
+      "duration_sec": 24.52
+    },
+    {
+      "episode": 41,
+      "seed": 2090,
+      "steps": 182,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "defeat_zombie"
+      ],
+      "duration_sec": 18.32
+    },
+    {
+      "episode": 42,
+      "seed": 2091,
+      "steps": 165,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 16.48
+    },
+    {
+      "episode": 43,
+      "seed": 2092,
+      "steps": 165,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "place_table",
+        "defeat_zombie"
+      ],
+      "duration_sec": 16.46
+    },
+    {
+      "episode": 44,
+      "seed": 2093,
+      "steps": 193,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up"
+      ],
+      "duration_sec": 19.17
+    },
+    {
+      "episode": 45,
+      "seed": 2094,
+      "steps": 351,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 34.85
+    },
+    {
+      "episode": 46,
+      "seed": 2095,
+      "steps": 198,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "eat_cow",
+        "collect_wood"
+      ],
+      "duration_sec": 19.39
+    },
+    {
+      "episode": 47,
+      "seed": 2096,
+      "steps": 163,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "collect_drink"
+      ],
+      "duration_sec": 16.39
+    },
+    {
+      "episode": 48,
+      "seed": 2097,
+      "steps": 215,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "collect_wood",
+        "wake_up",
+        "place_table"
+      ],
+      "duration_sec": 21.97
+    },
+    {
+      "episode": 49,
+      "seed": 2098,
+      "steps": 248,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_pickaxe",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up",
+        "collect_wood",
+        "collect_drink",
+        "place_table",
+        "make_wood_pickaxe"
+      ],
+      "duration_sec": 25.56
+    },
+    {
+      "episode": 50,
+      "seed": 2099,
+      "steps": 136,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ],
+      "discoveries": [
+        "collect_sapling",
+        "place_plant",
+        "eat_cow",
+        "wake_up",
+        "collect_wood"
+      ],
+      "duration_sec": 13.85
+    }
+  ]
+}
