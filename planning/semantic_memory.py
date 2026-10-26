@@ -93,26 +93,35 @@ class ShortTermWorkingMemory:
         if inventory_mask is not None:
             self.active_inventory = np.maximum(self.active_inventory, inventory_mask.astype(np.uint8))
 
-        # Check for landmark anchor placement (e.g. table placed)
-        if unlocked_event is not None and "table" in unlocked_event:
-            self.landmark_anchors["place_table"] = z_cpu.clone()
-            self.landmark_step_created["place_table"] = self.current_step
+        # Generic Object Permanence: track placed structures until subsequent breakthrough
+        if unlocked_event is not None:
+            if "place_" in unlocked_event:
+                self.landmark_anchors["structure"] = z_cpu.clone()
+                self.landmark_step_created["structure"] = self.current_step
+            else:
+                # Any milestone breakthrough fulfills the structure's potential -> release anchor
+                self.landmark_anchors.clear()
+                self.landmark_step_created.clear()
 
         # Update vital trend (damage slope over last 5 steps)
         if len(self.reward_window) >= 5:
             recent_rews = list(self.reward_window)[-5:]
             self.vital_trend = float(np.mean(recent_rews))
 
-    def has_anchor(self, name: str, max_age: int = 250) -> bool:
+    def has_anchor(self, name: str = "structure", max_age: int = 250) -> bool:
         """Checks if a landmark anchor exists and is within temporal relevance."""
-        if name not in self.landmark_anchors:
+        # Support both generic 'structure' and legacy names
+        key = name if name in self.landmark_anchors else ("structure" if "structure" in self.landmark_anchors else None)
+        if key is None:
             return False
-        age = self.current_step - self.landmark_step_created.get(name, 0)
+        age = self.current_step - self.landmark_step_created.get(key, 0)
         return age <= max_age
 
-    def get_anchor(self, name: str) -> Optional[torch.Tensor]:
+    def get_anchor(self, name: str = "structure") -> Optional[torch.Tensor]:
         """Retrieves a landmark anchor latent vector."""
-        return self.landmark_anchors.get(name, None)
+        if name in self.landmark_anchors:
+            return self.landmark_anchors[name]
+        return self.landmark_anchors.get("structure", None)
 
 
 class LongTermSemanticMemory:
