@@ -1,0 +1,44 @@
+{
+  "status": "completed",
+  "phase": "section6_state_readout",
+  "gate_5_passed": true,
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_state_readout.pt",
+  "dataset_audit": {
+    "total_episodes": 3832,
+    "total_transitions": 666338,
+    "train_episodes": 3448,
+    "train_transitions": 598518,
+    "val_episodes": 384,
+    "val_transitions": 67820,
+    "val_ratio": 0.1,
+    "split_seed": 42
+  },
+  "initial_metrics": {
+    "state_readout_mse": 1.5437473150400014,
+    "zero_state_mse": 1.3494891826923077,
+    "persistence_mse": 0.08314302884615385,
+    "state_readout_beats_persistence": false
+  },
+  "final_metrics": {
+    "state_readout_mse": 0.032349297078326344,
+    "zero_state_mse": 1.2208658854166667,
+    "persistence_mse": 0.07716878255208333,
+    "baseline_best_mse": 0.07716878255208333,
+    "state_readout_beats_persistence": true,
+    "relative_improvement_pct": 58.07990141697203
+  },
+  "config": {
+    "phase": "state_readout_learning",
+    "checkpoint_init": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5_frozen.pt",
+    "manifest_path": "/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json",
+    "total_steps": 1000,
+    "batch_size": 16,
+    "seq_len": 16,
+    "labeled_ratio": 0.5,
+    "lr": 0.001,
+    "split_seed": 42,
+    "val_ratio": 0.1,
+    "base_model_frozen": true,
+    "state_readout_head_trainable": true
+  }
+}
