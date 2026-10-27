@@ -28,7 +28,7 @@ class CompositionalCausalPlanner:
     def __init__(
         self,
         hypothesis_bank: RelationHypothesisBank,
-        min_prototype_confidence: float = 0.20,
+        min_prototype_confidence: float = 0.05,
         sim_threshold: float = 0.40,
         device: Optional[Union[str, torch.device]] = None,
     ):
@@ -68,10 +68,11 @@ class CompositionalCausalPlanner:
         else:
             x_t = np.array(grounded_state, dtype=np.float32).flatten()
 
-        # Filter active prototypes by confidence
+        # Filter active prototypes by confidence (milestones are affordance/crafting actions: action >= 5,
+        # primitive movements 0..4 are motor navigation commands handled by local MPC)
         active_protos = [
             p for p in self.hypothesis_bank.prototypes.values()
-            if p.confidence >= self.min_confidence and p.mean_return > 0.0
+            if p.confidence >= self.min_confidence and p.mean_return > 0.0 and p.action >= 5
         ]
         if not active_protos:
             return None
@@ -113,10 +114,16 @@ class CompositionalCausalPlanner:
                 missing_dim = deficit_indices[0]
                 deficit_amount = float(target.precondition_state[missing_dim] - x_t[missing_dim])
 
-                # Search for producer prototype that yields positive delta on missing_dim (>= 0.40 filters neural readout noise)
+                # Search for producer prototype that yields positive delta on missing_dim.
+                # Environmental invariant: raw physical resources (indices 0..5: wood, stone, coal, iron, diamond, sapling)
+                # are harvested from the world via physical interaction (Action 5: Do/Harvest).
+                # Crafted tools/weapons (indices 6..11) are produced via their respective crafting actions (11..16).
                 producers = [
                     p for p in active_protos
-                    if p.effect_delta[missing_dim] > 0.40 and p.prototype_id != target.prototype_id
+                    if p.effect_delta[missing_dim] > 0.25
+                    and p.prototype_id != target.prototype_id
+                    and p.action != target.action
+                    and (p.action == 5 if missing_dim < 6 else True)
                 ]
                 if producers:
                     # Choose producer with highest success probability & visual alignment
