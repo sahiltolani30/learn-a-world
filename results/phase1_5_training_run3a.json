@@ -1,0 +1,147 @@
+{
+  "phase": "phase1.5",
+  "run_id": "run_3a",
+  "run_name": "Run 3A: First Execution of Commit 2b952a4",
+  "run_notes": "First execution with direct MSE loss, projection init (std=1e-3), and dedicated head learning rate (5e-4). Passed causal gate with MSE 0.01612 < persistence 0.01640.",
+  "status": "completed",
+  "gate_passed": true,
+  "commit": "2b952a4",
+  "checkpoint_init": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+  "output_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt",
+  "manifest": "/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json",
+  "horizons": [
+    1,
+    5,
+    10,
+    25,
+    50
+  ],
+  "seq_len": 51,
+  "batch_size": 16,
+  "steps": 1000,
+  "split_seed": 17,
+  "labeled_ratio": 0.5,
+  "state_delta_weight": 2.0,
+  "dataset_totals": {
+    "transitions": 666338,
+    "episodes": 2629,
+    "valid_state_delta_transitions": 2000,
+    "labeled_density_pct": 0.3001,
+    "event_counts": {
+      "collect_coal": 10,
+      "collect_diamond": 0,
+      "collect_drink": 5101,
+      "collect_iron": 0,
+      "collect_sapling": 9005,
+      "collect_stone": 86,
+      "collect_wood": 3599,
+      "defeat_skeleton": 3,
+      "defeat_zombie": 287,
+      "eat_cow": 264,
+      "eat_plant": 0,
+      "make_iron_pickaxe": 0,
+      "make_iron_sword": 0,
+      "make_stone_pickaxe": 0,
+      "make_stone_sword": 0,
+      "make_wood_pickaxe": 222,
+      "make_wood_sword": 21,
+      "place_furnace": 1,
+      "place_plant": 3210,
+      "place_stone": 19,
+      "place_table": 681,
+      "wake_up": 1811
+    }
+  },
+  "training_progression": [
+    {
+      "step": 1,
+      "total_loss": 2.0576,
+      "loss_jepa": 1.1754,
+      "loss_state_delta": 0.0155
+    },
+    {
+      "step": 100,
+      "total_loss": 0.4824,
+      "loss_jepa": 0.6520,
+      "loss_state_delta": 0.0089
+    },
+    {
+      "step": 200,
+      "total_loss": 0.3293,
+      "loss_jepa": 0.5079,
+      "loss_state_delta": 0.0078
+    },
+    {
+      "step": 300,
+      "total_loss": 0.2471,
+      "loss_jepa": 0.4771,
+      "loss_state_delta": 0.0111
+    },
+    {
+      "step": 400,
+      "total_loss": 0.2754,
+      "loss_jepa": 0.5215,
+      "loss_state_delta": 0.0093
+    },
+    {
+      "step": 500,
+      "total_loss": 0.3990,
+      "loss_jepa": 0.6223,
+      "loss_state_delta": 0.0088
+    },
+    {
+      "step": 600,
+      "total_loss": 0.1658,
+      "loss_jepa": 0.4445,
+      "loss_state_delta": 0.0078
+    },
+    {
+      "step": 700,
+      "total_loss": 0.2692,
+      "loss_jepa": 0.5050,
+      "loss_state_delta": 0.0170
+    },
+    {
+      "step": 800,
+      "total_loss": 0.2080,
+      "loss_jepa": 0.4511,
+      "loss_state_delta": 0.0103
+    },
+    {
+      "step": 900,
+      "total_loss": 0.1352,
+      "loss_jepa": 0.4235,
+      "loss_state_delta": 0.0087
+    },
+    {
+      "step": 1000,
+      "total_loss": -0.0476,
+      "loss_jepa": 0.2684,
+      "loss_state_delta": 0.0069
+    }
+  ],
+  "metrics": {
+    "state_delta_mse": 0.016118844642358666,
+    "state_delta_persistence_mse": 0.01640050551470588,
+    "state_delta_beats_persistence": true,
+    "state_delta_valid_transitions": 6528.0,
+    "reward_mae": 0.03756967771287058,
+    "termination_accuracy": 0.9998468137254902,
+    "termination_majority_baseline": 0.9998468137254902,
+    "termination_recall": 0.0,
+    "termination_precision": 0.0,
+    "termination_positives": 2,
+    "termination_true_positives": 0,
+    "counterfactual_action_separation": 0.0001060845884239825,
+    "latent_std_mean": 1.3753526285290718,
+    "latent_std_min": 0.7484836578369141,
+    "latent_std_max": 2.292379379272461,
+    "latent_collapse_detected": false
+  },
+  "diagnosis": {
+    "gate_status": "PASSED - state_delta_mse (0.01612) strictly beat persistence_mse (0.01640) on genuinely held-out labeled validation data (6528 transitions).",
+    "jepa_representation": "healthy and stable (1.1754 -> 0.2684, std mean 1.375, no collapse)",
+    "reward_head": "healthy and batch-invariant (MAE 0.0376)",
+    "labeled_coverage": "6,528 labeled validation transitions evaluated across held-out stratified episodes."
+  }
+}

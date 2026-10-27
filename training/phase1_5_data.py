@@ -77,7 +77,14 @@ def inspect_shard(path: Union[str, Path]) -> Dict[str, Any]:
         if "obs" not in data or "actions" not in data:
             raise ValueError(f"Not a sequence shard: {p}")
         transitions = int(data["actions"].shape[0])
-        lengths = np.asarray(data["episode_lengths"]) if "episode_lengths" in data else np.array([])
+        if "episode_lengths" in data:
+            episodes = int(len(data["episode_lengths"]))
+        elif "dones" in data:
+            dones = data["dones"]
+            done_indices = np.where(dones)[0]
+            episodes = max(1, len(done_indices))
+        else:
+            episodes = 1
         events = np.asarray(data["events"]) if "events" in data else np.zeros((transitions, len(CRAFTER_ACHIEVEMENTS)), dtype=np.uint8)
         has_delta = "state_delta" in data and data["state_delta"].ndim == 2
         valid_count = int(np.asarray(data["state_delta_valid"]).sum()) if "state_delta_valid" in data else 0
@@ -93,7 +100,7 @@ def inspect_shard(path: Union[str, Path]) -> Dict[str, Any]:
             "family": _family_key(p)[0],
             "is_final": _family_key(p)[1],
             "transitions": transitions,
-            "episodes": int(len(lengths)),
+            "episodes": episodes,
             "sources": _source_names(data),
             "has_state_delta": bool(has_delta),
             "valid_state_delta_count": valid_count,

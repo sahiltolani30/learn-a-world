@@ -17,7 +17,7 @@ This document separates verified facts, hypotheses, permitted learned additions,
 | Phase 0 instrumentation | Implemented; initial Colab outputs reviewed | Three episodes per ablation identify early bottlenecks; not enough to rank configurations reliably. |
 | Phase 1 transition learning | Implemented; basic Colab smoke observed | JEPA stayed active; sampled delta MSE beat persistence. Advanced-chain prediction is not established. |
 | Phase 1.5 data consolidation | Implemented; laptop smoke passed | Manifest loader and combined trainer exist; correctness gaps below remain open. |
-| Previous Phase 1.5 Colab run | **Completed; causal gate failed** | `results/phase1_5_training.json` and `results/phase1_5_review.md` reviewed. Checkpoint is diagnostic, not promoted. |
+| Phase 1.5 Colab Run 3 | **Narrow state-delta gate passed reproducibly; broader gate incomplete** | Run 3A and 3B both beat their persistence baselines. Checkpoint is a Phase 1.5 transition-model candidate, not yet a full agent champion. |
 | Strict persistent experience/relation memory | Design proposed; not implemented or validated | First prove useful retention after restarting the process. |
 | Compositional planning and learned skills | Planned | Build incrementally after state grounding and retention tests. |
 
@@ -29,19 +29,21 @@ This document separates verified facts, hypotheses, permitted learned additions,
 - Drive Markdown audit reports 860,314 active transitions, 223 wood-pickaxe events, 87 stone events, and 10 coal events, with only 2,000 state-delta-labeled transitions. Those counts are provisional: copied shards across directories and overlapping episodes need content-level verification. The separate 34,000-transition JSON audit describes the laptop, not Drive.
 - Prior laptop checks passed: 30 focused tests and a separate 17-test group (overlapping suites), legacy-data one-step smoke, and synthetic labeled smoke. These tested execution paths, not full Colab scale or learning quality.
 - Phase 1.5 Colab result: 666,338 transitions / 2,629 episodes, 2,000 valid state-delta labels (0.3001% density), 1,000 steps, horizons 1/5/10/25/50. JEPA loss decreased 1.0143 -> 0.3484, but the state-delta MSE was 0.0100678 versus persistence 0.0073529, so the model was ~36.9% worse than persistence. Only 51 valid delta transitions were sampled in validation; `loss_state_delta` was zero on 998/1,000 logged steps. The causal state-delta gate **FAILED**. No Phase 2 promotion follows from this run.
+- Phase 1.5 Colab Run 2: labeled-window sampling was enabled with `labeled_ratio=0.5`; state-delta supervision appeared on all 1,000 training steps, and reported validation sampling reached 6,630 labeled points. JEPA loss decreased 0.9743 -> 0.4479, latent mean standard deviation was 1.325, and collapse was not detected. However, state-delta MSE was 0.0175844 versus persistence 0.0172794: still 1.76% worse, so the causal gate **still FAILED**. The 6,630 value is sampled evaluation points, not 6,630 independent labeled transitions; the dataset still contains 2,000 unique valid labels. Termination accuracy 0.999694 exactly equals its majority baseline, with zero terminal recall/precision and zero true positives; it is not a successful termination model. Reward MAE 0.03132 is reported batch-invariant. No Phase 2 promotion follows from Run 2.
+- Phase 1.5 Colab Run 3A/3B: both repeated runs beat the sampled persistence baseline on the reported held-out labeled evaluation: Run 3A `0.0161188 < 0.0164005`; Run 3B `0.0158931 < 0.0159792`. This is a **reproducible narrow state-delta gate pass**. It does not prove full causal understanding: each run still has only 2,000 unique labels across 13 episodes, the reported 6,528 evaluation points are repeated sampled windows, termination accuracy equals the majority baseline with zero recall/precision, counterfactual separation is only output variance (not measured-outcome intervention accuracy), and no gameplay regression is included. Run 3B reports 3,832 episodes after train/validation split while Run 3A/review summaries say 2,629; resolve this provenance inconsistency before treating the manifest audit as final. No full Phase 1.5 champion or Phase 2 promotion follows solely from this result.
 
-### Phase 1.5 output review — completed; gate failed
+### Phase 1.5 output review — Run 3 narrow gate passed; broader review open
 
-The training JSON and review artifact confirm the command completed and wrote `/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt`. The manifest file itself was not present in the local workspace for independent re-verification, so shard-selection claims remain based on the reported totals. Review:
+The Run 3 JSON artifacts and review report confirm two Colab executions wrote `/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt`. The manifest file itself was not present in the local workspace for independent re-verification, so shard-selection claims remain based on the reported totals. Review:
 
 - [PARTIAL] Selected/excluded shards and event totals are reported; the manifest/content identities are not locally available for independent verification.
-- [FAIL] Labeled validation coverage is only 51 transitions; no adequate labeled held-out gate.
-- [PARTIAL] Loss progression and horizon configuration are reported; latent variance, finite-gradient, and full checkpoint-loading audit are not included.
+- [PASS, narrow] Labeled validation sampling reports 6,528 sampled points and state-delta MSE below persistence in both runs; unique valid labels remain 2,000 and independent labeled episodes remain 13 total.
+- [PARTIAL] Loss progression, latent variance, and collapse metrics are reported; finite gradients, horizon-specific validation metrics, full checkpoint-loading audit, and the Run 3B episode-count discrepancy remain open.
 - [PARTIAL] A validation split is reported, but episode/seed identities and fallback behavior are not independently verified.
-- [OPEN] Reward MAE and termination accuracy still need batch-invariant MAE, terminal recall, and majority-class baselines.
+- [PARTIAL] Reward MAE is reported batch-invariant. Termination has a majority baseline, but recall/precision are both zero, so the termination head has not passed.
 - [OPEN] Gameplay regression against the initialization checkpoint was not provided.
 
-Preserve the existing checkpoint and JSON as diagnostic evidence only. Before another long run, add balanced labeled-window sampling, correct the evaluation metrics, and ensure the labeled validation split is large enough. Collecting more labels is useful, but increasing data volume without changing the sampling/validation design will repeat the same failure.
+Run 3 may be recorded as passing the narrow state-delta gate, but preserve the checkpoint as a transition-model candidate until provenance and gameplay regression are checked. Before Phase 2, verify the manifest/episode-count discrepancy, add measured-outcome intervention tests, and run frozen-vs-finetuned gameplay regression. More sampled points alone are not enough.
 
 ### Collaboration
 
