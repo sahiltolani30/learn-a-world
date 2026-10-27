@@ -96,8 +96,10 @@ class CompositionalCausalPlanner:
 
             if len(deficit_indices) == 0:
                 # Preconditions fully met!
-                # If visual cue is present or action is self-executable, target is ready to execute
-                if sim_tgt >= self.sim_threshold or len(req_indices) > 0:
+                # Visual-free READY is only valid for cards with zero requirements;
+                # a card WITH requirements still needs its affordance cue in view
+                # (e.g. crafting near a table) — otherwise the engine silently rejects.
+                if sim_tgt >= self.sim_threshold or len(req_indices) == 0:
                     return {
                         "status": "READY_TO_EXECUTE",
                         "prototype_id": target.prototype_id,
@@ -115,15 +117,13 @@ class CompositionalCausalPlanner:
                 deficit_amount = float(target.precondition_state[missing_dim] - x_t[missing_dim])
 
                 # Search for producer prototype that yields positive delta on missing_dim.
-                # Environmental invariant: raw physical resources (indices 0..5: wood, stone, coal, iron, diamond, sapling)
-                # are harvested from the world via physical interaction (Action 5: Do/Harvest).
-                # Crafted tools/weapons (indices 6..11) are produced via their respective crafting actions (11..16).
+                # Producers are identified purely by their learned effect covering the
+                # deficit — no action-identity rules (zero hardcoding).
                 producers = [
                     p for p in active_protos
                     if p.effect_delta[missing_dim] > 0.25
                     and p.prototype_id != target.prototype_id
                     and p.action != target.action
-                    and (p.action == 5 if missing_dim < 6 else True)
                 ]
                 if producers:
                     # Choose producer with highest success probability & visual alignment
