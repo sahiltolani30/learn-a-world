@@ -68,15 +68,38 @@ def consolidate_phase2_memory(
     store = EpisodicEvidenceStore(max_capacity=100000, gamma=0.99)
 
     # 3. Ingest Episodes
-    man_p = Path(manifest_path)
-    if not man_p.exists():
-        # Fallback to scanning shard files
-        shard_dir = REPO_ROOT / "results" / "sequences"
-        shard_files = sorted(list(shard_dir.glob("*.npz")))
-    else:
+    shard_files = []
+    man_p = Path(manifest_path) if manifest_path else None
+    if man_p and man_p.exists():
         with open(man_p, "r") as f:
             manifest = json.load(f)
-        shard_files = [Path(p) for p in manifest.get("train_shards", []) if Path(p).exists()]
+        raw_shards = manifest.get("train_shards", manifest.get("selected_shards", []))
+        for item in raw_shards:
+            p_str = item["path"] if isinstance(item, dict) else str(item)
+            p = Path(p_str)
+            if p.exists():
+                shard_files.append(p)
+            elif (REPO_ROOT / p_str).exists():
+                shard_files.append(REPO_ROOT / p_str)
+            elif (REPO_ROOT / "results" / p.name).exists():
+                shard_files.append(REPO_ROOT / "results" / p.name)
+            elif (REPO_ROOT / "results" / "sequences" / p.name).exists():
+                shard_files.append(REPO_ROOT / "results" / "sequences" / p.name)
+
+    # Fallback to direct directory scans if none found from manifest
+    if not shard_files:
+        search_dirs = [
+            REPO_ROOT / "results" / "sequences",
+            REPO_ROOT / "results",
+            Path("/content/drive/MyDrive/learn-a-world/results/sequences"),
+            Path("/content/drive/MyDrive/learn-a-world/results"),
+        ]
+        for sdir in search_dirs:
+            if sdir.exists():
+                found = sorted(list(sdir.glob("*.npz")))
+                if found:
+                    shard_files.extend(found)
+                    break
 
     print(f"-> Ingesting trajectory evidence from {len(shard_files)} shard files...")
     episodes_ingested = 0
