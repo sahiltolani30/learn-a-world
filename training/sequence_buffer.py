@@ -401,7 +401,26 @@ class EpisodeBuffer:
         p = Path(path)
         data = np.load(p, allow_pickle=True)
 
-        ep_lens = data["episode_lengths"]
+        if "episode_lengths" in data:
+            ep_lens = data["episode_lengths"]
+        elif "dones" in data:
+            dones = data["dones"]
+            done_indices = np.where(dones)[0]
+            if len(done_indices) == 0:
+                ep_lens = np.array([len(dones)], dtype=np.int64)
+            else:
+                lens = []
+                prev = 0
+                for d_idx in done_indices:
+                    lens.append(int(d_idx + 1 - prev))
+                    prev = int(d_idx + 1)
+                if prev < len(dones):
+                    lens.append(int(len(dones) - prev))
+                ep_lens = np.array(lens, dtype=np.int64)
+        else:
+            total_t = len(data["actions"]) if "actions" in data else len(data["obs"])
+            ep_lens = np.array([total_t], dtype=np.int64)
+
         if len(ep_lens) == 0:
             return
 
@@ -410,10 +429,10 @@ class EpisodeBuffer:
         cat_rewards = data["rewards"]
         cat_dones = data["dones"]
         cat_events = data["events"]
-        cat_mask = data["mask_before"]
+        cat_mask = data["mask_before"] if "mask_before" in data else np.zeros_like(cat_events)
         cat_state_delta = data["state_delta"] if "state_delta" in data else None
         cat_state_valid = data["state_delta_valid"] if "state_delta_valid" in data else None
-        sources = data["sources"]
+        sources = data["sources"] if "sources" in data else np.array(["unknown"] * len(ep_lens), dtype=object)
 
         offset = 0
         for i, length in enumerate(ep_lens):

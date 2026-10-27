@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from training.phase1_5_data import discover_active_shards
+from training.phase1_5_data import discover_active_shards, load_manifest
 from training.run_phase1_transition_learning import train_phase1_transitions
 
 
@@ -47,9 +47,15 @@ def main() -> None:
     parser.add_argument("--capacity_transitions", type=int, default=1_000_000)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--audit_only", action="store_true")
+    parser.add_argument("--force_rebuild_manifest", action="store_true")
     args = parser.parse_args()
 
-    manifest = discover_active_shards(args.data_root, args.manifest)
+    manifest_p = Path(args.manifest)
+    if manifest_p.exists() and not args.force_rebuild_manifest:
+        print(f"[Phase 1.5] Reusing verified existing manifest: {manifest_p}")
+        manifest = load_manifest(manifest_p)
+    else:
+        manifest = discover_active_shards(args.data_root, args.manifest)
     print(json.dumps({"phase": "phase1.5", "totals": manifest["totals"]}, indent=2))
     if args.audit_only:
         return
