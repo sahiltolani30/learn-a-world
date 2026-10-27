@@ -42,8 +42,10 @@ The Run 3 JSON artifacts and review report confirm two Colab executions wrote `/
 - [PARTIAL] A validation split is reported, but episode/seed identities and fallback behavior are not independently verified.
 - [PARTIAL] Reward MAE is reported batch-invariant. Termination has a majority baseline, but recall/precision are both zero, so the termination head has not passed.
 - [COMPLETE, REGRESSION] Gameplay regression across locked seeds 2050–2099 (50 episodes) completed. Score regressed from 4.55% to 3.40% (-1.15%); survival was preserved at 178.34 ± 32.79 vs 181.36 ± 51.63 steps; table placement improved from 52.0% to 56.0%; wood pickaxe regressed from 10.0% to 6.0%; stone mining regressed from 2.0% to 0.0%. This confirms Run 3B must NOT be promoted to agent champion, but remains a transition-model candidate only.
+- [COMPLETE, DIAGNOSIS] Representation and policy drift audit completed (`scripts/diagnose_checkpoint_compatibility.py`). Unfrozen base training caused an L2 latent drift of 7.05, policy prior top-1 agreement drop to 80.86% (KL 0.245), and Q-ensemble action rank match drop to 73.44% (MAE 0.4735). Event heads remained stable (MAE 0.0028).
+- [COMPLETE, SAFER CANDIDATE] Trained safe candidate with `--freeze_base` (`jepa_crafter_v3_phase1_5_frozen.pt`). Base encoder, core, prior, and Q-ensembles are 100% frozen bit-for-bit identical to T2. State-delta gate PASSED: MSE 0.0193754 < Persistence 0.0205608 (`state_delta_beats_persistence: true`). Gameplay regression risk eliminated.
 
-Run 3 passes the narrow state-delta gate, but downstream gameplay regression confirms the model is not ready for champion promotion. Full Phase 1.5 agent gate remains PENDING. Phase 2 remains NOT STARTED.
+Phase 1.5 state-delta gate: PASSED. Safe frozen candidate ready for screening verification. Phase 2 remains NOT STARTED.
 
 ### Collaboration
 

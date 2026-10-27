@@ -1,0 +1,73 @@
+{
+  "phase": "phase1.5",
+  "run_id": "run_frozen_candidate",
+  "run_name": "Phase 1.5 Safe Candidate: Base Model Frozen (No Drift)",
+  "status": "completed",
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5_frozen.pt",
+  "checkpoint_init": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+  "manifest": "/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json",
+  "dataset": {
+    "total_episodes": 3448,
+    "total_transitions": 599171,
+    "state_delta_valid_transitions": 1685
+  },
+  "validation": {
+    "total_episodes": 384,
+    "total_transitions": 67167,
+    "state_delta_valid_transitions": 315
+  },
+  "train_labeled_stats": {
+    "total_episodes": 3448,
+    "labeled_episodes": 11,
+    "total_transitions": 599171,
+    "labeled_transitions": 1685,
+    "labeled_density_pct": 0.2812
+  },
+  "val_labeled_stats": {
+    "total_episodes": 384,
+    "labeled_episodes": 2,
+    "total_transitions": 67167,
+    "labeled_transitions": 315,
+    "labeled_density_pct": 0.469
+  },
+  "metrics": {
+    "state_delta_mse": 0.0193754420724026,
+    "state_delta_persistence_mse": 0.02056080426356589,
+    "state_delta_beats_persistence": true,
+    "state_delta_valid_transitions": 2064.0,
+    "reward_mae": 0.040488373721018434,
+    "termination_accuracy": 0.999267578125,
+    "termination_majority_baseline": 0.999267578125,
+    "termination_recall": 0.0,
+    "termination_precision": 0.0,
+    "termination_positives": 3,
+    "termination_true_positives": 0,
+    "counterfactual_action_separation": 0.0002791566021187464,
+    "latent_std_mean": 1.4448854103684425,
+    "latent_std_min": 0.638236403465271,
+    "latent_std_max": 2.5521328449249268,
+    "latent_collapse_detected": false
+  },
+  "elapsed_seconds": 54.39,
+  "config": {
+    "phase": "phase1_transition_learning",
+    "shards_dir": [
+      "/content/drive/MyDrive/learn-a-world/data"
+    ],
+    "manifest_path": "/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json",
+    "checkpoint_init": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+    "horizons": [
+      1,
+      5,
+      10
+    ],
+    "seq_len": 16,
+    "labeled_ratio": 0.5,
+    "transition_state_dim": 16,
+    "consistency_weight": 0.5,
+    "state_delta_labels_are_training_targets_only": true,
+    "strict_inference_uses_inventory_input": false,
+    "split_seed": 17,
+    "freeze_base": true
+  }
+}

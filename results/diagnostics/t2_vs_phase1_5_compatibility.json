@@ -1,0 +1,37 @@
+{
+  "encoder": {
+    "latent_l2_diff": 7.054508,
+    "latent_cosine_sim": 0.964327,
+    "representation_drift": true
+  },
+  "policy_prior": {
+    "kl_divergence": 0.245460,
+    "top1_action_agreement": 0.80859375,
+    "policy_drift": true
+  },
+  "q_ensemble": {
+    "q_mae": 0.473467,
+    "q_top1_action_agreement": 0.734375,
+    "value_drift": true
+  },
+  "event_head": {
+    "prob_mae": 0.002777,
+    "event_drift": false
+  },
+  "screening_regression": {
+    "score_a": 4.55,
+    "score_b": 3.40,
+    "survival_a": 181.36,
+    "survival_b": 178.34,
+    "table_a": 52.0,
+    "table_b": 56.0,
+    "pickaxe_a": 10.0,
+    "pickaxe_b": 6.0,
+    "stone_a": 2.0,
+    "stone_b": 0.0
+  },
+  "summary": {
+    "regression_confirmed": true,
+    "primary_cause": "Unfrozen base model training allowed visual encoder and policy/Q weights to drift during transition fine-tuning. Policy prior top-1 agreement dropped to 80.86% and Q-ensemble action rank match dropped to 73.44% with 0.4735 MAE. Freezing base model weights is required for a safe Phase 1.5 candidate."
+  }
+}
