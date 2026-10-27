@@ -1,0 +1,55 @@
+{
+  "protocol": "strict_visual_jepa_clean_v2",
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_state_readout.pt",
+  "dataset_split": {
+    "validation_episodes": 384,
+    "validation_transitions": 67820,
+    "split_seed": 42,
+    "val_ratio": 0.1
+  },
+  "gate_8": {
+    "gate_8_passed": true,
+    "horizons": {
+      "horizon_1": {
+        "horizon": 1,
+        "freerun_mse": 0.006843,
+        "persistence_mse": 0.011619,
+        "freerun_beats_persistence": true,
+        "relative_improvement_pct": 41.105086
+      },
+      "horizon_5": {
+        "horizon": 5,
+        "freerun_mse": 0.024397,
+        "persistence_mse": 0.042468,
+        "freerun_beats_persistence": true,
+        "relative_improvement_pct": 42.552039
+      },
+      "horizon_10": {
+        "horizon": 10,
+        "freerun_mse": 0.056338,
+        "persistence_mse": 0.094752,
+        "freerun_beats_persistence": true,
+        "relative_improvement_pct": 40.541624
+      },
+      "horizon_25": {
+        "horizon": 25,
+        "freerun_mse": 0.182098,
+        "persistence_mse": 0.26262,
+        "freerun_beats_persistence": true,
+        "relative_improvement_pct": 30.661031
+      }
+    }
+  },
+  "gate_9": {
+    "gate_9_passed": true,
+    "action_collapse_detected": false,
+    "mean_pairwise_action_separation": 0.048744,
+    "intervention_accuracy_pct": 89.189189,
+    "mean_counterfactual_margin": 0.070842
+  },
+  "overall_status": {
+    "gate_8_passed": true,
+    "gate_9_passed": true,
+    "both_passed": true
+  }
+}
