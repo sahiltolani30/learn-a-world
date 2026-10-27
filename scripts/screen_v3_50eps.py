@@ -14,6 +14,7 @@ Outputs:
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -34,6 +35,7 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS, compute_crafter_score
 from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
+from planning.playtime_recorder import PlaytimeRecorder
 
 
 def _sha256_file(filepath: Path) -> Optional[str]:
@@ -52,6 +54,32 @@ def _get_git_commit() -> str:
         return out.strip()
     except Exception:
         return "unknown"
+
+
+def collect_subgoal_trace(raw_entries: List[Any], cap: int = 20) -> List[Dict[str, Any]]:
+    """Bounded per-episode subgoal provenance (Stage 8 / plan §7 AC8).
+
+    raw_entries: (step, status, target) tuples appended per step when the
+    compositional planner reported an active subgoal. Entries with an empty
+    status are dropped and the trace is capped so episode records stay bounded.
+    """
+    trace: List[Dict[str, Any]] = []
+    for entry in raw_entries:
+        step, status, target = entry
+        if not status:
+            continue
+        trace.append({"step": int(step), "status": str(status), "target": str(target)})
+        if len(trace) >= cap:
+            break
+    return trace
+
+
+def _atomic_save_bank(bank: Any, path: Path) -> None:
+    """Stage 8: bank persistence is atomic — tmp file + os.replace (caller's job per bank contract)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    bank.save(str(tmp_path))
+    os.replace(tmp_path, path)
 
 
 def _resolve_calibrator(cal_path: str, drive_dir: Optional[str] = None) -> Optional[Path]:
@@ -138,6 +166,9 @@ def run_screening(
     transition_done_penalty: float = 2.0,
     transition_resource_weight: float = 0.25,
     causal_memory_bank_path: Optional[str] = None,
+    online_learning: bool = False,
+    online_bank_path: str = "results/phase2_online_bank.json",
+    resume_bank: bool = False,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -214,18 +245,46 @@ def run_screening(
     print(f"[Protocol Lock] Protocol ID: {protocol_id} (Git: {git_commit[:8]}, Checkpoint SHA: {ckpt_sha256[:12] if ckpt_sha256 else 'none'}...)")
 
     # 2. Build Optional Phase 2 Compositional Causal Planner
+    # Stage 8: with --resume_bank, a persisted online bank takes precedence over
+    # --causal_memory_bank so game N+1 resumes from game N's lessons.
     comp_planner = None
-    if causal_memory_bank_path:
+    bank = None
+    bank_path_loaded: Optional[str] = None
+    bank_sha256: Optional[str] = None
+
+    if online_learning and resume_bank:
+        online_p = Path(online_bank_path)
+        if online_p.exists():
+            bank_path_loaded = str(online_p)
+        else:
+            print(
+                f"[Phase 2 Online Learning] --resume_bank set but no bank file at {online_p}; "
+                "falling back to --causal_memory_bank or a fresh bank."
+            )
+
+    if bank_path_loaded is None and causal_memory_bank_path:
         bank_p = Path(causal_memory_bank_path)
         if bank_p.exists():
-            from planning.causal_memory import RelationHypothesisBank
-            from planning.compositional_planner import CompositionalCausalPlanner
-            bank = RelationHypothesisBank(device=dev)
-            bank.load(str(bank_p))
-            comp_planner = CompositionalCausalPlanner(bank, device=dev)
-            print(f"[Phase 2 Causal Memory] Loaded {len(bank)} prototypes from: {bank_p}")
+            bank_path_loaded = str(bank_p)
         else:
             print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {bank_p}")
+
+    if bank_path_loaded is not None:
+        from planning.causal_memory import RelationHypothesisBank
+        from planning.compositional_planner import CompositionalCausalPlanner
+        bank = RelationHypothesisBank(device=dev)
+        bank.load(bank_path_loaded)
+        bank_sha256 = _sha256_file(Path(bank_path_loaded))  # sha of INITIAL bank bytes (pre-online updates)
+        comp_planner = CompositionalCausalPlanner(bank, device=dev)
+        print(f"[Phase 2 Causal Memory] Loaded {len(bank)} prototypes from: {bank_path_loaded}")
+    elif online_learning:
+        # Online arm with no resumable/offline bank: start empty; lessons persist
+        # to --online_bank_path after every episode (the cross-game loop).
+        from planning.causal_memory import RelationHypothesisBank
+        from planning.compositional_planner import CompositionalCausalPlanner
+        bank = RelationHypothesisBank(device=dev)
+        comp_planner = CompositionalCausalPlanner(bank, device=dev)
+        print(f"[Phase 2 Online Learning] Starting from a fresh empty bank; lessons will persist to: {online_bank_path}")
 
     # 3. Build Planner & Belief with Adaptive Frontier Thresholds
     planner = RecurrentMPCPlanner(
@@ -265,6 +324,13 @@ def run_screening(
         strict_inference=True,
     )
 
+    # 2.5 Stage 8: playtime recorder for the online cross-game learning loop.
+    recorder: Optional[PlaytimeRecorder] = None
+    if online_learning:
+        if bank is None:
+            raise RuntimeError("[Phase 2 Online Learning] online_learning requires a relation bank (loaded or fresh).")
+        recorder = PlaytimeRecorder()
+
     # 3. Environment
     env = gym.make("Crafter-v0", render_size=64, max_steps=max_steps)
 
@@ -283,12 +349,21 @@ def run_screening(
         ep_reward = 0.0
         steps = 0
         t_ep_start = time.time()
+        subgoal_trace_raw: List[Any] = []  # (step, status, target) for the bounded subgoal provenance
 
         for step in range(max_steps):
             steps += 1
 
             # Strict Zero Info Leak: plan only from raw pixels + belief
             action, debug = planner.plan(obs, belief)
+            if online_learning and isinstance(debug, dict) and debug.get("active_subgoal_status", ""):
+                subgoal_trace_raw.append(
+                    (
+                        step,
+                        str(debug.get("active_subgoal_status", "")),
+                        str(debug.get("active_subgoal_target", "")),
+                    )
+                )
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = bool(terminated or truncated)
@@ -304,14 +379,39 @@ def run_screening(
                 s_t, next_h = model.recurrent_step(z_t, act_t, h_prev)
                 mask_t = belief.get_mask_tensor(device=dev).unsqueeze(0)
                 event_probs = model.event_head.predict_proba(s_t, act_t, mask_t).squeeze(0)
+                if online_learning:
+                    # Stage 8: playtime grounded state comes from the model's state
+                    # readout, never from engine inventory (strict protocol).
+                    x_hat, _ = model.predict_state(s_t)
+
+            if online_learning:
+                mask_before = belief.get_mask()  # copied BEFORE belief.update
 
             belief.update(event_probs, reward, next_h=next_h.squeeze(0))
             obs = next_obs
+
+            if online_learning and recorder is not None:
+                # Strict protocol: unlock labels come from the belief only —
+                # info['achievements'] is scoring-only and never enters the recorder.
+                hist = belief.history[-1]
+                recorder.record_step(
+                    z_t=z_t,
+                    x_hat=x_hat,
+                    action=action,
+                    reward=reward,
+                    done=done,
+                    mask_before=mask_before,
+                    newly_unlocked=hist["newly_unlocked"],
+                    fallback_unlocked=hist.get("fallback_unlocked", []),
+                    event_probs=event_probs.detach().cpu().tolist(),
+                    thresholds=np.asarray(belief.thresholds).tolist(),
+                )
 
             if done:
                 break
 
         ep_duration = time.time() - t_ep_start
+        # achievements are read here for SCORING ONLY (protocol); they never enter the online recorder.
         ach = dict(info.get("achievements", {})) if isinstance(info, dict) else {}
         unlocked = [k for k, v in ach.items() if v > 0]
 
@@ -319,14 +419,25 @@ def run_screening(
         survival_lengths.append(steps)
         episode_rewards.append(ep_reward)
 
-        episode_records.append({
+        ep_record: Dict[str, Any] = {
             "episode": ep_idx + 1,
             "seed": seed,
             "steps": steps,
             "reward": round(ep_reward, 2),
             "unlocked": unlocked,
             "duration_sec": round(ep_duration, 2),
-        })
+        }
+
+        online_stats: Dict[str, int] = {}
+        if online_learning and recorder is not None and bank is not None:
+            # Stage 8: learn → refresh edges → atomic persist, every episode, so
+            # game N's lessons shape game N+1 (bank survives across episodes).
+            online_stats = recorder.end_episode(bank)
+            _atomic_save_bank(bank, Path(online_bank_path))
+            ep_record["online_stats"] = dict(online_stats)
+            ep_record["subgoal_trace"] = collect_subgoal_trace(subgoal_trace_raw, cap=20)
+
+        episode_records.append(ep_record)
 
         print(
             f"Ep {ep_idx + 1:02d}/{num_episodes} (Seed {seed}) | "
@@ -334,6 +445,15 @@ def run_screening(
             f"Achievements ({len(unlocked)}): {', '.join(unlocked) if unlocked else 'None'} "
             f"({ep_duration:.1f}s)"
         )
+
+        if online_learning:
+            stats_view = online_stats if isinstance(online_stats, dict) else {}
+            print(
+                f"[Phase 2 Online Learning] episode {ep_idx + 1}: "
+                f"created={stats_view.get('created', 0)} "
+                f"confirmed={stats_view.get('confirmed', 0)} "
+                f"denied={stats_view.get('denied', 0)}"
+            )
 
     env.close()
     total_time = time.time() - t_start
@@ -385,6 +505,10 @@ def run_screening(
         "transition_scoring": transition_scoring,
         "causal_memory_enabled": bool(comp_planner is not None),
         "causal_memory_prototypes": len(comp_planner.hypothesis_bank) if comp_planner is not None else 0,
+        "online_learning": bool(online_learning),
+        "online_bank_path": str(online_bank_path) if online_learning else None,
+        "bank_path_loaded": bank_path_loaded,
+        "bank_sha256": bank_sha256,
         "ablation_mode": "active_consequence" if (use_transition_model and transition_scoring) else ("shadow_transition" if use_transition_model else "baseline_t2"),
         "horizon": horizon,
         "num_candidates": num_candidates,
@@ -409,6 +533,10 @@ def run_screening(
         "unlock_percentages": score_stats["unlock_percentages"],
         "episodes": episode_records,
     }
+
+    if online_learning:
+        # Stage 8 provenance: sha of the bank AFTER the last episode's online updates.
+        summary["final_bank_sha256"] = _sha256_file(Path(online_bank_path))
 
     # Print summary table
     print("\n" + "=" * 80)
@@ -504,6 +632,24 @@ if __name__ == "__main__":
     parser.add_argument("--transition_done_penalty", type=float, default=2.0, help="Penalty factor for predicted termination probability.")
     parser.add_argument("--transition_resource_weight", type=float, default=0.25, help="Weight for predicted positive resource increments.")
     parser.add_argument("--causal_memory_bank", type=str, default=None, help="Path to Phase 2 learned RelationHypothesisBank JSON.")
+    parser.add_argument(
+        "--online_learning",
+        action="store_true",
+        default=False,
+        help="Stage 8: record strict playtime transitions and update the relation bank after every episode (bank persists across episodes).",
+    )
+    parser.add_argument(
+        "--online_bank_path",
+        type=str,
+        default="results/phase2_online_bank.json",
+        help="Path of the persistent online relation bank (atomically rewritten each episode under --online_learning; loaded when --resume_bank is set).",
+    )
+    parser.add_argument(
+        "--resume_bank",
+        action="store_true",
+        default=False,
+        help="Resume from --online_bank_path if that file exists, instead of --causal_memory_bank.",
+    )
     parser.set_defaults(standardize_scores=False)
     args = parser.parse_args()
 
@@ -537,4 +683,7 @@ if __name__ == "__main__":
         transition_done_penalty=args.transition_done_penalty,
         transition_resource_weight=args.transition_resource_weight,
         causal_memory_bank_path=args.causal_memory_bank,
+        online_learning=args.online_learning,
+        online_bank_path=args.online_bank_path,
+        resume_bank=args.resume_bank,
     )

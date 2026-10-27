@@ -35,6 +35,9 @@ class AgentBeliefV3:
         self.m_soft = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.h = np.zeros(recurrent_dim, dtype=np.float32)
         self.history = []
+        # Stage 8 (N7 reward-fallback quarantine): event dims pinned by the reward
+        # fallback THIS step; empty unless the fallback fired. Provenance only.
+        self.last_fallback_unlocked: List[int] = []
 
         # Adaptive Frontier Thresholds (per achievement)
         if event_thresholds is not None:
@@ -75,6 +78,7 @@ class AgentBeliefV3:
         self.m_soft.fill(0.0)
         self.h.fill(0.0)
         self.history.clear()
+        self.last_fallback_unlocked = []
         self.working_memory.reset()
         from planning.semantic_memory import inventory_dict_to_vector
         self.inv_vec = inventory_dict_to_vector(None)
@@ -141,6 +145,8 @@ class AgentBeliefV3:
         reward: scalar reward received from environment
         next_h: [recurrent_dim] updated hidden state from RecurrentCore
         """
+        # Stage 8 (N7): fallback provenance is per-step — clear, then record if it fires below.
+        self.last_fallback_unlocked = []
         if isinstance(event_probs, torch.Tensor):
             p = event_probs.detach().cpu().numpy().astype(np.float32).reshape(-1)
         else:
@@ -175,11 +181,13 @@ class AgentBeliefV3:
                 self.m_bin[best_locked_idx] = 1.0
                 self.m_soft[best_locked_idx] = 1.0
                 newly_unlocked.append(best_locked_idx)
+                self.last_fallback_unlocked = [int(best_locked_idx)]
 
         self.history.append({
             "event_probs": p.copy(),
             "reward": float(reward),
             "newly_unlocked": newly_unlocked,
+            "fallback_unlocked": list(self.last_fallback_unlocked),
             "m_bin": self.m_bin.copy(),
             "m_soft": self.m_soft.copy(),
             "mask": self.m_bin.copy(),
