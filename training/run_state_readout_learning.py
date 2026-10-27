@@ -61,11 +61,16 @@ def load_sequence_shards(
     return buffer
 
 
-def _encode_batch_frozen(model: JEPAv3, obs: torch.Tensor) -> torch.Tensor:
-    """Encode observation batch with frozen encoder [B, T, C, H, W] -> [B, T, 128]."""
+def _encode_batch_frozen(model: JEPAv3, obs: torch.Tensor, use_target: bool = True) -> torch.Tensor:
+    """Encode observation batch with frozen encoder [B, T, C, H, W] -> [B, T, 128].
+
+    use_target=True (default, plan Stage 1 encoder unification): the target encoder is
+    the serving convention shared by event/health-head training, belief updates, MPC
+    planning, and consolidation keys — the readout head must live in the same space.
+    """
     B, T = obs.shape[:2]
     with torch.no_grad():
-        z = model.encoder(obs.reshape(B * T, *obs.shape[2:]))
+        z = model.encode(obs.reshape(B * T, *obs.shape[2:]), use_target=use_target)
         return z.reshape(B, T, -1)
 
 
@@ -77,6 +82,7 @@ def evaluate_state_readout(
     batches: int = 20,
     labeled_ratio: float = 1.0,
     device: Optional[Union[str, torch.device]] = None,
+    use_target_encoder: bool = True,
 ) -> Dict[str, Any]:
     """
     Evaluates StateReadoutHead on validation episodes.
@@ -112,7 +118,7 @@ def evaluate_state_readout(
             target_state = batch["state_current"]
             valid_mask = batch["state_current_valid"]  # [B, T]
 
-            z_seq = _encode_batch_frozen(model, obs)
+            z_seq = _encode_batch_frozen(model, obs, use_target=use_target_encoder)
             h_seq = model.recurrent_core.unroll_sequence(z_seq, actions, reset_masks=dones)
             s_seq = torch.cat([z_seq, h_seq], dim=-1)
 
@@ -197,6 +203,7 @@ def train_state_readout(
     manifest_path: Optional[Union[str, Path]] = None,
     capacity_transitions: int = 1_000_000,
     device: str = "cpu",
+    use_target_encoder: bool = True,
 ) -> Dict[str, Any]:
     """
     Main training pipeline for StateReadoutHead under Section 6 / Gate 5.
@@ -263,6 +270,7 @@ def train_state_readout(
         seq_len=seq_len,
         batches=16,
         labeled_ratio=labeled_ratio,
+        use_target_encoder=use_target_encoder,
         device=dev,
     )
     print(
@@ -292,7 +300,7 @@ def train_state_readout(
         valid_mask = batch["state_current_valid"]
 
         with torch.no_grad():
-            z_seq = _encode_batch_frozen(model, obs)
+            z_seq = _encode_batch_frozen(model, obs, use_target=use_target_encoder)
             h_seq = model.recurrent_core.unroll_sequence(z_seq, actions, reset_masks=dones)
             s_seq = torch.cat([z_seq, h_seq], dim=-1)
 
@@ -335,6 +343,7 @@ def train_state_readout(
         seq_len=seq_len,
         batches=24,
         labeled_ratio=labeled_ratio,
+        use_target_encoder=use_target_encoder,
         device=dev,
     )
 
@@ -363,6 +372,7 @@ def train_state_readout(
         "val_ratio": val_ratio,
         "base_model_frozen": True,
         "state_readout_head_trainable": True,
+        "use_target_encoder": bool(use_target_encoder),
     }
 
     out_ckpt = Path(output_checkpoint)
@@ -416,6 +426,8 @@ def main() -> None:
     parser.add_argument("--split_seed", type=int, default=42)
     parser.add_argument("--capacity_transitions", type=int, default=1_000_000)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--encoder", choices=["target", "online"], default="target",
+                        help="Frozen encoder feeding the readout head. Default 'target' = plan Stage 1 serving convention.")
     args = parser.parse_args()
 
     if not args.shards_dir and args.manifest is None:
@@ -436,6 +448,7 @@ def main() -> None:
         split_seed=args.split_seed,
         capacity_transitions=args.capacity_transitions,
         device=args.device,
+        use_target_encoder=(args.encoder == "target"),
     )
 
 

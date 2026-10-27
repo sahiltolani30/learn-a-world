@@ -127,6 +127,12 @@ class EpisodeBuffer:
             state_current = np.zeros((T, state_delta.shape[-1]), dtype=np.float32)
             if T > 1 and np.any(state_delta_valid):
                 state_current[1:] = np.cumsum(state_delta[:-1], axis=0)
+            if state_current.shape[-1] == 16:
+                # Absolute vitals convention (plan Stage 1): dims 12-15 start at 9.0 and
+                # accumulate deltas, so x_hat is directly comparable to itself everywhere
+                # (the old deviation-from-start encoding made vitals <= 0 always and any
+                # vitals precondition meaningless/unsatisfiable).
+                state_current[:, 12:16] += 9.0
         else:
             state_current = np.asarray(state_current, dtype=np.float32)
             assert state_current.shape[0] == T

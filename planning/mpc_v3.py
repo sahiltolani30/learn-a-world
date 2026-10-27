@@ -151,7 +151,7 @@ class RecurrentMPCPlanner:
         obs_t = obs_t.to(self.device)
 
         with torch.no_grad():
-            z_0 = self.model.encode(obs_t, use_target=False)  # [1, 128]
+            z_0 = self.model.encode(obs_t, use_target=True)  # [1, 128] — target encoder: matches event/health-head training, belief updates, and consolidation keys (plan Stage 1 encoder unification)
             h_0 = belief.get_h_tensor(device=self.device).unsqueeze(0)  # [1, 256]
             m_bin_0 = belief.get_mask_tensor(device=self.device).unsqueeze(0)  # [1, 22]
             m_soft_0 = (
