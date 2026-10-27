@@ -104,6 +104,7 @@ def consolidate_phase2_memory(
     print(f"-> Ingesting trajectory evidence from {len(shard_files)} shard files...")
     episodes_ingested = 0
     transitions_ingested = 0
+    degraded_steps = 0
 
     with torch.no_grad():
         for s_idx, sf in enumerate(shard_files):
@@ -117,6 +118,12 @@ def consolidate_phase2_memory(
                 cat_dones = data.get("dones")
                 if cat_dones is None:
                     cat_dones = data.get("done")
+                # Plan Stage 3 (F1 fix): achievement labels were discarded here — the
+                # bank could never ground cards in events. events[t] re-fires on repeat
+                # events; the first-time unlock is events[t] * (1 - mask_before[t]).
+                cat_events = data.get("events")
+                cat_mask_before = data.get("mask_before")
+                shards_with_events = cat_events is not None and cat_mask_before is not None
 
                 if cat_obs is None or cat_actions is None or cat_rewards is None:
                     continue
@@ -142,6 +149,11 @@ def consolidate_phase2_memory(
                     ep_a = cat_actions[offset : offset + ep_len]
                     ep_r = cat_rewards[offset : offset + ep_len]
                     ep_d = cat_dones[offset : offset + ep_len] if cat_dones is not None else np.zeros(ep_len, dtype=bool)
+                    if shards_with_events:
+                        ep_ev = cat_events[offset : offset + ep_len].astype(np.int64)
+                        ep_mb = cat_mask_before[offset : offset + ep_len].astype(np.int64)
+                    else:
+                        ep_ev = ep_mb = None
                     offset += ep_len
 
                     # Batch encode visual observations in 64-step chunks to fit GPU VRAM
@@ -165,10 +177,26 @@ def consolidate_phase2_memory(
                         a_t = torch.tensor([ep_a[t]], dtype=torch.long, device=dev)
                         _, h_t = model.recurrent_step(z_all[t:t+1], a_t, h_t)
 
-                    for t in range(ep_len - 1):
+                    # Plan Amendment 9 (N10): include the episode-final transition — its
+                    # reward must enter the Monte Carlo returns of earlier steps. The
+                    # shard has no frame after the terminal one, so the final step is
+                    # recorded with an absorbing next state.
+                    for t in range(ep_len):
                         act = int(ep_a[t])
                         rew = float(ep_r[t])
-                        d = bool(ep_d[t])
+                        d = bool(ep_d[t]) or t == ep_len - 1
+                        is_final = t == ep_len - 1
+
+                        if ep_ev is not None:
+                            u_t = (ep_ev[t] * (1 - ep_mb[t])).astype(np.int64)
+                            m_before = ep_mb[t].astype(np.int64)
+                        else:
+                            # Degraded labels: without event channels an unlock cannot be
+                            # attributed to a specific achievement, so event_vec stays
+                            # all-zero and the step is counted for the coverage report.
+                            u_t = np.zeros(22, dtype=np.int64)
+                            m_before = np.zeros(22, dtype=np.int64)
+                            degraded_steps += 1
 
                         store.record_step(
                             obs_latent=z_all[t],
@@ -176,10 +204,12 @@ def consolidate_phase2_memory(
                             action=act,
                             reward=rew,
                             done=d,
-                            next_obs_latent=z_all[t + 1],
-                            next_grounded_state=states_all[t + 1],
+                            next_obs_latent=z_all[t] if is_final else z_all[t + 1],
+                            next_grounded_state=states_all[t] if is_final else states_all[t + 1],
                             episode_id=episodes_ingested,
                             step_id=t,
+                            event_vec=u_t.tolist(),
+                            mask_before_vec=m_before.tolist(),
                         )
                         transitions_ingested += 1
 
@@ -208,21 +238,42 @@ def consolidate_phase2_memory(
         "checkpoint": str(checkpoint_path),
         "episodes_ingested": episodes_ingested,
         "transitions_ingested": transitions_ingested,
+        "degraded_label_steps": degraded_steps,
+        "label_coverage": 1.0 - (degraded_steps / max(transitions_ingested, 1)),
         "prototypes_discovered": proto_count,
         "bank_path": str(out_bank_p),
         "prototype_summary": [
             {
                 "id": p.prototype_id,
                 "action": p.action,
+                "event_dim": p.event_dim,
+                "status": p.status,
                 "success_count": p.success_count,
                 "failure_count": p.failure_count,
                 "success_prob": p.success_probability,
                 "confidence": p.confidence,
+                "wilson_lb": p.wilson_lb,
                 "mean_return": p.mean_return,
+                "needs": [[int(d), round(float(a), 3)] for d, a in p.needs],
+                "produces": [[int(d), round(float(a), 3)] for d, a in p.produces],
+                "consumes": [[int(d), round(float(a), 3)] for d, a in p.consumes],
                 "preconditions": [round(float(v), 2) for v in p.precondition_state],
                 "effect_delta": [round(float(v), 2) for v in p.effect_delta],
+                "visual_dispersion": round(float(p.visual_dispersion), 4),
             }
             for p in bank.prototypes.values()
+        ],
+        "causal_edges": {
+            dst: [
+                {"src": e.src_id, "kind": e.kind, "dim": e.dim, "lift": round(float(e.lift), 3),
+                 "support": int(e.support), "mean_dt": round(float(e.mean_dt), 2)}
+                for e in edgelist
+            ]
+            for dst, edgelist in getattr(bank, "edges", {}).items()
+        },
+        "rejected_edges": [
+            {"src": e.src_id, "dst": e.dst_id, "lift": round(float(e.lift), 3), "support": int(e.support)}
+            for e in getattr(bank, "rejected_edges", [])
         ],
     }
 
@@ -239,7 +290,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Phase 2 Memory Consolidation.")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_state_readout.pt")
     parser.add_argument("--manifest_path", type=str, default="results/phase1_5_manifest.json")
-    parser.add_argument("--output_bank", type=str, default="checkpoints/phase2_causal_memory_bank.json")
+    parser.add_argument("--output_bank", type=str, default="checkpoints/phase2_causal_memory_bank_v2.json")
     parser.add_argument("--diagnostic_path", type=str, default="results/diagnostics/phase2_memory_consolidation.json")
     parser.add_argument("--max_episodes", type=int, default=300)
     parser.add_argument("--min_cluster_size", type=int, default=2)
