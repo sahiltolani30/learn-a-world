@@ -152,6 +152,7 @@ class EpisodeBuffer:
         event_weights: List[float] = []
         frontier_windows: List[Tuple[int, int]] = []
         frontier_weights: List[float] = []
+        labeled_windows: List[Tuple[int, int]] = []
 
         # Frontier achievement index set: tools, mining, combat, crafting
         frontier_indices_set = {0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20}
@@ -167,9 +168,12 @@ class EpisodeBuffer:
             if T < seq_len:
                 continue
             events = ep["events"]
+            state_valid = ep.get("state_delta_valid")
             for start_t in range(T - seq_len + 1):
                 win = (ep_idx, start_t)
                 windows.append(win)
+                if state_valid is not None and np.any(state_valid[start_t : start_t + seq_len]):
+                    labeled_windows.append(win)
                 w_events = events[start_t : start_t + seq_len]
                 active_types = np.where(np.any(w_events > 0, axis=0))[0]
                 if len(active_types) > 0:
@@ -188,6 +192,7 @@ class EpisodeBuffer:
         self._cached_windows = windows
         self._cached_event_windows = event_windows
         self._cached_frontier_windows = frontier_windows
+        self._cached_labeled_windows = labeled_windows
 
         if event_weights:
             total_w = sum(event_weights)
@@ -210,6 +215,7 @@ class EpisodeBuffer:
         batch_size: int = 32,
         seq_len: int = 16,
         mode: str = "uniform",
+        labeled_ratio: float = 0.0,
         device: Optional[Union[str, torch.device]] = None,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -218,6 +224,10 @@ class EpisodeBuffer:
           - 'uniform': all valid windows sampled uniformly.
           - 'event_balanced': 50% from event windows (weighted inversely by event-type rarity,
             no hardcoded names), 50% uniform.
+          - 'frontier_stratified': 25% frontier, 25% event, 50% uniform.
+        labeled_ratio:
+          - Fraction of batch (e.g. 0.5) guaranteed to be sampled from windows containing
+            valid state-delta labels (if any labeled windows exist in buffer).
         Returns:
           obs: [B, seq_len, 3, 64, 64] float32 in [0, 1]
           actions: [B, seq_len] int64
@@ -225,62 +235,82 @@ class EpisodeBuffer:
           dones: [B, seq_len] bool
           events: [B, seq_len, 22] float32
           mask_before: [B, seq_len, 22] float32
+          state_delta: [B, seq_len, D] float32
+          state_delta_valid: [B, seq_len] bool
         """
         self._build_windows(seq_len)
         if not self._cached_windows:
             raise ValueError(f"No valid sequence windows found of length {seq_len} in buffer.")
 
         chosen_windows: List[Tuple[int, int]] = []
-        if mode == "frontier_stratified" and self._cached_frontier_windows and self._cached_frontier_probs is not None:
-            n_frontier = min(batch_size // 4, len(self._cached_frontier_windows))
-            n_event = min(batch_size // 4, len(self._cached_event_windows)) if self._cached_event_windows else 0
-            n_uniform = batch_size - n_frontier - n_event
 
-            if n_frontier > 0:
-                f_indices = np.random.choice(
-                    len(self._cached_frontier_windows),
-                    size=n_frontier,
-                    replace=True,
-                    p=self._cached_frontier_probs,
-                )
-                for idx in f_indices:
-                    chosen_windows.append(self._cached_frontier_windows[idx])
+        # 1. Sample labeled windows if requested and available
+        n_labeled = 0
+        if labeled_ratio > 0.0 and self._cached_labeled_windows:
+            target_labeled = max(1, int(round(batch_size * labeled_ratio)))
+            n_labeled = min(target_labeled, len(self._cached_labeled_windows))
+            labeled_indices = np.random.choice(len(self._cached_labeled_windows), size=n_labeled, replace=True)
+            for idx in labeled_indices:
+                chosen_windows.append(self._cached_labeled_windows[idx])
 
-            if n_event > 0 and self._cached_event_probs is not None:
-                e_indices = np.random.choice(
+        n_remaining = batch_size - n_labeled
+
+        # 2. Sample remaining slots according to mode
+        if n_remaining > 0:
+            if mode == "frontier_stratified" and self._cached_frontier_windows and self._cached_frontier_probs is not None:
+                n_frontier = min(n_remaining // 4, len(self._cached_frontier_windows))
+                n_event = min(n_remaining // 4, len(self._cached_event_windows)) if self._cached_event_windows else 0
+                n_uniform = n_remaining - n_frontier - n_event
+
+                if n_frontier > 0:
+                    f_indices = np.random.choice(
+                        len(self._cached_frontier_windows),
+                        size=n_frontier,
+                        replace=True,
+                        p=self._cached_frontier_probs,
+                    )
+                    for idx in f_indices:
+                        chosen_windows.append(self._cached_frontier_windows[idx])
+
+                if n_event > 0 and self._cached_event_probs is not None:
+                    e_indices = np.random.choice(
+                        len(self._cached_event_windows),
+                        size=n_event,
+                        replace=True,
+                        p=self._cached_event_probs,
+                    )
+                    for idx in e_indices:
+                        chosen_windows.append(self._cached_event_windows[idx])
+
+                if n_uniform > 0:
+                    u_indices = np.random.choice(len(self._cached_windows), size=n_uniform, replace=True)
+                    for idx in u_indices:
+                        chosen_windows.append(self._cached_windows[idx])
+
+            elif mode == "event_balanced" and self._cached_event_windows and self._cached_event_probs is not None:
+                n_event = min(n_remaining // 2, len(self._cached_event_windows))
+                n_uniform = n_remaining - n_event
+
+                event_indices = np.random.choice(
                     len(self._cached_event_windows),
                     size=n_event,
                     replace=True,
                     p=self._cached_event_probs,
                 )
-                for idx in e_indices:
+                for idx in event_indices:
                     chosen_windows.append(self._cached_event_windows[idx])
 
-            if n_uniform > 0:
-                u_indices = np.random.choice(len(self._cached_windows), size=n_uniform, replace=True)
-                for idx in u_indices:
+                uniform_indices = np.random.choice(len(self._cached_windows), size=n_uniform, replace=True)
+                for idx in uniform_indices:
+                    chosen_windows.append(self._cached_windows[idx])
+            else:
+                indices = np.random.choice(len(self._cached_windows), size=n_remaining, replace=True)
+                for idx in indices:
                     chosen_windows.append(self._cached_windows[idx])
 
-        elif mode == "event_balanced" and self._cached_event_windows and self._cached_event_probs is not None:
-            n_event = min(batch_size // 2, len(self._cached_event_windows))
-            n_uniform = batch_size - n_event
-
-            event_indices = np.random.choice(
-                len(self._cached_event_windows),
-                size=n_event,
-                replace=True,
-                p=self._cached_event_probs,
-            )
-            for idx in event_indices:
-                chosen_windows.append(self._cached_event_windows[idx])
-
-            uniform_indices = np.random.choice(len(self._cached_windows), size=n_uniform, replace=True)
-            for idx in uniform_indices:
-                chosen_windows.append(self._cached_windows[idx])
-        else:
-            indices = np.random.choice(len(self._cached_windows), size=batch_size, replace=True)
-            for idx in indices:
-                chosen_windows.append(self._cached_windows[idx])
+        # Shuffle so labeled and unlabeled sequences are interspersed
+        if n_labeled > 0 and len(chosen_windows) > 1:
+            np.random.shuffle(chosen_windows)
 
         # Collate batches
         b_obs = np.empty((batch_size, seq_len, 64, 64, 3), dtype=np.uint8)
@@ -458,15 +488,52 @@ class EpisodeBuffer:
         """
         Splits by held-out episodes in-place with zero array copying.
 
-        The deterministic episode shuffle prevents validation from becoming an
-        accidental source-policy holdout when shards are loaded directory by
-        directory. It is still an episode split; transition windows never cross
-        episode boundaries.
+        Performs stratified splitting between labeled and unlabeled episodes so that
+        validation is guaranteed to contain labeled episodes if any exist in the dataset.
         """
+        rng = np.random.RandomState(seed)
         n_eps = len(self.episodes)
-        n_val = max(1, int(round(n_eps * val_ratio))) if n_eps > 1 else 0
-        order = np.random.RandomState(seed).permutation(n_eps)
-        val_indices = set(int(i) for i in order[:n_val])
+        if n_eps <= 1:
+            train_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
+            val_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
+            train_buf.episodes = list(self.episodes)
+            train_buf._total_transitions = self._total_transitions
+            self.episodes = []
+            self._total_transitions = 0
+            self._invalidate_window_cache()
+            return train_buf, val_buf
+
+        labeled_indices = [
+            i for i, ep in enumerate(self.episodes)
+            if np.any(ep.get("state_delta_valid", False))
+        ]
+        unlabeled_indices = [
+            i for i, ep in enumerate(self.episodes)
+            if not np.any(ep.get("state_delta_valid", False))
+        ]
+
+        val_indices = set()
+        # Stratified split on labeled episodes
+        if labeled_indices:
+            perm_labeled = rng.permutation(labeled_indices)
+            if len(labeled_indices) >= 2:
+                # Ensure at least 1 in val and at least 1 in train (at least 2 in val if >= 5)
+                min_val = 2 if len(labeled_indices) >= 5 else 1
+                n_val_labeled = min(
+                    len(labeled_indices) - 1,
+                    max(min_val, int(round(len(labeled_indices) * val_ratio))),
+                )
+            else:
+                n_val_labeled = 1 if val_ratio >= 1.0 else 0
+            val_indices.update(int(i) for i in perm_labeled[:n_val_labeled])
+
+        # Stratified split on unlabeled episodes
+        if unlabeled_indices:
+            perm_unlabeled = rng.permutation(unlabeled_indices)
+            n_val_unlabeled = max(0, int(round(len(unlabeled_indices) * val_ratio)))
+            if val_ratio > 0.0 and len(val_indices) == 0 and len(unlabeled_indices) > 1:
+                n_val_unlabeled = max(1, n_val_unlabeled)
+            val_indices.update(int(i) for i in perm_unlabeled[:n_val_unlabeled])
 
         train_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
         val_buf = EpisodeBuffer(capacity_transitions=self.capacity_transitions)
@@ -484,6 +551,27 @@ class EpisodeBuffer:
         self._invalidate_window_cache()
 
         return train_buf, val_buf
+
+    def get_labeled_statistics(self) -> Dict[str, Any]:
+        """Calculates precise transition and episode counts for labeled state deltas."""
+        labeled_eps = 0
+        labeled_transitions = 0
+        for ep in self.episodes:
+            valid = ep.get("state_delta_valid")
+            if valid is not None:
+                n_v = int(np.sum(valid))
+                if n_v > 0:
+                    labeled_eps += 1
+                    labeled_transitions += n_v
+        total_transitions = self._total_transitions
+        density = (labeled_transitions / total_transitions) if total_transitions > 0 else 0.0
+        return {
+            "total_episodes": len(self.episodes),
+            "labeled_episodes": labeled_eps,
+            "total_transitions": total_transitions,
+            "labeled_transitions": labeled_transitions,
+            "labeled_density_pct": round(density * 100.0, 4),
+        }
 
     def get_dataset_statistics(self) -> Dict[str, Any]:
         """Calculates per-achievement positive counts and source breakdown."""

@@ -61,11 +61,23 @@ def _make_model(
     checkpoint_path: Optional[Union[str, Path]],
     device: torch.device,
     transition_state_dim: int,
+    allow_fresh_init: bool = False,
 ) -> JEPAv3:
     model = JEPAv3(transition_state_dim=transition_state_dim)
-    if checkpoint_path and Path(checkpoint_path).exists():
-        model.load_checkpoint(str(checkpoint_path), device=device)
+    if checkpoint_path:
+        p = Path(checkpoint_path)
+        if not p.exists():
+            raise FileNotFoundError(
+                f"Requested checkpoint does not exist: {checkpoint_path}. "
+                "Failing immediately to prevent silent training from random initialization."
+            )
+        model.load_checkpoint(str(p), device=device)
     else:
+        if not allow_fresh_init:
+            raise ValueError(
+                "No checkpoint_path provided. To train from scratch with random initialization, "
+                "allow_fresh_init=True must be explicitly set."
+            )
         model.to(device)
     return model
 
@@ -113,8 +125,9 @@ def evaluate_transition_heads(
     batch_size: int = 16,
     seq_len: int = 16,
     batches: int = 16,
+    labeled_ratio: float = 0.5,
     device: Union[str, torch.device] = "cpu",
-) -> Dict[str, float]:
+) -> Dict[str, Any]:
     """Evaluate held-out auxiliary predictions and persistence baselines."""
     dev = torch.device(device)
     model.eval()
@@ -123,15 +136,38 @@ def evaluate_transition_heads(
     delta_count = 0.0
     delta_valid_transitions = 0.0
     reward_abs = 0.0
-    done_correct = 0.0
-    done_count = 0.0
+    reward_count = 0
+    done_correct = 0
+    done_count = 0
+    done_positives = 0
+    done_pred_positives = 0
+    done_true_positives = 0
     action_separation = 0.0
+
+    latent_std_means: List[float] = []
+    latent_std_mins: List[float] = []
+    latent_std_maxs: List[float] = []
+
     with torch.no_grad():
         for _ in range(max(1, batches)):
-            batch = buffer.sample_sequences(batch_size, seq_len, mode="uniform", device=dev)
+            batch = buffer.sample_sequences(
+                batch_size,
+                seq_len,
+                mode="uniform",
+                labeled_ratio=labeled_ratio,
+                device=dev,
+            )
             obs, actions = batch["obs"], batch["actions"]
             B, T = actions.shape
             z = _encode_batch(model, obs)
+
+            # Latent variance / collapse metrics
+            z_flat = z.reshape(-1, z.shape[-1])
+            dim_std = z_flat.std(dim=0)
+            latent_std_means.append(float(dim_std.mean().item()))
+            latent_std_mins.append(float(dim_std.min().item()))
+            latent_std_maxs.append(float(dim_std.max().item()))
+
             h = model.recurrent_core.unroll_sequence(z, actions, reset_masks=batch["dones"])
             s = torch.cat([z, h], dim=-1)
             pred = model.predict_transition(s, actions)
@@ -147,10 +183,15 @@ def evaluate_transition_heads(
                 delta_valid_transitions += float(valid.sum().item())
 
             reward_abs += float((pred["reward"] - batch["rewards"]).abs().sum().item())
-            reward_n = float(batch["rewards"].numel())
+            reward_count += int(batch["rewards"].numel())
+
+            dones = batch["dones"]
             done_pred = pred["done_prob"] >= 0.5
-            done_correct += float((done_pred == batch["dones"]).sum().item())
-            done_count += float(batch["dones"].numel())
+            done_correct += int((done_pred == dones).sum().item())
+            done_count += int(dones.numel())
+            done_positives += int(dones.sum().item())
+            done_pred_positives += int(done_pred.sum().item())
+            done_true_positives += int((done_pred & dones).sum().item())
 
             # Intervention diagnostic: same latent state, different actions.
             s0 = s[:, 0].unsqueeze(1).expand(-1, model.num_actions, -1)
@@ -158,19 +199,54 @@ def evaluate_transition_heads(
             all_delta = model.state_delta_head(s0, all_actions)
             action_separation += float(all_delta.var(dim=1).mean().item())
 
+    has_delta = delta_count > 0.0
+    state_delta_mse = (delta_sq / delta_count) if has_delta else None
+    state_delta_persistence_mse = (persist_sq / delta_count) if has_delta else None
+    beats_persist = (
+        bool(state_delta_mse < state_delta_persistence_mse)
+        if (state_delta_mse is not None and state_delta_persistence_mse is not None)
+        else False
+    )
+
+    done_negatives = done_count - done_positives
+    majority_baseline = max(done_negatives, done_positives) / max(done_count, 1)
+    termination_recall = (
+        float(done_true_positives / done_positives) if done_positives > 0 else 1.0
+    )
+    termination_precision = (
+        float(done_true_positives / done_pred_positives)
+        if done_pred_positives > 0
+        else (1.0 if done_positives == 0 else 0.0)
+    )
+
+    lat_mean = float(np.mean(latent_std_means)) if latent_std_means else 0.0
+    lat_min = float(np.min(latent_std_mins)) if latent_std_mins else 0.0
+    lat_max = float(np.max(latent_std_maxs)) if latent_std_maxs else 0.0
+    collapse = bool(lat_min < 0.01 or lat_mean < 0.05)
+
     return {
-        "state_delta_mse": delta_sq / max(delta_count, 1.0),
-        "state_delta_persistence_mse": persist_sq / max(delta_count, 1.0),
+        "state_delta_mse": state_delta_mse,
+        "state_delta_persistence_mse": state_delta_persistence_mse,
+        "state_delta_beats_persistence": beats_persist,
         "state_delta_valid_transitions": delta_valid_transitions,
-        "reward_mae": reward_abs / max(reward_n, 1.0),
-        "termination_accuracy": done_correct / max(done_count, 1.0),
+        "reward_mae": reward_abs / max(reward_count, 1),
+        "termination_accuracy": done_correct / max(done_count, 1),
+        "termination_majority_baseline": majority_baseline,
+        "termination_recall": termination_recall,
+        "termination_precision": termination_precision,
+        "termination_positives": done_positives,
+        "termination_true_positives": done_true_positives,
         "counterfactual_action_separation": action_separation / max(1, batches),
+        "latent_std_mean": lat_mean,
+        "latent_std_min": lat_min,
+        "latent_std_max": lat_max,
+        "latent_collapse_detected": collapse,
     }
 
 
 def train_phase1_transitions(
     *,
-    shards_dir: Union[str, Path],
+    shards_dir: Union[str, Path, Sequence[Union[str, Path]]],
     checkpoint_path: Optional[Union[str, Path]] = None,
     output_checkpoint: Union[str, Path] = "checkpoints/jepa_crafter_v3_phase1_transitions.pt",
     output_json: Optional[Union[str, Path]] = None,
@@ -185,6 +261,8 @@ def train_phase1_transitions(
     event_weight: float = 0.3,
     health_weight: float = 0.2,
     variance_weight: float = 0.05,
+    labeled_ratio: float = 0.5,
+    allow_fresh_init: bool = False,
     device: Union[str, torch.device] = "cpu",
     val_ratio: float = 0.1,
     transition_state_dim: Optional[int] = None,
@@ -210,7 +288,12 @@ def train_phase1_transitions(
         raise ValueError(
             f"transition_state_dim={state_dim} does not match dataset width={inferred_state_dim}"
         )
-    model = _make_model(checkpoint_path, dev, transition_state_dim=state_dim)
+    model = _make_model(
+        checkpoint_path,
+        dev,
+        transition_state_dim=state_dim,
+        allow_fresh_init=allow_fresh_init,
+    )
     for p in model.parameters():
         p.requires_grad = True
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -218,7 +301,13 @@ def train_phase1_transitions(
     start = time.time()
 
     for step in range(1, total_steps + 1):
-        batch = train_buffer.sample_sequences(batch_size, seq_len, mode="event_balanced", device=dev)
+        batch = train_buffer.sample_sequences(
+            batch_size,
+            seq_len,
+            mode="event_balanced",
+            labeled_ratio=labeled_ratio,
+            device=dev,
+        )
         obs, actions = batch["obs"], batch["actions"]
         B, T = actions.shape
         z_seq = _encode_batch(model, obs)
@@ -309,19 +398,24 @@ def train_phase1_transitions(
             )
 
     has_val_windows = any(len(ep["actions"]) >= seq_len for ep in val_buffer.episodes)
+    eval_buffer = val_buffer if has_val_windows else train_buffer
     metrics = evaluate_transition_heads(
-        model, val_buffer if has_val_windows else train_buffer,
+        model,
+        eval_buffer,
         batch_size=batch_size,
         seq_len=seq_len,
+        batches=16,
+        labeled_ratio=labeled_ratio,
         device=dev,
     )
     config = {
         "phase": "phase1_transition_learning",
-        "shards_dir": str(shards_dir),
+        "shards_dir": [str(s) for s in shards_dir] if isinstance(shards_dir, (list, tuple)) else str(shards_dir),
         "manifest_path": str(manifest_path) if manifest_path else None,
         "checkpoint_init": str(checkpoint_path) if checkpoint_path else None,
         "horizons": list(horizons),
         "seq_len": seq_len,
+        "labeled_ratio": labeled_ratio,
         "transition_state_dim": state_dim,
         "consistency_weight": consistency_weight,
         "state_delta_labels_are_training_targets_only": True,
@@ -335,6 +429,8 @@ def train_phase1_transitions(
         "checkpoint": str(output_checkpoint),
         "dataset": train_buffer.get_dataset_statistics(),
         "validation": val_buffer.get_dataset_statistics(),
+        "train_labeled_stats": train_buffer.get_labeled_statistics(),
+        "val_labeled_stats": val_buffer.get_labeled_statistics(),
         "metrics": metrics,
         "history_tail": history[-10:],
         "elapsed_seconds": time.time() - start,
@@ -358,6 +454,8 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--seq_len", type=int, default=16)
     parser.add_argument("--horizons", type=int, nargs="+", default=[1, 5, 10])
+    parser.add_argument("--labeled_ratio", type=float, default=0.5)
+    parser.add_argument("--allow_fresh_init", action="store_true")
     parser.add_argument("--transition_state_dim", type=int, default=None)
     parser.add_argument("--split_seed", type=int, default=0)
     parser.add_argument("--capacity_transitions", type=int, default=1_000_000)
@@ -374,6 +472,8 @@ def main() -> None:
         batch_size=args.batch_size,
         seq_len=args.seq_len,
         horizons=tuple(args.horizons),
+        labeled_ratio=args.labeled_ratio,
+        allow_fresh_init=args.allow_fresh_init,
         device=args.device,
         transition_state_dim=args.transition_state_dim,
         manifest_path=args.manifest,

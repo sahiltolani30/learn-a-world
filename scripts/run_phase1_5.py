@@ -42,6 +42,8 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--seq_len", type=int, default=16)
     parser.add_argument("--horizons", type=int, nargs="+", default=[1, 5, 10])
+    parser.add_argument("--labeled_ratio", type=float, default=0.5)
+    parser.add_argument("--allow_fresh_init", action="store_true")
     parser.add_argument("--split_seed", type=int, default=0)
     parser.add_argument("--val_ratio", type=float, default=0.1)
     parser.add_argument("--capacity_transitions", type=int, default=1_000_000)
@@ -59,8 +61,14 @@ def main() -> None:
     print(json.dumps({"phase": "phase1.5", "totals": manifest["totals"]}, indent=2))
     if args.audit_only:
         return
-    if args.checkpoint is None:
-        parser.error("--checkpoint is required unless --audit_only is used")
+    if args.checkpoint is None and not args.allow_fresh_init:
+        parser.error("--checkpoint is required unless --audit_only or --allow_fresh_init is used")
+
+    if args.checkpoint is not None and not Path(args.checkpoint).exists():
+        raise FileNotFoundError(
+            f"Checkpoint not found at {args.checkpoint}. "
+            "Failing immediately to prevent silent training from random initialization."
+        )
 
     result = train_phase1_transitions(
         shards_dir=args.data_root,
@@ -72,6 +80,8 @@ def main() -> None:
         batch_size=args.batch_size,
         seq_len=args.seq_len,
         horizons=tuple(args.horizons),
+        labeled_ratio=args.labeled_ratio,
+        allow_fresh_init=args.allow_fresh_init,
         val_ratio=args.val_ratio,
         split_seed=args.split_seed,
         capacity_transitions=args.capacity_transitions,

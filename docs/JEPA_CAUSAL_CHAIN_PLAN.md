@@ -2,19 +2,50 @@
 
 ## Purpose
 
-Make the Crafter agent learn and execute: wood -> table -> pickaxe -> stone -> furnace -> iron.
+Build a continually learning Crafter agent that discovers useful action effects, retains knowledge across games and process restarts, and composes learned requirements into resource-aware plans. Crafter's progression is a branching dependency structure, not a single fixed chain.
 
 The project goal remains a JEPA-based agent that learns world dynamics from experience, plans in latent space, and can later transfer to other games and robotics environments.
 
 This document separates verified facts, hypotheses, permitted learned additions, and privileged or hardcoded assistance. Every phase needs a reproducible experiment and an ablation.
 
-## Implementation status
+## Current decision and progress tracker
 
-- **Phase 0: implemented.** Run `python3 scripts/run_phase0_chain_diagnostics.py` to produce same-seed traces and controller ablations in `results/phase0_chain_diagnostics.json`.
-- **Phase 1: implemented.** Run `python3 training/run_phase1_transition_learning.py --shards_dir <sequence-shards>` to fine-tune an existing v3 checkpoint while retaining and logging the JEPA latent objective.
-- **Phase 1.5: implemented.** Run `python3 scripts/run_phase1_5.py --data_root <data-root> --manifest <manifest.json> --audit_only` to create a reproducible deduplicated multi-directory manifest, or omit `--audit_only` to run the combined Phase 1 fine-tune.
-- Existing shards remain readable. New state-delta labels are optional; old data still trains latent, event, reward, health, and termination objectives. The Phase 1.5 manifest prefers final cumulative shards, collapses duplicate transition content, and prefers labeled copies when available.
-- No result is called a learned causal relation until held-out transition metrics and intervention/ablation evidence are recorded.
+**Updated: 2026-10-27.** This tracker supersedes earlier statements that implementation or smoke-test success meant a phase's scientific gate had passed.
+
+| Work | Status | Evidence / next gate |
+|---|---|---|
+| Phase 0 instrumentation | Implemented; initial Colab outputs reviewed | Three episodes per ablation identify early bottlenecks; not enough to rank configurations reliably. |
+| Phase 1 transition learning | Implemented; basic Colab smoke observed | JEPA stayed active; sampled delta MSE beat persistence. Advanced-chain prediction is not established. |
+| Phase 1.5 data consolidation | Implemented; laptop smoke passed | Manifest loader and combined trainer exist; correctness gaps below remain open. |
+| Previous Phase 1.5 Colab run | **Completed; causal gate failed** | `results/phase1_5_training.json` and `results/phase1_5_review.md` reviewed. Checkpoint is diagnostic, not promoted. |
+| Strict persistent experience/relation memory | Design proposed; not implemented or validated | First prove useful retention after restarting the process. |
+| Compositional planning and learned skills | Planned | Build incrementally after state grounding and retention tests. |
+
+### Recorded run evidence
+
+- Earlier Phase 1 collection: 2,000 transitions / 13 episodes, 11 wood events, 5 table events, and no wood-pickaxe/stone/coal/iron/diamond events.
+- Earlier Phase 1 training: 1,000 updates; logged JEPA loss 0.5449 -> 0.1352; sampled state-delta MSE 0.0146805 versus zero-delta persistence 0.0168762 (~13% improvement). These are observations, not proof of general causal understanding or absence of representation collapse.
+- `state_delta_valid_transitions=4096` in that evaluation counts sampled points, not unique episodes or transitions. Nonzero action separation is not an intervention-accuracy test. Near-perfect termination accuracy needs a majority-class baseline and terminal-event recall.
+- Drive Markdown audit reports 860,314 active transitions, 223 wood-pickaxe events, 87 stone events, and 10 coal events, with only 2,000 state-delta-labeled transitions. Those counts are provisional: copied shards across directories and overlapping episodes need content-level verification. The separate 34,000-transition JSON audit describes the laptop, not Drive.
+- Prior laptop checks passed: 30 focused tests and a separate 17-test group (overlapping suites), legacy-data one-step smoke, and synthetic labeled smoke. These tested execution paths, not full Colab scale or learning quality.
+- Phase 1.5 Colab result: 666,338 transitions / 2,629 episodes, 2,000 valid state-delta labels (0.3001% density), 1,000 steps, horizons 1/5/10/25/50. JEPA loss decreased 1.0143 -> 0.3484, but the state-delta MSE was 0.0100678 versus persistence 0.0073529, so the model was ~36.9% worse than persistence. Only 51 valid delta transitions were sampled in validation; `loss_state_delta` was zero on 998/1,000 logged steps. The causal state-delta gate **FAILED**. No Phase 2 promotion follows from this run.
+
+### Phase 1.5 output review — completed; gate failed
+
+The training JSON and review artifact confirm the command completed and wrote `/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt`. The manifest file itself was not present in the local workspace for independent re-verification, so shard-selection claims remain based on the reported totals. Review:
+
+- [PARTIAL] Selected/excluded shards and event totals are reported; the manifest/content identities are not locally available for independent verification.
+- [FAIL] Labeled validation coverage is only 51 transitions; no adequate labeled held-out gate.
+- [PARTIAL] Loss progression and horizon configuration are reported; latent variance, finite-gradient, and full checkpoint-loading audit are not included.
+- [PARTIAL] A validation split is reported, but episode/seed identities and fallback behavior are not independently verified.
+- [OPEN] Reward MAE and termination accuracy still need batch-invariant MAE, terminal recall, and majority-class baselines.
+- [OPEN] Gameplay regression against the initialization checkpoint was not provided.
+
+Preserve the existing checkpoint and JSON as diagnostic evidence only. Before another long run, add balanced labeled-window sampling, correct the evaluation metrics, and ensure the labeled validation split is large enough. Collecting more labels is useful, but increasing data volume without changing the sampling/validation design will repeat the same failure.
+
+### Collaboration
+
+Discuss and agree on the architecture first. This assistant supplies research, implementation briefs, acceptance criteria, and reviews. Agy implements code and tests by default. Direct code implementation by this assistant is reserved for rare cases where a precise handoff is insufficient; documentation updates remain part of planning.
 
 ## 1. True-JEPA contract
 
@@ -30,7 +61,7 @@ Strict evaluation must not use `info["inventory"]`, `info["achievements"]`, engi
 
 The Crafter HUD is part of the image and may be read by the visual encoder. Reading the engine inventory dictionary is privileged diagnostic mode.
 
-Every benchmark must declare one track: `strict_visual_jepa`, `privileged_diagnostic`, `demonstration_assisted`, or `pure_self_play`. Scores from different tracks must not be combined.
+Every benchmark must separately declare inference access (`strict_visual_jepa` or `privileged_diagnostic`), training provenance (including demonstration-assisted data or pure self-play), and adaptation mode (frozen evaluation or continual learning). Visual-only inference does not erase demonstration or privileged-target training provenance. Scores from different protocols must not be combined.
 
 ## 2. Verified repository evidence
 
@@ -39,7 +70,7 @@ Every benchmark must declare one track: `strict_visual_jepa`, `privileged_diagno
 - `planning/semantic_memory.py` stores visual keys, inventory snapshots, actions, inventory deltas, and returns.
 - `planning/mpc_v3.py` gates table landmark pull on wood, tracks offsets, adds survival subgoals, and supports a stone landmark.
 - `deduce_active_subgoal()` is currently mostly a one-level resource lookup, not recursive graph search.
-- `scripts/screen_v3_dual_memory.py` passes inventory and achievement information into the memory/writer; that path is not strict pixels-only evaluation.
+- `scripts/screen_v3_dual_memory.py` passes inventory/achievements to the writer only in privileged diagnostic mode. Its strict path withholds them, but the existing writer then lacks the positive-effect evidence its inventory-based consolidation expects.
 
 Saved artifacts show the current chain bottleneck:
 
@@ -57,13 +88,13 @@ The current system combines JEPA latent prediction, task heads, recurrent belief
 
 The missing component is a learned compositional state-transition model. Planning needs imagined resource quantities, tool possession, object existence/location, proximity requirements, and action consequences.
 
-Confirmed causes:
+Verified implementation limitations (not a complete causal diagnosis of gameplay failure):
 
-1. The strict visual path has no explicit learned resource-transition head.
+1. Phase 1 added resource-delta heads, but current-state quantity grounding and their integration into the strict MPC decision path remain incomplete.
 2. Backward chaining is not recursive causal graph search.
-3. Primitive MPC with `H=10` is too short for the complete chain.
+3. Primitive MPC with `H=10` does not directly cover complete chains; whether terminal values compensate adequately needs measurement.
 4. Frontier events are sparse, so direct stone evidence is weak.
-5. The dual-memory path is privileged because it reads environment state.
+5. The existing positive-relation writer depends on environment-state evidence unavailable in strict play.
 
 Hypotheses requiring experiments:
 
@@ -95,21 +126,78 @@ Use `L = L_JEPA + lambda_delta*L_delta + lambda_event*L_event + lambda_reward*L_
 
 Train progressively on 1, 5, 10, 25, and 50 steps. Do not claim 25-step learning when only a 4-step loss was trained.
 
-**Gate:** on held-out chain windows, state-delta prediction beats a persistence baseline, counterfactual actions produce distinct effects, rare-event prediction improves, and strict/privileged results are separate.
+**Gate:** on held-out chain windows, state-delta prediction beats persistence, alternative-action predictions match measured outcomes, rare-event prediction improves, and training/inference provenance is explicit. Action-output variance alone does not pass the intervention gate.
 
-## 6. Phase 2: learn a causal transition graph
+### Phase 1.5: correctness and data gate before scaling
+
+Entry points: `training/phase1_5_data.py`, `scripts/run_phase1_5.py`, and `training/run_phase1_transition_learning.py`. Existing data remains useful for JEPA/event/reward learning even when resource labels are absent. Missing labels must not be treated as observed zero effects.
+
+Open work for Agy, with focused regression tests before a new long run:
+
+- [ ] **Deduplication:** prove content duplication or cumulative inclusion before excluding a shard. Filename family/size alone is insufficient. Detect overlapping episodes across differently packaged shards; retain source provenance and compatible labels.
+- [ ] **Reproducible splits:** save explicit episode identities and seeds when available; keep duplicates/known shared seeds together. Report missing seed metadata instead of claiming seed-disjoint validation. Ensure usable labeled validation and report unsupported rare events.
+- [ ] **Balanced supervision:** retain broad old experience while explicitly sampling labeled transitions and rare-event windows. Report sampling proportions and unique counts; oversampling does not create new evidence.
+- [ ] **Checkpoint integrity:** fail on a missing requested checkpoint rather than silently starting randomly. Preserve EMA target freeze/stop-gradient semantics; record initialization and training state.
+- [ ] **Temporal alignment:** test the same observation/previous-action/hidden-state convention in training, acting, and imagination, including episode boundaries and recurrent burn-in.
+- [ ] **Rollout consistency:** distinguish teacher-forced sums of delta predictions from free-running imagined state/effect consistency. Introduce longer horizons progressively and evaluate each horizon.
+- [ ] **Metric correctness:** reward MAE currently sums errors across batches but divides by one batch's count. A read-only reproduction with constant unit error returned 4.0 for four batches instead of 1.0. Fix accumulation and regression-test batch-count invariance.
+- [ ] **Honest evaluation:** remove silent train-set fallback for held-out reports. Report missing-label metrics as unavailable, not successful zero error. Add event support/precision/recall, terminal recall and baseline, and uncertainty calibration. Current uncertainty is trained on reward residuals, not general transition/model uncertainty.
+- [ ] **Behavior compatibility:** the trainer changes the encoder without policy/value losses. Measure policy/value regression; choose a controlled representation freeze or joint/replay-based adaptation rather than assuming old heads stay compatible.
+- [ ] **Scale and resume:** check host RAM use for full decoded shards and observation tensors, avoid silent buffer eviction, and checkpoint optimizer/RNG/progress for interrupted Colab runs.
+
+**Exit:** corrected metrics and split manifest, validated labeled/rare-event coverage, horizon-specific predictive evidence, and gameplay comparison against the initialization checkpoint. A fixed number of training steps is not an acceptance criterion.
+
+## 6. Phase 2: grounded persistent memory and compositional planning
+
+This is a staged proposal, not an implemented capability. Reuse the JEPA checkpoint rather than restarting from scratch. Empty external memory does not remove knowledge already stored in trained weights.
+
+### 2A. Ground the current belief in observations
+
+Probe whether the existing recurrent representation preserves quantities, tool possession, nearby structures, facing/interaction context, and survival state. Add learned visual/HUD readouts or local spatial features only where probes show a gap. Estimate uncertainty and repeatedly correct state from observations; blindly accumulating predicted deltas drifts.
+
+Ground-truth labels may supervise an explicitly declared training experiment, but strict acting must not receive engine inventory, achievements, positions, maps, or recipes. An achievement having occurred does not establish current resource possession.
+
+### 2B. Persist experience, then consolidate candidate relations
+
+Use two information layers in long-term storage:
+
+1. **Experience evidence:** actual observation sequences, actions, rewards, termination/truncation, observation-derived state estimates/confidence, and model/source/episode identifiers.
+2. **Relation hypotheses:** learned success conditions, consumption/production, reusable requirements, duration/risk, supporting examples, counterexamples, and uncertainty.
+
+Keep predicted effects separate from effects inferred from subsequent observations. Neither a single success nor visual similarity establishes a minimum resource requirement or a causal rule. A zero-reward action is not necessarily a failure: repeated resource collection can enable later rewards.
+
+### 2C. Plan with learned requirements and costs
 
 Store transition prototypes containing precondition embedding, action/option, observed effect delta, postcondition embedding, success probability, duration, risk, visual goal key, and return.
 
 Graph edges must come from trajectories. The search algorithm may be engineered; table/pickaxe/stone relations must come from data.
 
-For a stone goal, recursively search for producers of missing state: stone requires pickaxe; pickaxe requires table and wood; table requires wood.
+Once supported by trajectories, compose operations while accounting for consumed resources, reusable tools, persistent structures, and spatial access. For example, the agent should discover the total resource budget for a table and a tool by simulating their learned effects, not by receiving a table/tool recipe from us.
 
 Use beam search or A* over learned edges and rank by success probability, duration, survival risk, and uncertainty. Do not select only the highest-return memory because it may be unreachable.
 
-**Gate:** every planned edge has stored trajectory evidence. A hardcoded wood-to-table-to-pickaxe rule fails this phase.
+**Gate:** every planned edge has stored trajectory evidence. Start with a probabilistic transition model; introduce an explicit graph only when its abstractions are reliable enough. A hardcoded wood-to-table-to-pickaxe rule fails this phase.
+
+### Memory lifecycle and acceptance experiments
+
+- New lifetime: empty short-term context and empty external long-term memory, with a recorded pretrained model.
+- New episode/world: reset hidden/context state and current-world locations/resource beliefs; retain learned skills and relations.
+- Process restart: reload long-term memory and training state. Restore short-term context only when resuming the same saved environment state.
+- Save model, optimizer, replay/evidence, relation bank, counters, model version, and RNG state. Save updates to existing entries even if bank size has not grown.
+- Initially freeze the representation for the memory-only ablation. Later alternate interaction and replay-based consolidation of dynamics and behavior; re-encode evidence or version keys when the encoder changes.
+
+Acceptance order:
+
+1. **Retention:** discover useful wood-acquisition experience, save, restart, and improve acquisition time/success on new maps relative to memory disabled at equal interaction budgets.
+2. **Composition:** predict table/tool effects and resource consumption, distinguish resource failures from proximity failures, and execute their composition on new maps.
+3. **Revision:** contradictory observations lower confidence or revise a relation instead of reinforcing a false belief.
+4. **Longer chains:** extend only after the simpler tests pass, while tracking survival and skill execution failures.
+
+More memory entries are not evidence of improvement. Compare continual-learning curves separately from locked, no-update evaluation. A growing memory must not carry evaluation experience into a supposedly independent benchmark.
 
 ## 7. Phase 3: persistent learned options
+
+Develop minimal goal-conditioned execution alongside Phase 2's first retention/composition tests. Do not wait for a large graph before checking whether the agent can execute its chosen subgoals. Broader skill discovery remains this phase's scope.
 
 Primitive CEM should not discover a 50-step task from scratch. Use options containing a goal embedding, initiation condition, action policy, and termination condition.
 
@@ -159,11 +247,11 @@ Chain trace, memory/landmark/inventory/prior ablations, and a failure-taxonomy J
 
 ### Campaign B: state-transition learning
 
-Generic delta/event/reward/done heads, 1-to-10-step consistency, held-out chain-window evaluation, and Drive-resumable checkpoints.
+Review the already-produced Phase 1.5 output first. Correct the open Phase 1.5 issues, then validate generic delta/event/reward/done heads, progressively extended rollouts, held-out chain windows, and resumable training state.
 
-### Campaign C: graph and options
+### Campaign C: retention, composition, and skills
 
-Graph from successful/failed transitions, goal-conditioned options, and primitive-versus-hierarchical comparison.
+Ground current state, prove memory retention after process restart, then learn and compose a small set of evidenced transitions with executable goal-conditioned skills. Compare memory off/on and primitive/hierarchical control. Expand an explicit graph only after these gates.
 
 ### Campaign D: scale and lock
 
@@ -175,4 +263,17 @@ Each campaign ends with a saved manifest and reproducible report.
 
 The project remains a true JEPA-based agent if JEPA latent prediction remains the world-model foundation; strict planning state is inferred from observations/actions; auxiliary transition heads are generic and learned; memory/graph edges come from experience rather than recipe code; hierarchy is ablated; and privileged diagnostics are clearly labelled.
 
-The immediate next step is **Phase 0 instrumentation**, not another reward coefficient or landmark heuristic. First measure the first failed link, then implement the smallest root-cause change and verify it independently.
+The immediate next step is **review the available Phase 1.5 Colab artifacts**, then hand Agy a focused correctness-fix brief. Preserve the run as evidence; do not promote its checkpoint or expand memory/planning based solely on a completed status or lower aggregate loss.
+
+## 12. Research basis and developer-only mechanics
+
+Reviewed on 2026-10-27:
+
+- [Crafter benchmark](https://arxiv.org/abs/2109.06780) and [game rules](https://github.com/danijar/crafter/blob/main/crafter/data.yaml): procedural worlds, local visual observations/HUD, survival, and sparse first-unlock achievement rewards. Installed rules checked: table consumes two wood; wood pickaxe consumes one wood near a table; wood pickaxe can collect both stone and coal. These are developer evaluation facts, never supplied recipes for the strict agent.
+- [Reward and interaction implementation](https://github.com/danijar/crafter/blob/main/crafter/env.py), [objects](https://github.com/danijar/crafter/blob/main/crafter/objects.py): repeat collection can have zero achievement reward; facing, placement surface, proximity, and survival affect outcomes.
+- [DreamerV3](https://www.nature.com/articles/s41586-025-08744-2): supports concurrent world-model/actor/critic learning from replay. Its Minecraft experiment includes structured observations and is not direct evidence for our pixels-only claim.
+- [Neural Episodic Control](https://proceedings.mlr.press/v70/pritzel17a.html): supports fast reuse of experience with persistent memory and relatively stable representation keys; it does not by itself identify resource requirements.
+- [Director](https://arxiv.org/abs/2206.04114): supports learned latent subgoals and goal-conditioned execution for long horizons; its architecture is not a drop-in JEPA implementation.
+- [V-JEPA 2](https://arxiv.org/abs/2506.09985): supports action-conditioned latent prediction and planning, not automatic discovery of arithmetic resource rules from our limited data.
+
+The proposed synthesis is a research hypothesis to test, not a published guarantee of human-like learning speed or diamond mastery.
