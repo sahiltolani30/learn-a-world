@@ -189,3 +189,58 @@ def test_laptop_smoke_state_delta_beats_persistence(tmp_path):
     assert metrics["state_delta_beats_persistence"] is True or metrics["state_delta_mse"] < metrics["state_delta_persistence_mse"]
     assert out_ckpt.exists()
     assert out_json.exists()
+
+
+def test_frozen_base_model_training(tmp_path: Path):
+    """Test that freeze_base=True keeps encoder/prior strictly frozen while training transition heads."""
+    from models.jepa_v3 import JEPAv3
+    from training.sequence_buffer import EpisodeBuffer
+    init_model = JEPAv3(transition_state_dim=16)
+    init_ckpt = tmp_path / "init_model.pt"
+    init_model.save_checkpoint(str(init_ckpt), step=0)
+
+    # Save initial weights to verify freezing
+    encoder_weight_before = init_model.encoder.conv_net[0].weight.clone()
+    prior_weight_before = init_model.policy_prior.net[0].weight.clone()
+    delta_weight_before = init_model.state_delta_head.net[-1].weight.clone()
+
+    # Create dummy shard
+    shard_path = tmp_path / "shard_0.npz"
+    buf = EpisodeBuffer(capacity_transitions=1000)
+    actions = np.zeros(16, dtype=np.int64)
+    buf.add_episode(
+        obs=np.zeros((16, 64, 64, 3), dtype=np.uint8),
+        actions=actions,
+        rewards=np.zeros(16, dtype=np.float32),
+        dones=np.array([False] * 15 + [True]),
+        events=np.zeros((16, NUM_ACHIEVEMENTS), dtype=np.uint8),
+        mask_before=np.zeros((16, NUM_ACHIEVEMENTS), dtype=np.uint8),
+        state_delta=np.ones((16, 16), dtype=np.float32),
+        state_delta_valid=np.ones(16, dtype=np.bool_),
+    )
+    buf.save_shard(shard_path)
+
+    out_ckpt = tmp_path / "frozen_out.pt"
+    result = train_phase1_transitions(
+        shards_dir=tmp_path,
+        checkpoint_path=init_ckpt,
+        output_checkpoint=out_ckpt,
+        total_steps=5,
+        batch_size=2,
+        seq_len=8,
+        horizons=(1, 2),
+        freeze_base=True,
+        allow_fresh_init=True,
+        device="cpu",
+    )
+
+    trained_model = JEPAv3(transition_state_dim=16)
+    trained_model.load_checkpoint(str(out_ckpt))
+
+    # 1. Base modules MUST be bitwise identical
+    assert torch.equal(trained_model.encoder.conv_net[0].weight, encoder_weight_before), "Encoder was modified despite freeze_base=True!"
+    assert torch.equal(trained_model.policy_prior.net[0].weight, prior_weight_before), "Policy prior was modified despite freeze_base=True!"
+
+    # 2. Transition head MUST have updated
+    assert not torch.equal(trained_model.state_delta_head.net[-1].weight, delta_weight_before), "State delta head did not update!"
+    assert result["config"]["freeze_base"] is True

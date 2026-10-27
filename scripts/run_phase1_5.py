@@ -44,6 +44,7 @@ def main() -> None:
     parser.add_argument("--horizons", type=int, nargs="+", default=[1, 5, 10])
     parser.add_argument("--labeled_ratio", type=float, default=0.5)
     parser.add_argument("--state_delta_weight", type=float, default=2.0)
+    parser.add_argument("--freeze_base", action="store_true", help="Freeze base model to prevent gameplay regression")
     parser.add_argument("--allow_fresh_init", action="store_true")
     parser.add_argument("--split_seed", type=int, default=0)
     parser.add_argument("--val_ratio", type=float, default=0.1)
@@ -83,6 +84,7 @@ def main() -> None:
         horizons=tuple(args.horizons),
         state_delta_weight=args.state_delta_weight,
         labeled_ratio=args.labeled_ratio,
+        freeze_base=args.freeze_base,
         allow_fresh_init=args.allow_fresh_init,
         val_ratio=args.val_ratio,
         split_seed=args.split_seed,

@@ -15,6 +15,7 @@ Headline experiment: when the world's dynamics change at test time, the model ke
 - [x] **Phase 2 — Planner + PPO Baseline** (MPC/CEM Planner + Curiosity Module + Comparative Results Table)
 - [x] **Phase 3 — Push-T + Crafter Full Loop** (Push-T Physics + Crafter Achievement Score + Drive Resumability)
 - [x] **Phase 4 — Dynamics Change & Test-Time Adaptation** (Headline Table: Frozen vs Adaptive vs PPO)
+- [x] **Phase 1.5 — Causal State-Delta Learning Gate** (Narrow state-delta gate passed; Run 3B preserved as candidate transition model)
 - [x] **v2 Promotion — Pure Learned World Model & Locked Evaluation** (**2.16%** on Crafter benchmark across 100 locked seeds — **PROMOTED TO V2 ✅**)
 - [ ] **Phase 5 — Hierarchical Subgoal Layer & Full Release** (Autonomous Causal Precedence DAG Mining, Hugging Face Checkpoints & Model Card)
 
@@ -22,6 +23,41 @@ Headline experiment: when the world's dynamics change at test time, the model ke
 
 Full design blueprint: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)  
 Comprehensive results & per-achievement breakdown: [`RESULTS.md`](RESULTS.md)
+
+---
+
+## Phase 1.5: Causal State-Delta Gate
+
+Phase 1.5 trains auxiliary transition heads on the JEPA representation and requires the
+predicted state-change MSE to beat a zero-change persistence baseline on held-out data.
+Both independent Colab runs passed this narrow gate; **Run 3B is preserved as a candidate
+transition model**, while `jepa_crafter_v3_t2_final.pt` remains the standing agent champion.
+
+| Run | State-Delta MSE | Persistence MSE | Gate | Validation Summary |
+|:---|---:|---:|:---:|:---|
+| Run 3A (`2b952a4`) | **0.0161188** | 0.0164005 | **PASS (narrow)** | 315 unique held-out labels; 6,528 sampled validation positions |
+| Run 3B (`67bff02`) | **0.0158931** | 0.0159792 | **PASS (narrow)** | 315 unique held-out labels; 6,528 sampled validation positions |
+
+The reported 6,528 validation positions are sampled sequence positions, not 6,528
+independent labels (dataset contains 2,000 unique valid labels across 13 episodes). The termination head remained at the majority baseline with zero recall/precision.
+Gameplay regression on seeds 2050–2099 scored 3.398% vs the 4.55% T2 reference baseline, so full Phase 1.5 agent promotion remains pending.
+
+### Strict Visual Crafter Screen
+
+The Phase 1.5 checkpoint was evaluated without privileged inventory inputs on 50 fixed
+episodes (`2050..2099`). It reached **3.398% Crafter Score**, improving on the clean
+3.171% screen, but it does not replace the existing 4.55% T2 reference benchmark.
+
+| Checkpoint | Episodes | Crafter Score | Mean Survival | Mean Reward | Achievements |
+|:---|---:|---:|---:|---:|---:|
+| Phase 1.5 candidate | 50 | **3.398%** | 178.34 | 3.42 | 4.32 / ep, 10 / 22 |
+| Clean T2 champion screen | 50 | 3.171% | 172.96 | 3.34 | 4.24 / ep, 10 / 22 |
+| T2 reference benchmark | 50 | **4.55%** | 181.36 | 4.12 | 5.02 / ep, 12 / 22 |
+
+Artifacts: [`Run 3A`](results/phase1_5_training_run3a.json) ·
+[`Run 3B`](results/phase1_5_training_run3b.json) ·
+[`Candidate screen`](results/screen_v3_phase1_5_candidate.json) ·
+[`Phase 1.5 audit`](results/phase1_5_review.md)
 
 ---
 

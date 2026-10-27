@@ -269,6 +269,7 @@ def train_phase1_transitions(
     manifest_path: Optional[Union[str, Path]] = None,
     split_seed: int = 0,
     capacity_transitions: int = 1_000_000,
+    freeze_base: bool = False,
 ) -> Dict[str, Any]:
     """Fine-tune v3 with JEPA plus generic transition losses."""
     dev = torch.device(device)
@@ -302,15 +303,23 @@ def train_phase1_transitions(
         transition_state_dim=state_dim,
         allow_fresh_init=allow_fresh_init,
     )
-    for p in model.parameters():
-        p.requires_grad = True
     head_params = list(model.state_delta_head.parameters()) + list(model.transition_head.parameters())
-    head_param_ids = {id(p) for p in head_params}
-    base_params = [p for p in model.parameters() if id(p) not in head_param_ids]
-    optimizer = optim.AdamW([
-        {"params": base_params, "lr": lr},
-        {"params": head_params, "lr": max(lr, 5e-4)},
-    ], weight_decay=1e-4)
+    if freeze_base:
+        for p in model.parameters():
+            p.requires_grad = False
+        for p in head_params:
+            p.requires_grad = True
+        optimizer = optim.AdamW(head_params, lr=max(lr, 5e-4), weight_decay=1e-4)
+        print("[Phase 1.5 Safety] Frozen base model enabled: encoder, core, prior, and Q-ensembles locked.")
+    else:
+        for p in model.parameters():
+            p.requires_grad = True
+        head_param_ids = {id(p) for p in head_params}
+        base_params = [p for p in model.parameters() if id(p) not in head_param_ids]
+        optimizer = optim.AdamW([
+            {"params": base_params, "lr": lr},
+            {"params": head_params, "lr": max(lr, 5e-4)},
+        ], weight_decay=1e-4)
     history: List[Dict[str, float]] = []
     start = time.time()
 
@@ -324,17 +333,36 @@ def train_phase1_transitions(
         )
         obs, actions = batch["obs"], batch["actions"]
         B, T = actions.shape
-        z_seq = _encode_batch(model, obs)
-        with torch.no_grad():
-            z_target = model.target_encoder(obs.reshape(B * T, *obs.shape[2:])).reshape(B, T, -1)
-        h_seq = model.recurrent_core.unroll_sequence(z_seq, actions, reset_masks=batch["dones"])
-        s_seq = torch.cat([z_seq, h_seq], dim=-1)
+        if freeze_base:
+            with torch.no_grad():
+                z_seq = _encode_batch(model, obs)
+                h_seq = model.recurrent_core.unroll_sequence(z_seq, actions, reset_masks=batch["dones"])
+                s_seq = torch.cat([z_seq, h_seq], dim=-1)
+            loss_jepa = torch.zeros((), device=dev)
+            loss_variance = torch.zeros((), device=dev)
+            loss_event = torch.zeros((), device=dev)
+            loss_health = torch.zeros((), device=dev)
+            latent_metrics = {}
+        else:
+            z_seq = _encode_batch(model, obs)
+            with torch.no_grad():
+                z_target = model.target_encoder(obs.reshape(B * T, *obs.shape[2:])).reshape(B, T, -1)
+            h_seq = model.recurrent_core.unroll_sequence(z_seq, actions, reset_masks=batch["dones"])
+            s_seq = torch.cat([z_seq, h_seq], dim=-1)
 
-        loss_jepa, latent_metrics = _jepa_multistep_loss(
-            model, z_seq, z_target, actions, batch["dones"], horizons
-        )
-        z_std = torch.sqrt(z_seq.reshape(B * T, -1).var(dim=0) + 1e-4)
-        loss_variance = F.relu(0.05 - z_std).mean()
+            loss_jepa, latent_metrics = _jepa_multistep_loss(
+                model, z_seq, z_target, actions, batch["dones"], horizons
+            )
+            z_std = torch.sqrt(z_seq.reshape(B * T, -1).var(dim=0) + 1e-4)
+            loss_variance = F.relu(0.05 - z_std).mean()
+            loss_event = model.event_head.compute_loss(
+                model.event_head(s_seq, actions, batch["mask_before"]), batch["events"]
+            )
+            event_counts = batch["events"].sum(dim=-1)
+            health_target = (batch["rewards"] - event_counts).clamp(-1.0, 1.0)
+            loss_health = model.health_head.compute_loss(
+                model.health_head(s_seq, actions), health_target
+            )
 
         transition = model.predict_transition(s_seq, actions)
         loss_state = model.state_delta_head.compute_loss(
@@ -368,14 +396,6 @@ def train_phase1_transitions(
             batch["rewards"],
             batch["dones"],
         )
-        loss_event = model.event_head.compute_loss(
-            model.event_head(s_seq, actions, batch["mask_before"]), batch["events"]
-        )
-        event_counts = batch["events"].sum(dim=-1)
-        health_target = (batch["rewards"] - event_counts).clamp(-1.0, 1.0)
-        loss_health = model.health_head.compute_loss(
-            model.health_head(s_seq, actions), health_target
-        )
 
         total = (
             loss_jepa
@@ -388,9 +408,10 @@ def train_phase1_transitions(
         )
         optimizer.zero_grad(set_to_none=True)
         total.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        torch.nn.utils.clip_grad_norm_(head_params if freeze_base else model.parameters(), 5.0)
         optimizer.step()
-        model.update_target_networks(decay_encoder=0.99, decay_q=0.995)
+        if not freeze_base:
+            model.update_target_networks(decay_encoder=0.99, decay_q=0.995)
 
         record = {
             "step": float(step),
@@ -435,6 +456,7 @@ def train_phase1_transitions(
         "state_delta_labels_are_training_targets_only": True,
         "strict_inference_uses_inventory_input": False,
         "split_seed": split_seed,
+        "freeze_base": freeze_base,
     }
     model.save_checkpoint(str(output_checkpoint), step=total_steps, optimizer=optimizer, config=config)
     result = {
@@ -469,6 +491,8 @@ def main() -> None:
     parser.add_argument("--seq_len", type=int, default=16)
     parser.add_argument("--horizons", type=int, nargs="+", default=[1, 5, 10])
     parser.add_argument("--labeled_ratio", type=float, default=0.5)
+    parser.add_argument("--state_delta_weight", type=float, default=2.0)
+    parser.add_argument("--freeze_base", action="store_true", help="Freeze base model (encoder, core, prior, Q) to prevent gameplay regression")
     parser.add_argument("--allow_fresh_init", action="store_true")
     parser.add_argument("--transition_state_dim", type=int, default=None)
     parser.add_argument("--split_seed", type=int, default=0)
@@ -487,6 +511,8 @@ def main() -> None:
         seq_len=args.seq_len,
         horizons=tuple(args.horizons),
         labeled_ratio=args.labeled_ratio,
+        state_delta_weight=args.state_delta_weight,
+        freeze_base=args.freeze_base,
         allow_fresh_init=args.allow_fresh_init,
         device=args.device,
         transition_state_dim=args.transition_state_dim,
