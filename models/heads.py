@@ -7,7 +7,7 @@ Implements:
    Loss: Huber (SmoothL1) Loss.
 """
 
-from typing import Any, Optional, Union
+from typing import Any, Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
@@ -211,6 +211,55 @@ class StateDeltaHead(nn.Module):
             action = self.action_emb(action.squeeze(-1) if action.ndim > 1 else action)
         features = torch.cat([state, action], dim=-1)
         return self.net(features)
+
+    def compute_loss(
+        self,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+        valid_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        loss = F.mse_loss(prediction, target, reduction="none")
+        if valid_mask is not None:
+            mask = valid_mask.float().reshape(-1, 1)
+            loss = loss.reshape(-1, self.state_dim) * mask
+            denom = mask.sum().clamp_min(1.0) * self.state_dim
+            return loss.sum() / denom
+        return loss.mean()
+
+class StateReadoutHead(nn.Module):
+    """Predicts a generic current-state/resource estimate and uncertainty from composite state.
+
+    Input: composite state s_t = [z_t, h_t]
+    Output: estimated state x_hat_t of dimension state_dim (e.g. 16), uncertainty of shape [..., state_dim]
+    The head has zero Crafter names, recipe tables, or object-specific logic.
+    At inference it consumes only learned representations [z_t, h_t], never environment inventory dictionaries.
+    """
+
+    def __init__(
+        self,
+        latent_dim: int,
+        state_dim: int = 16,
+        hidden_dim: int = 256,
+    ):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.state_dim = state_dim
+        self.net = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.SiLU(),
+        )
+        self.state_mean = nn.Linear(hidden_dim, state_dim)
+        self.state_logvar = nn.Linear(hidden_dim, state_dim)
+
+    def forward(self, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        features = self.net(state)
+        x_hat = self.state_mean(features)
+        uncertainty = F.softplus(self.state_logvar(features)) + 1e-4
+        return x_hat, uncertainty
 
     def compute_loss(
         self,

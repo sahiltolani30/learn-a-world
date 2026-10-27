@@ -29,6 +29,7 @@ from models.heads import (
     ReturnNormalizer,
     TimeToEventHead,
     StateDeltaHead,
+    StateReadoutHead,
     TransitionHead,
     NUM_ACHIEVEMENTS,
 )
@@ -266,6 +267,11 @@ class JEPAv3(nn.Module):
             state_dim=transition_state_dim,
             hidden_dim=hidden_dim,
         )
+        self.state_readout_head = StateReadoutHead(
+            latent_dim=self.state_dim,
+            state_dim=transition_state_dim,
+            hidden_dim=hidden_dim,
+        )
         self.transition_head = TransitionHead(
             latent_dim=self.state_dim,
             num_actions=num_actions,
@@ -390,6 +396,10 @@ class JEPAv3(nn.Module):
             "done_prob": torch.sigmoid(done_logits),
             "uncertainty": uncertainty,
         }
+
+    def predict_state(self, s: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Predict generic current state estimate and uncertainty from composite state s_t = [z_t, h_t]."""
+        return self.state_readout_head(s)
 
     def q_min(self, s: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:
         """Clipped Double-Q minimum return across ensemble heads."""

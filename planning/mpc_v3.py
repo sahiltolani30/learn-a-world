@@ -56,6 +56,7 @@ class RecurrentMPCPlanner:
         use_landmark_guidance: bool = True,
         use_policy_prior: bool = True,
         strict_inference: bool = True,
+        use_transition_model: bool = False,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -78,6 +79,7 @@ class RecurrentMPCPlanner:
         self.death_risk_factor = death_risk_factor
         self.harvest_bonus = harvest_bonus
         self.strict_inference = strict_inference
+        self.use_transition_model = use_transition_model
         if self.strict_inference and semantic_memory is not None:
             raise RuntimeError(
                 "Crafter semantic memory with hardcoded subgoals/recipes cannot be attached in strict inference mode. "
@@ -323,6 +325,15 @@ class RecurrentMPCPlanner:
                 if stone_offset is not None:
                     pos_stone_t = torch.tensor(stone_offset, dtype=torch.float32, device=self.device).unsqueeze(0).expand(C, -1).clone()
 
+                # Transition-aware state tracking per imagined candidate branch
+                x_hat_0 = None
+                x_hat_t = None
+                transition_preds_history = []
+                if self.use_transition_model and hasattr(self.model, "predict_state"):
+                    x_hat_0, _ = self.model.predict_state(s_0)
+                    # Each candidate maintains its own independent predicted state:
+                    x_hat_t = x_hat_0.expand(C, -1).clone()
+
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
                     delta_move = action_deltas_tensor[a_t]
@@ -330,6 +341,37 @@ class RecurrentMPCPlanner:
                         pos_struct_t = pos_struct_t + delta_move
                     if pos_stone_t is not None:
                         pos_stone_t = pos_stone_t + delta_move
+
+                    # Transition head imagined consequence prediction (Shadow mode: per-candidate state tracking)
+                    if self.use_transition_model and hasattr(self.model, "predict_transition"):
+                        trans = self.model.predict_transition(s_t, a_t)
+                        delta_hat = trans["state_delta"]
+                        reward_hat = trans["reward"]
+                        done_prob = trans["done_prob"]
+                        uncertainty = trans["uncertainty"]
+
+                        if not torch.isfinite(delta_hat).all():
+                            raise FloatingPointError("Predicted state delta contains NaN or Inf")
+                        if not torch.isfinite(reward_hat).all():
+                            raise FloatingPointError("Predicted transition reward contains NaN or Inf")
+                        if ((done_prob < 0.0) | (done_prob > 1.0)).any():
+                            raise ValueError("Predicted done probability outside [0, 1]")
+                        if (uncertainty < 0.0).any():
+                            raise ValueError("Predicted transition uncertainty must be non-negative")
+
+                        if x_hat_t is not None:
+                            x_hat_t = x_hat_t + delta_hat
+                            if not torch.isfinite(x_hat_t).all():
+                                raise FloatingPointError("Imagined candidate state contains NaN or Inf")
+
+                        if iteration == self.cem_iterations - 1:
+                            transition_preds_history.append({
+                                "step": t,
+                                "delta_hat": delta_hat,
+                                "reward_hat": reward_hat,
+                                "done_prob": done_prob,
+                                "uncertainty": uncertainty,
+                            })
 
                     r_hat, decomp = self.model.predict_reward(
                         s_t,
@@ -507,6 +549,17 @@ class RecurrentMPCPlanner:
                     "stone_offset_x": float(stone_offset[0]) if stone_offset is not None else 0.0,
                     "stone_offset_y": float(stone_offset[1]) if stone_offset is not None else 0.0,
                 }
+                if self.use_transition_model:
+                    best_debug.update({
+                        "transition_model_used": True,
+                        "state_estimate": x_hat_0[0].detach().cpu().numpy().tolist() if x_hat_0 is not None else [],
+                        "predicted_delta": transition_preds_history[0]["delta_hat"][best_idx].detach().cpu().numpy().tolist() if transition_preds_history else [],
+                        "predicted_reward": float(transition_preds_history[0]["reward_hat"][best_idx].item()) if transition_preds_history else 0.0,
+                        "predicted_done_probability": float(transition_preds_history[0]["done_prob"][best_idx].item()) if transition_preds_history else 0.0,
+                        "predicted_uncertainty": float(transition_preds_history[0]["uncertainty"][best_idx].mean().item()) if transition_preds_history else 0.0,
+                    })
+                else:
+                    best_debug["transition_model_used"] = False
                 if self.standardize_scores:
                     best_debug.update({
                         "z_reward": float(z_reward[best_idx].item()),

@@ -203,7 +203,7 @@ def run_screening(
             "Benchmark evaluations must be calibrated. Never silently continue uncalibrated."
         )
 
-    protocol_id = "strict_visual_jepa_clean_v1" if (is_calibrated and not allow_uncalibrated_diagnostic) else "uncalibrated_diagnostic_not_a_benchmark"
+    protocol_id = "strict_visual_jepa_clean_v2" if (is_calibrated and not allow_uncalibrated_diagnostic) else "uncalibrated_diagnostic_not_a_benchmark"
     print(f"[Protocol Lock] Protocol ID: {protocol_id} (Git: {git_commit[:8]}, Checkpoint SHA: {ckpt_sha256[:12] if ckpt_sha256 else 'none'}...)")
 
     # 2. Build Planner & Belief with Adaptive Frontier Thresholds
@@ -327,8 +327,28 @@ def run_screening(
         "achievements_used_for_scoring_only": True,
         "semantic_memory_enabled": False,
         "adaptation_mode": "frozen",
-        "num_episodes": num_episodes,
+        "seeds": [seed_start, seed_start + num_episodes - 1],
         "seed_range": [seed_start, seed_start + num_episodes - 1],
+        "num_episodes": num_episodes,
+        "planner_configuration": {
+            "horizon": horizon,
+            "num_candidates": num_candidates,
+            "cem_iterations": cem_iterations,
+            "elite_ratio": 0.15,
+            "prior_mix": prior_mix,
+            "action_persistence": action_persistence,
+            "uncertainty_weight": uncertainty_weight,
+            "novelty_weight": novelty_weight,
+            "vital_weight": vital_weight,
+            "death_risk_factor": death_risk_factor,
+            "harvest_bonus": harvest_bonus,
+            "denormalize_q": denormalize_q,
+            "tte_weight": tte_weight,
+            "standardize_scores": standardize_scores,
+            "frontier_threshold": frontier_threshold,
+            "common_threshold": common_threshold,
+            "strict_inference": True,
+        },
         "horizon": horizon,
         "num_candidates": num_candidates,
         "cem_iterations": cem_iterations,

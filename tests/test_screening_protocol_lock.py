@@ -53,3 +53,27 @@ def test_screening_allows_uncalibrated_diagnostic_flag(tmp_path):
     )
     assert summary["protocol_id"] == "uncalibrated_diagnostic_not_a_benchmark"
     assert summary["calibrator_sha256"] is None
+
+
+def test_screening_protocol_v2_schema_when_calibrated(tmp_path):
+    model = JEPAv3()
+    ckpt_path = tmp_path / "dummy.pt"
+    model.save_checkpoint(str(ckpt_path))
+
+    summary = run_screening(
+        checkpoint_path=str(ckpt_path),
+        calibrator_path="results/calibration/event_head_calibrator.json",
+        allow_uncalibrated_diagnostic=False,
+        num_episodes=1,
+        max_steps=2,
+        output_json=str(tmp_path / "out.json"),
+    )
+    assert summary["protocol_id"] == "strict_visual_jepa_clean_v2"
+    assert summary["strict_inference"] is True
+    assert summary["privileged_inventory_used"] is False
+    assert summary["privileged_achievements_used_for_action"] is False
+    assert summary["achievements_used_for_scoring_only"] is True
+    assert summary["semantic_memory_enabled"] is False
+    assert summary["adaptation_mode"] == "frozen"
+    assert "seeds" in summary
+    assert "planner_configuration" in summary
