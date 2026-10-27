@@ -61,6 +61,7 @@ class RecurrentMPCPlanner:
         transition_weight: float = 0.5,
         transition_done_penalty: float = 2.0,
         transition_resource_weight: float = 0.25,
+        compositional_planner: Optional[Any] = None,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -88,6 +89,7 @@ class RecurrentMPCPlanner:
         self.transition_weight = transition_weight
         self.transition_done_penalty = transition_done_penalty
         self.transition_resource_weight = transition_resource_weight
+        self.compositional_planner = compositional_planner
         if self.strict_inference and semantic_memory is not None:
             raise RuntimeError(
                 "Crafter semantic memory with hardcoded subgoals/recipes cannot be attached in strict inference mode. "
@@ -195,6 +197,27 @@ class RecurrentMPCPlanner:
                         current_inv=inv_context,
                         achieved_names=achieved_set,
                     )
+            elif self.compositional_planner is not None:
+                x_hat_root = None
+                if hasattr(self.model, "predict_state"):
+                    x_hat_root, _ = self.model.predict_state(s_0)
+                subgoal_info = self.compositional_planner.plan_subgoal(
+                    obs_latent=z_0,
+                    grounded_state=x_hat_root if x_hat_root is not None else torch.zeros(16, device=self.device),
+                )
+                if subgoal_info is not None:
+                    active_subgoal = {
+                        "status": subgoal_info["status"],
+                        "producer_action": subgoal_info.get("producer_action", subgoal_info["recommended_action"]),
+                        "producer_key": subgoal_info.get("visual_key", z_0),
+                        "producer_return": subgoal_info.get("expected_return", 1.0),
+                        "target_action": subgoal_info["recommended_action"],
+                        "target_key": subgoal_info.get("visual_key", z_0),
+                        "target_name": subgoal_info.get("prototype_id", "phase2_subgoal"),
+                    }
+                    if subgoal_info.get("visual_sim", 0.0) >= 0.35:
+                        retrieved_action = subgoal_info["recommended_action"]
+                        match_sim = float(subgoal_info.get("visual_sim", 0.5))
 
             # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
             structure_anchor = None

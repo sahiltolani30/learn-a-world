@@ -137,6 +137,7 @@ def run_screening(
     transition_weight: float = 0.5,
     transition_done_penalty: float = 2.0,
     transition_resource_weight: float = 0.25,
+    causal_memory_bank_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -212,7 +213,21 @@ def run_screening(
     protocol_id = "strict_visual_jepa_clean_v2" if (is_calibrated and not allow_uncalibrated_diagnostic) else "uncalibrated_diagnostic_not_a_benchmark"
     print(f"[Protocol Lock] Protocol ID: {protocol_id} (Git: {git_commit[:8]}, Checkpoint SHA: {ckpt_sha256[:12] if ckpt_sha256 else 'none'}...)")
 
-    # 2. Build Planner & Belief with Adaptive Frontier Thresholds
+    # 2. Build Optional Phase 2 Compositional Causal Planner
+    comp_planner = None
+    if causal_memory_bank_path:
+        bank_p = Path(causal_memory_bank_path)
+        if bank_p.exists():
+            from planning.causal_memory import RelationHypothesisBank
+            from planning.compositional_planner import CompositionalCausalPlanner
+            bank = RelationHypothesisBank(device=dev)
+            bank.load(str(bank_p))
+            comp_planner = CompositionalCausalPlanner(bank, device=dev)
+            print(f"[Phase 2 Causal Memory] Loaded {len(bank)} prototypes from: {bank_p}")
+        else:
+            print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {bank_p}")
+
+    # 3. Build Planner & Belief with Adaptive Frontier Thresholds
     planner = RecurrentMPCPlanner(
         model=model,
         horizon=horizon,
@@ -239,6 +254,7 @@ def run_screening(
         transition_weight=transition_weight,
         transition_done_penalty=transition_done_penalty,
         transition_resource_weight=transition_resource_weight,
+        compositional_planner=comp_planner,
         semantic_memory=None,
         device=dev,
     )
@@ -367,6 +383,8 @@ def run_screening(
         },
         "use_transition_model": use_transition_model,
         "transition_scoring": transition_scoring,
+        "causal_memory_enabled": bool(comp_planner is not None),
+        "causal_memory_prototypes": len(comp_planner.hypothesis_bank) if comp_planner is not None else 0,
         "ablation_mode": "active_consequence" if (use_transition_model and transition_scoring) else ("shadow_transition" if use_transition_model else "baseline_t2"),
         "horizon": horizon,
         "num_candidates": num_candidates,
@@ -485,6 +503,7 @@ if __name__ == "__main__":
     parser.add_argument("--transition_weight", type=float, default=0.5, help="Weight for model-predicted transition reward.")
     parser.add_argument("--transition_done_penalty", type=float, default=2.0, help="Penalty factor for predicted termination probability.")
     parser.add_argument("--transition_resource_weight", type=float, default=0.25, help="Weight for predicted positive resource increments.")
+    parser.add_argument("--causal_memory_bank", type=str, default=None, help="Path to Phase 2 learned RelationHypothesisBank JSON.")
     parser.set_defaults(standardize_scores=False)
     args = parser.parse_args()
 
@@ -517,4 +536,5 @@ if __name__ == "__main__":
         transition_weight=args.transition_weight,
         transition_done_penalty=args.transition_done_penalty,
         transition_resource_weight=args.transition_resource_weight,
+        causal_memory_bank_path=args.causal_memory_bank,
     )
