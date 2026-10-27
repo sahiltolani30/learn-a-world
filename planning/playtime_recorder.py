@@ -87,9 +87,14 @@ class PlaytimeRecorder:
             ValueError: if engine achievements (or any unknown kwarg) are handed in,
                         or if a vector does not match its contract dim.
         """
-        if "achievements" in kwargs:
+        if kwargs:
+            # Fail closed on ANY unexpected payload, not just the literal
+            # 'achievements' key — the recorder's input surface is exactly the
+            # named parameters above, nothing else (audit V6 fix).
             raise ValueError(
-                "strict protocol: engine achievements are scoring-only and may never enter the memory path"
+                f"strict protocol: unexpected payload {sorted(kwargs)} — the recorder "
+                "accepts only belief-derived signals; engine achievements/inventory "
+                "are scoring-only and may never enter the memory path"
             )
 
         obs_latent = _to_plain_float_list(z_t, OBS_LATENT_DIM, "z_t")

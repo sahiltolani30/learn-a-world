@@ -506,6 +506,19 @@ class RecurrentMPCPlanner:
                     elif self.strict_inference and self.use_transition_model and self.transition_scoring and x_hat_t is not None:
                         # Strict-mode landmark guidance using strictly learned state readout & imagined dynamics
                         # Zero privileged environment inventory inspection!
+                        #
+                        # Zero-hardcoding fail-fast (compliance audit V1): the branches
+                        # below index x_hat dims 0/6 with engine-inventory meaning
+                        # (wood/pickaxe). That is engine layout knowledge and must never
+                        # execute — anchors cannot be set in strict mode by construction
+                        # (semantic_memory=None is enforced at init). If one ever is,
+                        # abort rather than silently act on hardcoded semantics.
+                        if structure_anchor is not None or stone_anchor is not None:
+                            raise RuntimeError(
+                                "Strict mode forbids landmark anchors: the anchor-guidance "
+                                "path indexes learned state dims with hardcoded engine "
+                                "semantics (audit V1). Run privileged mode or remove anchors."
+                            )
                         if self.use_landmark_guidance and structure_anchor is not None:
                             struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
                             cand_has_wood = (x_hat_t[:, 0] >= 0.5)
