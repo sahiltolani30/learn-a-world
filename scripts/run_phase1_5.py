@@ -89,7 +89,7 @@ def main() -> None:
         capacity_transitions=args.capacity_transitions,
         device=args.device,
     )
-    print(json.dumps({"status": result["status"], "metrics": result["metrics"]}, indent=2))
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

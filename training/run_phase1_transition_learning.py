@@ -282,6 +282,14 @@ def train_phase1_transitions(
     train_buffer, val_buffer = buffer.split_train_val(val_ratio=val_ratio, seed=split_seed)
     if train_buffer.num_episodes == 0:
         raise ValueError("Training split is empty")
+    train_lstats = train_buffer.get_labeled_statistics()
+    val_lstats = val_buffer.get_labeled_statistics()
+    print(
+        f"[Phase 1.5 Split] Train: {train_lstats['labeled_transitions']} labeled transitions "
+        f"across {train_lstats['labeled_episodes']} episodes (density {train_lstats['labeled_density_pct']}%) | "
+        f"Val: {val_lstats['labeled_transitions']} labeled transitions "
+        f"across {val_lstats['labeled_episodes']} episodes (density {val_lstats['labeled_density_pct']}%)"
+    )
     inferred_state_dim = int(train_buffer.episodes[0]["state_delta"].shape[-1])
     state_dim = int(transition_state_dim or inferred_state_dim)
     if state_dim != inferred_state_dim:
