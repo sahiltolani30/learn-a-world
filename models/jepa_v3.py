@@ -574,13 +574,15 @@ class JEPAv3(nn.Module):
         self,
         path: str,
         device: Optional[Union[str, torch.device]] = None,
+        map_location: Optional[Union[str, torch.device]] = None,
         strict_v3: bool = False,
     ) -> Dict[str, Any]:
         """
         Loads v3 checkpoint or transfers weights from legacy checkpoints with schema normalization.
         Attaches calibrator and verifies parameter integrity.
         """
-        dev = torch.device(device) if device is not None else torch.device("cpu")
+        target_dev = map_location if map_location is not None else device
+        dev = torch.device(target_dev) if target_dev is not None else torch.device("cpu")
         self.to(dev)
         ckpt = torch.load(path, map_location=dev)
 

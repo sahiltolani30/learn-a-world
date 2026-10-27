@@ -59,7 +59,7 @@ def consolidate_phase2_memory(
     model = JEPAv3()
     ckpt_p = Path(checkpoint_path)
     if ckpt_p.exists():
-        model.load_checkpoint(str(ckpt_p), map_location=dev)
+        model.load_checkpoint(str(ckpt_p), device=dev)
         print(f"-> Loaded base model from {ckpt_p}")
     model.to(dev)
     model.eval()
