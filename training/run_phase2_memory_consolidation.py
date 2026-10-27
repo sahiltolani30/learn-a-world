@@ -18,6 +18,7 @@ Outputs:
 """
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -236,6 +237,10 @@ def consolidate_phase2_memory(
     diag_summary = {
         "phase": "phase2_grounded_memory_consolidation",
         "checkpoint": str(checkpoint_path),
+        "checkpoint_sha256": (
+            hashlib.sha256(Path(checkpoint_path).read_bytes()).hexdigest()
+            if Path(checkpoint_path).exists() else None
+        ),
         "episodes_ingested": episodes_ingested,
         "transitions_ingested": transitions_ingested,
         "degraded_label_steps": degraded_steps,

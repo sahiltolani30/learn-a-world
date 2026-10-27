@@ -547,9 +547,13 @@ class RecurrentMPCPlanner:
                         # 3. Resource consequence progress: reward transitions predicting positive resource acquisition.
                         #    Clipped to <= 0.25 total per step (plan Stage 6): unbounded, it can reach ~2.0/step
                         #    and out-shout both the Q term and subgoal shaping (harvest-spam driver).
-                        res_prog = self.transition_resource_weight * torch.clamp(
-                            torch.clamp(delta_hat, min=0.0).sum(dim=-1), max=1.0
-                        ).reshape(-1)
+                        #    Gated on the delta head actually being trained (loaded from the
+                        #    checkpoint) — a random-init head's deltas are noise.
+                        res_prog = 0.0
+                        if "state_delta_head" in getattr(self.model, "loaded_component_keys", set()):
+                            res_prog = self.transition_resource_weight * torch.clamp(
+                                torch.clamp(delta_hat, min=0.0).sum(dim=-1), max=1.0
+                            ).reshape(-1)
                         consequence_reward = r_trans + done_pen + res_prog
 
                     step_reward = (

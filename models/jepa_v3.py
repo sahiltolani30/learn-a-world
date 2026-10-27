@@ -663,6 +663,12 @@ class JEPAv3(nn.Module):
             self.return_normalizer.initialized = ckpt["normalizer"].get("initialized", True)
             loaded_components.append("normalizer")
 
+        # Provenance: which components actually came from the file vs were left at
+        # random init. Consumers (e.g. MPC's transition consequence term) must gate
+        # on this — a random-init head's outputs are noise, not predictions.
+        self.loaded_component_keys = {
+            name.split(" ")[0] for name in loaded_components
+        }
         self.to(dev)
 
         # Integrity verification

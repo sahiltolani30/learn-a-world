@@ -87,7 +87,7 @@ def audit(bank_path: Path) -> int:
     bad_tables = []
     for pid, p in table_cards:
         for dim, amt in p.get("needs", []):
-            if int(dim) != RESOURCE_WOOD_DIM or not (0.5 <= float(amt) <= 2.5):
+            if int(dim) != RESOURCE_WOOD_DIM or not (0.5 <= float(amt) <= 2.0):
                 bad_tables.append((pid, dim, amt))
     if table_cards and bad_tables:
         failures.append(f"B: place_table cards with non-wood needs: {bad_tables[:5]}")

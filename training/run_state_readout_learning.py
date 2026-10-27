@@ -17,6 +17,7 @@ Strict Architectural Constraints:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -373,6 +374,10 @@ def train_state_readout(
         "base_model_frozen": True,
         "state_readout_head_trainable": True,
         "use_target_encoder": bool(use_target_encoder),
+        "checkpoint_sha256": (
+            hashlib.sha256(Path(checkpoint_path).read_bytes()).hexdigest()
+            if checkpoint_path and Path(checkpoint_path).exists() else None
+        ),
     }
 
     out_ckpt = Path(output_checkpoint)

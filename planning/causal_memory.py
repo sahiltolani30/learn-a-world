@@ -414,7 +414,9 @@ class TransitionPrototype:
     consumes: List[List[float]] = field(default_factory=list)   # [[dim, |delta|], ...] (delta <= -0.25)
     unlock_prob: float = 0.0
     wilson_lb: float = 0.0
-    visual_dispersion: float = 1.0             # mean pairwise intra-cluster cosine; 1.0 if single-member
+    visual_dispersion: float = 1.0             # mean pairwise intra-cluster cosine SIMILARITY:
+                                               # HIGH = homogeneous cue (informative WHEN);
+                                               # LOW = fired across varied scenes (cue uninformative).
     status: str = "confirmed"                  # "hypothesis" if weighted successes < 3
     success_offline: float = 0.0
     success_online: float = 0.0

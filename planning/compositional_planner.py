@@ -73,9 +73,14 @@ class CompositionalCausalPlanner:
         return trust
 
     def _ucb_bonus(self, card: TransitionPrototype) -> float:
-        """UCB exploration bonus over empirical attempts; decays ~1/sqrt(n)."""
+        """UCB exploration bonus over empirical attempts; decays ~1/sqrt(n).
+        N_total is the bank's total ATTEMPT evidence (sum of card attempt counts),
+        not the corpus step count — otherwise the bonus saturates at the cap and
+        exploration cannot discriminate between cards (review finding, Stage 5)."""
         bank = self.hypothesis_bank
-        n_total = max(int(getattr(bank, "evidence_count", 0)), 1)
+        if not hasattr(self, "_n_total_cache") or self._n_total_cache[0] != len(bank.prototypes):
+            self._n_total_cache = (len(bank.prototypes), sum(p.attempt_count for p in bank.prototypes.values()))
+        n_total = max(self._n_total_cache[1], 1)
         n_p = max(card.attempt_count, 0)
         return float(min(self.ucb_cap, self.ucb_weight * (2.0 * np.log(1.0 + n_total) / (1.0 + n_p)) ** 0.5))
 
@@ -161,6 +166,8 @@ class CompositionalCausalPlanner:
             if chained is None:
                 return None
             per_apply = max(self._producer_amount(chained[-1]["card"], dim), 1e-6)
+            # Cap applications per deficit: protects the cost term from a producer with a
+            # tiny learned delta demanding absurd repeat counts within one plan step.
             applications = int(min(10, max(1, int(np.ceil(amount / per_apply)))))
             for link in chained:
                 link["applications"] = link.get("applications", 0)

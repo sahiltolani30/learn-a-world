@@ -104,7 +104,9 @@ def test_record_step_converts_tensors_to_lists():
 
     assert len(steps) == 1
     step = steps[0]
-    assert set(step.keys()) == BANK_CONTRACT_KEYS
+    # record_step stores exactly the contract keys; end_episode's transition-view
+    # enrichment (state_delta / next_*) is applied later and is a contract SUPerset.
+    assert set(step.keys()) >= BANK_CONTRACT_KEYS
     assert isinstance(step["obs_latent"], list)
     assert len(step["obs_latent"]) == OBS_LATENT_DIM
     assert all(isinstance(v, float) for v in step["obs_latent"])

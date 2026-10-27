@@ -128,13 +128,41 @@ class PlaytimeRecorder:
     def end_episode(self, bank: Any) -> Dict[str, int]:
         """Hands the buffered episode to the bank, refreshes the causal graph, rolls over.
 
+        Before dispatch, the buffered steps are augmented with the transition view the
+        bank's near-miss rule needs (review fix, plan Stage 8): state_delta = x_hat[t+1]
+        - x_hat[t] (zeros on the first step, absorbing on the terminal step), plus
+        next_grounded_state / next_obs_latent. Without these, online near-miss
+        classification would degenerate to `reward <= 0` (max|delta| == 0 always).
         learn_from_episode + refresh_edges are the only bank surface used here.
         """
-        stats = bank.learn_from_episode(self._buffer, episode_id=self._episode_counter)
+        steps = self._finalize_transition_view(self._buffer)
+        stats = bank.learn_from_episode(steps, episode_id=self._episode_counter)
         bank.refresh_edges()
         self._buffer = []
         self._episode_counter += 1
         return stats
+
+    @staticmethod
+    def _finalize_transition_view(buffer: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Builds next-state / delta fields from consecutive buffered x_hat/z values."""
+        out: List[Dict[str, Any]] = []
+        for i, step in enumerate(buffer):
+            is_final = i == len(buffer) - 1
+            if is_final:
+                next_state = list(step["grounded_state"])
+                next_latent = list(step["obs_latent"])
+                delta = [0.0] * GROUNDED_STATE_DIM
+            else:
+                nxt = buffer[i + 1]
+                next_state = list(nxt["grounded_state"])
+                next_latent = list(nxt["obs_latent"])
+                delta = [float(n) - float(c) for n, c in zip(next_state, step["grounded_state"])]
+            enriched = dict(step)
+            enriched["state_delta"] = delta
+            enriched["next_grounded_state"] = next_state
+            enriched["next_obs_latent"] = next_latent
+            out.append(enriched)
+        return out
 
     def __len__(self) -> int:
         """Number of steps currently buffered for the in-progress episode."""
