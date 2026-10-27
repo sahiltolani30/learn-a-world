@@ -1,0 +1,187 @@
+{
+  "analysis": "Protocol v2 Paired Statistical Equivalence Analysis",
+  "num_episodes": 50,
+  "seed_range": [
+    2050,
+    2099
+  ],
+  "clean_baseline": {
+    "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+    "checkpoint_sha256": "0c120bfa3837fc3eaec36b46647e8427b1c4a3ea7085a196b98cf0e0c368b5c8",
+    "crafter_score": 3.179714799755639,
+    "mean_reward": 2.88,
+    "std_reward": 1.6036209028320876,
+    "mean_survival_length": 174.5,
+    "std_survival_length": 57.64694267695382,
+    "mean_achievements_per_ep": 3.78,
+    "unique_achievements_unlocked": 10
+  },
+  "frozen_phase1_5_candidate": {
+    "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5_frozen.pt",
+    "checkpoint_sha256": "5931a6ed7276b01797fca5ebd3ad167ce3b24807bcc1ae6bac4a0918f794906c",
+    "crafter_score": 2.883842752992269,
+    "mean_reward": 3.18,
+    "std_reward": 1.2464349160706305,
+    "mean_survival_length": 176.82,
+    "std_survival_length": 51.91712241640517,
+    "mean_achievements_per_ep": 4.1,
+    "unique_achievements_unlocked": 9
+  },
+  "paired_differences": {
+    "crafter_score": {
+      "diff": -0.2958720467633702,
+      "ci_95": [
+        -1.0015745162963867,
+        0.46170252561569214
+      ],
+      "spans_zero": true
+    },
+    "mean_reward": {
+      "diff": 0.3,
+      "ci_95": [
+        -0.24,
+        0.86
+      ],
+      "paired_t_stat": 1.0434983894999021,
+      "p_value_t": 0.3018385184353701,
+      "p_value_wilcoxon": 0.3525511203345628
+    },
+    "mean_survival_length": {
+      "diff": 2.32,
+      "ci_95": [
+        -15.28,
+        20.280499999999993
+      ],
+      "paired_t_stat": 0.2555425393427125,
+      "p_value_t": 0.7993737584568037,
+      "p_value_wilcoxon": 0.9542249738357711
+    },
+    "mean_achievements_per_ep": {
+      "diff": 0.32,
+      "ci_95": [
+        -0.22,
+        0.88
+      ],
+      "paired_t_stat": 1.117544101499933,
+      "p_value_t": 0.2692113070117657,
+      "p_value_wilcoxon": 0.29443210247781526
+    }
+  },
+  "per_achievement_unlock_rates": {
+    "collect_coal": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "collect_diamond": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "collect_drink": {
+      "clean_pct": 30.0,
+      "frozen_pct": 38.0,
+      "diff_pct": 8.0
+    },
+    "collect_iron": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "collect_sapling": {
+      "clean_pct": 50.0,
+      "frozen_pct": 60.0,
+      "diff_pct": 10.0
+    },
+    "collect_stone": {
+      "clean_pct": 4.0,
+      "frozen_pct": 0.0,
+      "diff_pct": -4.0
+    },
+    "collect_wood": {
+      "clean_pct": 82.0,
+      "frozen_pct": 90.0,
+      "diff_pct": 8.0
+    },
+    "defeat_skeleton": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "defeat_zombie": {
+      "clean_pct": 2.0,
+      "frozen_pct": 2.0,
+      "diff_pct": 0.0
+    },
+    "eat_cow": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "eat_plant": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "make_iron_pickaxe": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "make_iron_sword": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "make_stone_pickaxe": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "make_stone_sword": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "make_wood_pickaxe": {
+      "clean_pct": 10.0,
+      "frozen_pct": 8.0,
+      "diff_pct": -2.0
+    },
+    "make_wood_sword": {
+      "clean_pct": 8.0,
+      "frozen_pct": 4.0,
+      "diff_pct": -4.0
+    },
+    "place_furnace": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "place_plant": {
+      "clean_pct": 48.0,
+      "frozen_pct": 57.99999999999999,
+      "diff_pct": 10.0
+    },
+    "place_stone": {
+      "clean_pct": 0.0,
+      "frozen_pct": 0.0,
+      "diff_pct": 0.0
+    },
+    "place_table": {
+      "clean_pct": 50.0,
+      "frozen_pct": 54.0,
+      "diff_pct": 4.0
+    },
+    "wake_up": {
+      "clean_pct": 94.0,
+      "frozen_pct": 96.0,
+      "diff_pct": 2.0
+    }
+  },
+  "gate_11_verdict": {
+    "status": "CONFIRMED_EQUIVALENT",
+    "statistically_significant_regression": false,
+    "summary": "Statistical equivalence confirmed under Protocol v2: 95% bootstrap CI for Crafter score difference spans zero ([-1.00%, +0.46%], diff: -0.30%). Mean reward diff: +0.30 (95% CI: [-0.24, +0.86], p=0.302). Mean survival diff: +2.32 steps (95% CI: [-15.28, +20.28], p=0.799). No statistically significant regression detected between Clean T2 and Frozen Phase 1.5 candidate."
+  }
+}
