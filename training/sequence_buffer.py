@@ -86,6 +86,8 @@ class EpisodeBuffer:
         state_delta: Optional[np.ndarray] = None,
         state_delta_valid: Optional[np.ndarray] = None,
         inventory_deltas: Optional[np.ndarray] = None,
+        state_current: Optional[np.ndarray] = None,
+        state_current_valid: Optional[np.ndarray] = None,
     ) -> None:
         """
         Adds a complete episode to the buffer.
@@ -121,6 +123,25 @@ class EpisodeBuffer:
         state_delta_valid = np.asarray(state_delta_valid, dtype=np.bool_)
         assert state_delta_valid.shape == (T,)
 
+        if state_current is None:
+            state_current = np.zeros((T, state_delta.shape[-1]), dtype=np.float32)
+            if T > 1 and np.any(state_delta_valid):
+                state_current[1:] = np.cumsum(state_delta[:-1], axis=0)
+        else:
+            state_current = np.asarray(state_current, dtype=np.float32)
+            assert state_current.shape[0] == T
+
+        if state_current_valid is None:
+            if not np.any(state_delta_valid):
+                state_current_valid = np.zeros(T, dtype=np.bool_)
+            else:
+                cum_valid = np.cumprod(state_delta_valid.astype(int)).astype(bool)
+                state_current_valid = np.ones(T, dtype=np.bool_)
+                state_current_valid[1:] = cum_valid[:-1]
+        else:
+            state_current_valid = np.asarray(state_current_valid, dtype=np.bool_)
+            assert state_current_valid.shape == (T,)
+
         episode = {
             "obs": obs.astype(np.uint8, copy=False),
             "actions": actions.astype(np.int64, copy=False),
@@ -130,6 +151,8 @@ class EpisodeBuffer:
             "mask_before": mask_before.astype(np.uint8, copy=False),
             "state_delta": state_delta.astype(np.float32, copy=False),
             "state_delta_valid": state_delta_valid,
+            "state_current": state_current.astype(np.float32, copy=False),
+            "state_current_valid": state_current_valid,
             "source": str(source),
         }
 
@@ -322,6 +345,8 @@ class EpisodeBuffer:
         state_dim = int(self.episodes[0].get("state_delta", np.zeros((1, DEFAULT_STATE_DELTA_DIM))).shape[-1])
         b_state_delta = np.zeros((batch_size, seq_len, state_dim), dtype=np.float32)
         b_state_valid = np.zeros((batch_size, seq_len), dtype=np.bool_)
+        b_state_current = np.zeros((batch_size, seq_len, state_dim), dtype=np.float32)
+        b_state_current_valid = np.zeros((batch_size, seq_len), dtype=np.bool_)
 
         for i, (ep_idx, start_t) in enumerate(chosen_windows):
             ep = self.episodes[ep_idx]
@@ -340,6 +365,12 @@ class EpisodeBuffer:
                 b_state_valid[i] = ep.get(
                     "state_delta_valid", np.ones(len(ep["actions"]), dtype=np.bool_)
                 )[start_t:end_t]
+            ep_current = ep.get("state_current")
+            if ep_current is not None:
+                b_state_current[i] = ep_current[start_t:end_t]
+                b_state_current_valid[i] = ep.get(
+                    "state_current_valid", np.ones(len(ep["actions"]), dtype=np.bool_)
+                )[start_t:end_t]
 
         # Convert obs from [B, T, H, W, C] uint8 to [B, T, C, H, W] float32 in [0, 1]
         obs_tensor = torch.from_numpy(b_obs).permute(0, 1, 4, 2, 3).contiguous().float() / 255.0
@@ -350,6 +381,8 @@ class EpisodeBuffer:
         mask_tensor = torch.from_numpy(b_mask).float()
         state_delta_tensor = torch.from_numpy(b_state_delta).float()
         state_valid_tensor = torch.from_numpy(b_state_valid).bool()
+        state_current_tensor = torch.from_numpy(b_state_current).float()
+        state_current_valid_tensor = torch.from_numpy(b_state_current_valid).bool()
 
         if device is not None:
             dev = torch.device(device)
@@ -361,6 +394,8 @@ class EpisodeBuffer:
             mask_tensor = mask_tensor.to(dev)
             state_delta_tensor = state_delta_tensor.to(dev)
             state_valid_tensor = state_valid_tensor.to(dev)
+            state_current_tensor = state_current_tensor.to(dev)
+            state_current_valid_tensor = state_current_valid_tensor.to(dev)
 
         return {
             "obs": obs_tensor,
@@ -371,7 +406,12 @@ class EpisodeBuffer:
             "mask_before": mask_tensor,
             "state_delta": state_delta_tensor,
             "state_delta_valid": state_valid_tensor,
+            "state_current": state_current_tensor,
+            "state_current_valid": state_current_valid_tensor,
         }
+
+    # Backward compatibility alias
+    sample_batch = sample_sequences
 
     def save_shard(self, path: Union[str, Path]) -> Path:
         """Saves current buffer contents to a single compressed .npz archive."""
@@ -462,6 +502,8 @@ class EpisodeBuffer:
         cat_mask = data["mask_before"] if "mask_before" in data else np.zeros_like(cat_events)
         cat_state_delta = data["state_delta"] if "state_delta" in data else None
         cat_state_valid = data["state_delta_valid"] if "state_delta_valid" in data else None
+        cat_state_current = data["state_current"] if "state_current" in data else None
+        cat_state_current_valid = data["state_current_valid"] if "state_current_valid" in data else None
         sources = data["sources"] if "sources" in data else np.array(["unknown"] * len(ep_lens), dtype=object)
 
         offset = 0
@@ -476,6 +518,8 @@ class EpisodeBuffer:
                 mask_before=cat_mask[offset : offset + length],
                 state_delta=(cat_state_delta[offset : offset + length] if cat_state_delta is not None else None),
                 state_delta_valid=(cat_state_valid[offset : offset + length] if cat_state_valid is not None else None),
+                state_current=(cat_state_current[offset : offset + length] if cat_state_current is not None else None),
+                state_current_valid=(cat_state_current_valid[offset : offset + length] if cat_state_current_valid is not None else None),
                 source=str(sources[i]) if i < len(sources) else "unknown",
             )
             offset += length
