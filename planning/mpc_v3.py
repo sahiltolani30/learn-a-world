@@ -55,6 +55,7 @@ class RecurrentMPCPlanner:
         memory_inject_ratio: float = 0.50,
         use_landmark_guidance: bool = True,
         use_policy_prior: bool = True,
+        strict_inference: bool = True,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -76,6 +77,12 @@ class RecurrentMPCPlanner:
         self.vital_weight = vital_weight
         self.death_risk_factor = death_risk_factor
         self.harvest_bonus = harvest_bonus
+        self.strict_inference = strict_inference
+        if self.strict_inference and semantic_memory is not None:
+            raise RuntimeError(
+                "Crafter semantic memory with hardcoded subgoals/recipes cannot be attached in strict inference mode. "
+                "Pass semantic_memory=None or set strict_inference=False."
+            )
         self.semantic_memory = semantic_memory
         self.memory_sim_threshold = memory_sim_threshold
         self.memory_inject_ratio = memory_inject_ratio
@@ -84,8 +91,6 @@ class RecurrentMPCPlanner:
         self.device = torch.device(device) if device is not None else torch.device("cpu")
 
         # Adaptive Frontier Event Thresholds
-        # Common survival achievements (sapling, wood, drink, cow, plant, sleep) use common_threshold (0.50)
-        # Sparse frontier achievements (table, pickaxe, sword, stone, furnace, iron, etc.) use frontier_threshold (0.25)
         if event_thresholds is not None:
             if isinstance(event_thresholds, (int, float)):
                 t = torch.full((1, 22), float(event_thresholds), device=self.device)
@@ -93,10 +98,15 @@ class RecurrentMPCPlanner:
                 t = event_thresholds.to(self.device).float().reshape(1, 22)
             self.event_thresholds = t
         else:
-            t = torch.full((1, 22), common_threshold, device=self.device)
-            frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
-            t[0, frontier_indices] = frontier_threshold
-            self.event_thresholds = t
+            if self.strict_inference:
+                # Uniform learned/calibrated threshold across all achievements in strict mode
+                t = torch.full((1, 22), frontier_threshold, device=self.device)
+                self.event_thresholds = t
+            else:
+                t = torch.full((1, 22), common_threshold, device=self.device)
+                frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
+                t[0, frontier_indices] = frontier_threshold
+                self.event_thresholds = t
 
     def plan(
         self,
@@ -150,7 +160,10 @@ class RecurrentMPCPlanner:
             q_memory_all = None
             sim_memory_all = None
             active_subgoal = None
-            inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
+            if self.strict_inference:
+                inv_context = None
+            else:
+                inv_context = belief.get_inv_vector() if hasattr(belief, "get_inv_vector") else belief.get_binary_mask()
             if self.semantic_memory is not None and len(self.semantic_memory) > 0:
                 retrieved_action, match_sim, target_milestone = self.semantic_memory.query(
                     z_t=z_0,
@@ -209,7 +222,7 @@ class RecurrentMPCPlanner:
             # Backpack inventory checks for landmark gating (0: wood, 6: wood_pickaxe)
             has_wood = False
             has_pickaxe = False
-            if inv_context is not None:
+            if not self.strict_inference and inv_context is not None:
                 if torch.is_tensor(inv_context):
                     inv_cpu = inv_context.detach().cpu().flatten()
                 else:
@@ -371,34 +384,35 @@ class RecurrentMPCPlanner:
                             # Multi-step crafting affordance: rewards crafting at any point in the lookahead horizon
                             subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
 
-                    # Landmark anchor guidance (Bug 1 & Bug 2 Fix: Gated by inventory + Dead-reckoning spatial pull)
+                    # Landmark anchor guidance (Preserved in privileged mode; disabled in strict mode until learned state readout)
                     landmark_reward = 0.0
-                    if self.use_landmark_guidance and structure_anchor is not None:
-                        struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
-                        if has_wood:
-                            # We have wood (>= 1)! Pull HARD back to the table to craft pickaxe/sword
-                            # Visual alignment pull when table is on-screen
-                            vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
-                            # Dead-reckoning spatial pull when table is off-screen
-                            offset_pull = 0.0
-                            if pos_struct_t is not None:
-                                dist_to_table = torch.norm(pos_struct_t, dim=-1)
-                                offset_pull = -0.10 * dist_to_table
-                            landmark_reward = vis_pull + offset_pull
-                        else:
-                            # We have 0 wood! Do NOT glue agent to the table with +1.5 reward!
-                            # Push slightly away so the agent explores to harvest trees
-                            landmark_reward = -0.05 * torch.clamp(struct_sim - 0.85, min=0.0)
+                    if not self.strict_inference:
+                        if self.use_landmark_guidance and structure_anchor is not None:
+                            struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
+                            if has_wood:
+                                # We have wood (>= 1)! Pull HARD back to the table to craft pickaxe/sword
+                                # Visual alignment pull when table is on-screen
+                                vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
+                                # Dead-reckoning spatial pull when table is off-screen
+                                offset_pull = 0.0
+                                if pos_struct_t is not None:
+                                    dist_to_table = torch.norm(pos_struct_t, dim=-1)
+                                    offset_pull = -0.10 * dist_to_table
+                                landmark_reward = vis_pull + offset_pull
+                            else:
+                                # We have 0 wood! Do NOT glue agent to the table with +1.5 reward!
+                                # Push slightly away so the agent explores to harvest trees
+                                landmark_reward = -0.05 * torch.clamp(struct_sim - 0.85, min=0.0)
 
-                    # Stone landmark pull (Bug 3 Fix: Return to spotted rock once pickaxe is in hand)
-                    if self.use_landmark_guidance and stone_anchor is not None and has_pickaxe:
-                        stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
-                        vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
-                        offset_pull = 0.0
-                        if pos_stone_t is not None:
-                            dist_to_stone = torch.norm(pos_stone_t, dim=-1)
-                            offset_pull = -0.10 * dist_to_stone
-                        landmark_reward = landmark_reward + vis_pull + offset_pull
+                        # Stone landmark pull (Bug 3 Fix: Return to spotted rock once pickaxe is in hand)
+                        if self.use_landmark_guidance and stone_anchor is not None and has_pickaxe:
+                            stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
+                            vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_stone_t is not None:
+                                dist_to_stone = torch.norm(pos_stone_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_stone
+                            landmark_reward = landmark_reward + vis_pull + offset_pull
 
                     step_reward = (
                         effective_ach_reward

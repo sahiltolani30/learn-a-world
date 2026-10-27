@@ -27,8 +27,10 @@ class AgentBeliefV3:
         frontier_threshold: float = 0.25,
         common_threshold: float = 0.50,
         event_thresholds: Optional[Union[float, np.ndarray, torch.Tensor]] = None,
+        strict_inference: bool = True,
     ):
         self.recurrent_dim = recurrent_dim
+        self.strict_inference = strict_inference
         self.m_bin = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.m_soft = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.h = np.zeros(recurrent_dim, dtype=np.float32)
@@ -43,9 +45,15 @@ class AgentBeliefV3:
             else:
                 self.thresholds = np.array(event_thresholds, dtype=np.float32).reshape(-1)
         else:
-            self.thresholds = np.full(NUM_ACHIEVEMENTS, common_threshold, dtype=np.float32)
-            frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
-            self.thresholds[frontier_indices] = frontier_threshold
+            if self.strict_inference:
+                # In strict mode: uniform calibrated threshold across all achievements.
+                # Never assign hardcoded Crafter achievement indices special meaning!
+                self.thresholds = np.full(NUM_ACHIEVEMENTS, frontier_threshold, dtype=np.float32)
+            else:
+                # Privileged / diagnostic mode ONLY:
+                self.thresholds = np.full(NUM_ACHIEVEMENTS, common_threshold, dtype=np.float32)
+                frontier_indices = [0, 1, 3, 5, 7, 8, 11, 12, 13, 14, 15, 16, 17, 19, 20]
+                self.thresholds[frontier_indices] = frontier_threshold
 
         # Cognitive Working Memory (System 1 - Within-Episode Context & Landmark Anchors)
         from planning.semantic_memory import ShortTermWorkingMemory, inventory_dict_to_vector
@@ -73,6 +81,11 @@ class AgentBeliefV3:
 
     def update_inventory(self, inv: Union[Dict[str, Any], np.ndarray, torch.Tensor]) -> None:
         """Updates internal 16-D backpack vector from environment inventory info."""
+        if self.strict_inference:
+            raise RuntimeError(
+                "Updating inventory from environment info is forbidden in strict inference mode. "
+                "Set strict_inference=False only for privileged diagnostic runs."
+            )
         if isinstance(inv, dict):
             from planning.semantic_memory import inventory_dict_to_vector
             self.inv_vec = inventory_dict_to_vector(inv)

@@ -54,11 +54,16 @@ CRAFTER_INVENTORY_KEYS = [
 NUM_INVENTORY_ITEMS = len(CRAFTER_INVENTORY_KEYS)  # 16
 
 
-def inventory_dict_to_vector(inv_dict: Optional[Dict[str, Any]]) -> np.ndarray:
+def inventory_dict_to_vector(inv_dict: Optional[Dict[str, Any]], strict_inference: bool = False) -> np.ndarray:
     """
     Converts Crafter inventory dictionary into a 16-D float32 vector.
     Zero recipes or interpretation: extracts raw item counts directly from the game.
     """
+    if strict_inference and inv_dict is not None:
+        raise RuntimeError(
+            "Crafter inventory dictionaries are unavailable in strict inference. "
+            "Set strict_inference=False only for privileged diagnostic runs."
+        )
     vec = np.zeros(NUM_INVENTORY_ITEMS, dtype=np.float32)
     if not inv_dict or not isinstance(inv_dict, dict):
         # Default starting stats for Crafter
@@ -574,22 +579,19 @@ class LongTermSemanticMemory:
         current_inv: Union[np.ndarray, torch.Tensor],
         achieved_names: Optional[Set[str]] = None,
         min_return: float = 0.50,
+        strict_inference: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """
         Autonomous Backward Goal Chaining (System 2 Executive Controller).
         Deduces the active sub-goal intention directly from the Experience Diary
         WITHOUT hardcoding any recipes, rules, or achievement names.
-
-        Mathematical Workflow:
-        1. Selects the highest-return unachieved milestone k* = argmax(returns[unachieved]).
-        2. Computes the resource deficit vector: deficit = ReLU(inv_{k*}[:12] - inv_curr[:12]).
-        3. If deficit == 0: status is READY_TO_EXECUTE (crafting materials are in hand).
-        4. If deficit > 0: finds the producer memory that historically increased that resource
-           and returns {status: HARVESTING_INPUT, action, producer_key, deficit}.
-
-        Returns:
-            Dictionary containing active sub-goal metadata or None if memory bank is empty.
         """
+        if strict_inference:
+            raise RuntimeError(
+                "Crafter semantic subgoals are unavailable in strict inference. "
+                "Set strict_inference=False only for privileged diagnostic runs."
+            )
+
         if len(self) == 0:
             return None
 

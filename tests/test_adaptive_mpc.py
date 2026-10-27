@@ -18,7 +18,12 @@ SHARD_PATH = Path("data/sequences/shard_structured_random_0000.npz")
 
 
 def test_agent_belief_adaptive_thresholds():
-    belief = AgentBeliefV3(frontier_threshold=0.25, common_threshold=0.50)
+    # In default strict mode, thresholds are uniform across all achievements
+    belief_strict = AgentBeliefV3(frontier_threshold=0.25)
+    assert np.allclose(belief_strict.thresholds, 0.25)
+
+    # In privileged mode, legacy frontier indices are applied
+    belief = AgentBeliefV3(frontier_threshold=0.25, common_threshold=0.50, strict_inference=False)
     idx_pick = CRAFTER_ACHIEVEMENTS.index("make_wood_pickaxe")
     idx_plant = CRAFTER_ACHIEVEMENTS.index("place_plant")
     

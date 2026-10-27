@@ -227,12 +227,15 @@ def run_screening(
         vital_weight=vital_weight,
         death_risk_factor=death_risk_factor,
         harvest_bonus=harvest_bonus,
+        strict_inference=True,
+        semantic_memory=None,
         device=dev,
     )
     belief = AgentBeliefV3(
         recurrent_dim=256,
         frontier_threshold=frontier_threshold,
         common_threshold=common_threshold,
+        strict_inference=True,
     )
 
     # 3. Environment
@@ -318,7 +321,12 @@ def run_screening(
         "calibrator": str(cal_resolved) if cal_resolved else None,
         "calibrator_sha256": cal_sha256,
         "track": "strict_visual_jepa",
+        "strict_inference": True,
         "privileged_inventory_used": False,
+        "privileged_achievements_used_for_action": False,
+        "achievements_used_for_scoring_only": True,
+        "semantic_memory_enabled": False,
+        "adaptation_mode": "frozen",
         "num_episodes": num_episodes,
         "seed_range": [seed_start, seed_start + num_episodes - 1],
         "horizon": horizon,
