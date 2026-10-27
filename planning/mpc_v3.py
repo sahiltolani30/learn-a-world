@@ -57,6 +57,10 @@ class RecurrentMPCPlanner:
         use_policy_prior: bool = True,
         strict_inference: bool = True,
         use_transition_model: bool = False,
+        transition_scoring: bool = False,
+        transition_weight: float = 0.5,
+        transition_done_penalty: float = 2.0,
+        transition_resource_weight: float = 0.25,
         device: Optional[Union[str, torch.device]] = None,
     ):
         self.model = model
@@ -80,6 +84,10 @@ class RecurrentMPCPlanner:
         self.harvest_bonus = harvest_bonus
         self.strict_inference = strict_inference
         self.use_transition_model = use_transition_model
+        self.transition_scoring = transition_scoring
+        self.transition_weight = transition_weight
+        self.transition_done_penalty = transition_done_penalty
+        self.transition_resource_weight = transition_resource_weight
         if self.strict_inference and semantic_memory is not None:
             raise RuntimeError(
                 "Crafter semantic memory with hardcoded subgoals/recipes cannot be attached in strict inference mode. "
@@ -426,7 +434,7 @@ class RecurrentMPCPlanner:
                             # Multi-step crafting affordance: rewards crafting at any point in the lookahead horizon
                             subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
 
-                    # Landmark anchor guidance (Preserved in privileged mode; disabled in strict mode until learned state readout)
+                    # Landmark anchor guidance (Preserved in privileged mode; enabled in strict mode via learned state readout)
                     landmark_reward = 0.0
                     if not self.strict_inference:
                         if self.use_landmark_guidance and structure_anchor is not None:
@@ -455,6 +463,50 @@ class RecurrentMPCPlanner:
                                 dist_to_stone = torch.norm(pos_stone_t, dim=-1)
                                 offset_pull = -0.10 * dist_to_stone
                             landmark_reward = landmark_reward + vis_pull + offset_pull
+                    elif self.strict_inference and self.use_transition_model and self.transition_scoring and x_hat_t is not None:
+                        # Strict-mode landmark guidance using strictly learned state readout & imagined dynamics
+                        # Zero privileged environment inventory inspection!
+                        if self.use_landmark_guidance and structure_anchor is not None:
+                            struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
+                            cand_has_wood = (x_hat_t[:, 0] >= 0.5)
+                            vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_struct_t is not None:
+                                dist_to_table = torch.norm(pos_struct_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_table
+                            wood_landmark = torch.where(
+                                cand_has_wood,
+                                vis_pull + offset_pull,
+                                -0.05 * torch.clamp(struct_sim - 0.85, min=0.0),
+                            )
+                            landmark_reward = landmark_reward + wood_landmark
+
+                        # Stone landmark pull conditioned on strictly learned pickaxe prediction
+                        if self.use_landmark_guidance and stone_anchor is not None:
+                            cand_has_pickaxe = (x_hat_t[:, 6] >= 0.5)
+                            stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
+                            vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_stone_t is not None:
+                                dist_to_stone = torch.norm(pos_stone_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_stone
+                            stone_landmark = torch.where(
+                                cand_has_pickaxe,
+                                vis_pull + offset_pull,
+                                torch.zeros_like(vis_pull),
+                            )
+                            landmark_reward = landmark_reward + stone_landmark
+
+                    # Transition head active consequence scoring (Ablation C / Gate 10)
+                    consequence_reward = 0.0
+                    if self.use_transition_model and self.transition_scoring and hasattr(self.model, "predict_transition"):
+                        # 1. Model-predicted scalar reward (aligned with env reward)
+                        r_trans = self.transition_weight * reward_hat.reshape(-1)
+                        # 2. Death avoidance penalty: penalize imagined transitions leading to termination
+                        done_pen = - self.transition_done_penalty * done_prob.reshape(-1)
+                        # 3. Resource consequence progress: reward transitions predicting positive resource acquisition (wood, stone, tools)
+                        res_prog = self.transition_resource_weight * torch.clamp(delta_hat, min=0.0).sum(dim=-1).reshape(-1)
+                        consequence_reward = r_trans + done_pen + res_prog
 
                     step_reward = (
                         effective_ach_reward
@@ -462,6 +514,7 @@ class RecurrentMPCPlanner:
                         + affordance_reward
                         + subgoal_reward
                         + landmark_reward
+                        + consequence_reward
                     )
                     cumulative_reward = cumulative_reward + gamma_prod * step_reward
 
@@ -552,6 +605,7 @@ class RecurrentMPCPlanner:
                 if self.use_transition_model:
                     best_debug.update({
                         "transition_model_used": True,
+                        "transition_scoring_active": bool(self.transition_scoring),
                         "state_estimate": x_hat_0[0].detach().cpu().numpy().tolist() if x_hat_0 is not None else [],
                         "predicted_delta": transition_preds_history[0]["delta_hat"][best_idx].detach().cpu().numpy().tolist() if transition_preds_history else [],
                         "predicted_reward": float(transition_preds_history[0]["reward_hat"][best_idx].item()) if transition_preds_history else 0.0,
@@ -560,6 +614,7 @@ class RecurrentMPCPlanner:
                     })
                 else:
                     best_debug["transition_model_used"] = False
+                    best_debug["transition_scoring_active"] = False
                 if self.standardize_scores:
                     best_debug.update({
                         "z_reward": float(z_reward[best_idx].item()),

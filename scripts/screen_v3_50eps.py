@@ -132,6 +132,11 @@ def run_screening(
     death_risk_factor: float = 0.0,
     harvest_bonus: float = 0.15,
     action_persistence: float = 0.5,
+    use_transition_model: bool = False,
+    transition_scoring: bool = False,
+    transition_weight: float = 0.5,
+    transition_done_penalty: float = 2.0,
+    transition_resource_weight: float = 0.25,
 ) -> Dict[str, Any]:
     dev = torch.device(device)
 
@@ -143,6 +148,7 @@ def run_screening(
     print(f"      Frontier Threshold: {frontier_threshold} | Common Threshold: {common_threshold}")
     print(f"      Denormalize Q: {denormalize_q} | TTE Weight: {tte_weight} | Standardize Scores: {standardize_scores}")
     print(f"      Vital Weight: {vital_weight} | Death Risk Factor: {death_risk_factor} | Harvest Bonus: {harvest_bonus}")
+    print(f"      Transition Model: {use_transition_model} | Consequence Scoring: {transition_scoring}")
     print(f"      Action Persistence: {action_persistence} | Device: {dev}")
     print("=" * 80)
 
@@ -228,6 +234,11 @@ def run_screening(
         death_risk_factor=death_risk_factor,
         harvest_bonus=harvest_bonus,
         strict_inference=True,
+        use_transition_model=use_transition_model,
+        transition_scoring=transition_scoring,
+        transition_weight=transition_weight,
+        transition_done_penalty=transition_done_penalty,
+        transition_resource_weight=transition_resource_weight,
         semantic_memory=None,
         device=dev,
     )
@@ -348,7 +359,15 @@ def run_screening(
             "frontier_threshold": frontier_threshold,
             "common_threshold": common_threshold,
             "strict_inference": True,
+            "use_transition_model": use_transition_model,
+            "transition_scoring": transition_scoring,
+            "transition_weight": transition_weight,
+            "transition_done_penalty": transition_done_penalty,
+            "transition_resource_weight": transition_resource_weight,
         },
+        "use_transition_model": use_transition_model,
+        "transition_scoring": transition_scoring,
+        "ablation_mode": "active_consequence" if (use_transition_model and transition_scoring) else ("shadow_transition" if use_transition_model else "baseline_t2"),
         "horizon": horizon,
         "num_candidates": num_candidates,
         "cem_iterations": cem_iterations,
@@ -460,6 +479,11 @@ if __name__ == "__main__":
         action="store_false",
         help="Disable score standardization and use absolute reward weights.",
     )
+    parser.add_argument("--use_transition_model", action="store_true", default=False, help="Enable transition head evaluation during MPC rollouts.")
+    parser.add_argument("--transition_scoring", action="store_true", default=False, help="Enable active transition consequence scoring in MPC (Ablation C).")
+    parser.add_argument("--transition_weight", type=float, default=0.5, help="Weight for model-predicted transition reward.")
+    parser.add_argument("--transition_done_penalty", type=float, default=2.0, help="Penalty factor for predicted termination probability.")
+    parser.add_argument("--transition_resource_weight", type=float, default=0.25, help="Weight for predicted positive resource increments.")
     parser.set_defaults(standardize_scores=False)
     args = parser.parse_args()
 
@@ -487,4 +511,9 @@ if __name__ == "__main__":
         death_risk_factor=args.death_risk_factor,
         harvest_bonus=args.harvest_bonus,
         action_persistence=args.action_persistence,
+        use_transition_model=args.use_transition_model,
+        transition_scoring=args.transition_scoring,
+        transition_weight=args.transition_weight,
+        transition_done_penalty=args.transition_done_penalty,
+        transition_resource_weight=args.transition_resource_weight,
     )
