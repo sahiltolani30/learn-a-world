@@ -47,15 +47,60 @@ def load_sequence_shards(
     capacity_transitions: int = 1_000_000,
     manifest_path: Optional[Union[str, Path]] = None,
 ) -> EpisodeBuffer:
-    """Load deduplicated sequence shards into an EpisodeBuffer."""
-    if manifest_path is not None:
-        shards = selected_paths_from_manifest(manifest_path)
+    """Load deduplicated sequence shards into an EpisodeBuffer with resilient fallback."""
+    shards: List[Path] = []
+    man_p = Path(manifest_path) if manifest_path is not None else None
+    if man_p is not None and man_p.exists():
+        shards = selected_paths_from_manifest(man_p)
+    elif man_p is not None and (REPO_ROOT / man_p).exists():
+        shards = selected_paths_from_manifest(REPO_ROOT / man_p)
     else:
-        roots = [shards_dir] if isinstance(shards_dir, (str, Path)) else list(shards_dir)
-        discovery = discover_active_shards(roots)
-        shards = [Path(item["path"]) for item in discovery["selected_shards"]]
+        # Fallback to drive/manifest candidates or directory discovery
+        candidates = [
+            REPO_ROOT / "results" / "drive_data_audit_manifest.json",
+            Path("/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json"),
+            Path("/content/drive/MyDrive/learn-a-world/results/drive_data_audit_manifest.json"),
+        ]
+        for c in candidates:
+            if c.exists():
+                try:
+                    shards = selected_paths_from_manifest(c)
+                    if shards:
+                        print(f"-> Using manifest candidate: {c}")
+                        break
+                except Exception:
+                    pass
+
     if not shards:
-        raise FileNotFoundError(f"No sequence shards found in {shards_dir}")
+        roots: List[Union[str, Path]] = []
+        if shards_dir:
+            roots.extend([shards_dir] if isinstance(shards_dir, (str, Path)) else list(shards_dir))
+        standard_search = [
+            Path("/content/drive/MyDrive/learn-a-world/results/sequences"),
+            Path("/content/drive/MyDrive/learn-a-world/results"),
+            REPO_ROOT / "results" / "sequences",
+            REPO_ROOT / "results",
+        ]
+        for p in standard_search:
+            if p.exists() and p not in roots:
+                roots.append(p)
+        try:
+            discovery = discover_active_shards(roots)
+            shards = [Path(item["path"]) for item in discovery.get("selected_shards", [])]
+        except Exception:
+            shards = []
+
+        if not shards:
+            for r in roots:
+                found = sorted(list(Path(r).glob("*.npz")))
+                if found:
+                    shards.extend(found)
+                    break
+
+    if not shards:
+        raise FileNotFoundError(f"No sequence shards found in {shards_dir} or standard paths")
+
+    print(f"-> Loading {len(shards)} sequence shard files into EpisodeBuffer...")
     buffer = EpisodeBuffer(capacity_transitions=capacity_transitions)
     for shard in shards:
         buffer.load_shard(shard)
