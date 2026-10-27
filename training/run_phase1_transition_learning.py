@@ -255,7 +255,7 @@ def train_phase1_transitions(
     seq_len: int = 16,
     horizons: Sequence[int] = (1, 5, 10),
     lr: float = 2e-4,
-    state_delta_weight: float = 1.0,
+    state_delta_weight: float = 2.0,
     transition_weight: float = 1.0,
     consistency_weight: float = 0.5,
     event_weight: float = 0.3,
@@ -296,7 +296,13 @@ def train_phase1_transitions(
     )
     for p in model.parameters():
         p.requires_grad = True
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    head_params = list(model.state_delta_head.parameters()) + list(model.transition_head.parameters())
+    head_param_ids = {id(p) for p in head_params}
+    base_params = [p for p in model.parameters() if id(p) not in head_param_ids]
+    optimizer = optim.AdamW([
+        {"params": base_params, "lr": lr},
+        {"params": head_params, "lr": max(lr, 5e-4)},
+    ], weight_decay=1e-4)
     history: List[Dict[str, float]] = []
     start = time.time()
 
@@ -336,8 +342,8 @@ def train_phase1_transitions(
             valid_h = valid_h & (~batch["dones"][:, :horizon]).all(dim=1)
             pred_cumulative = transition["state_delta"][:, :horizon].sum(dim=1)
             target_cumulative = batch["state_delta"][:, :horizon].sum(dim=1)
-            per_sample = F.smooth_l1_loss(
-                pred_cumulative, target_cumulative, reduction="none", beta=1.0
+            per_sample = F.mse_loss(
+                pred_cumulative, target_cumulative, reduction="none"
             ).mean(dim=-1)
             consistency_losses.append(
                 (per_sample * valid_h.float()).sum() / valid_h.float().sum().clamp_min(1.0)

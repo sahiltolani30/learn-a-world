@@ -202,6 +202,9 @@ class StateDeltaHead(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, state_dim),
         )
+        # Small normal initialization: preserves action conditioning while staying close to zero delta
+        nn.init.normal_(self.net[-1].weight, std=1e-3)
+        nn.init.zeros_(self.net[-1].bias)
 
     def forward(self, state: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         if action.dtype in (torch.int64, torch.int32):
@@ -215,7 +218,7 @@ class StateDeltaHead(nn.Module):
         target: torch.Tensor,
         valid_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        loss = F.smooth_l1_loss(prediction, target, reduction="none", beta=1.0)
+        loss = F.mse_loss(prediction, target, reduction="none")
         if valid_mask is not None:
             mask = valid_mask.float().reshape(-1, 1)
             loss = loss.reshape(-1, self.state_dim) * mask
