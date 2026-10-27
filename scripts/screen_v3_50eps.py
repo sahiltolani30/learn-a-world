@@ -12,9 +12,11 @@ Outputs:
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import time
 from typing import Any, Dict, List, Optional
@@ -32,6 +34,49 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS, compute_crafter_score
 from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from planning.mpc_v3 import RecurrentMPCPlanner
+
+
+def _sha256_file(filepath: Path) -> Optional[str]:
+    if not filepath.exists() or not filepath.is_file():
+        return None
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _get_git_commit() -> str:
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True)
+        return out.strip()
+    except Exception:
+        return "unknown"
+
+
+def _resolve_calibrator(cal_path: str, drive_dir: Optional[str] = None) -> Optional[Path]:
+    p = Path(cal_path)
+    if p.exists() and p.is_file():
+        return p.resolve()
+    candidates = [
+        REPO_ROOT / cal_path,
+        REPO_ROOT / "results" / "calibration" / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / cal_path,
+        Path("/content/drive/MyDrive/learn-a-world/results/calibration") / p.name,
+        Path("/content/learn-a-world") / cal_path,
+        Path("/content/learn-a-world/results/calibration") / p.name,
+        Path("/content") / cal_path,
+    ]
+    if drive_dir:
+        dp = Path(drive_dir)
+        candidates.extend([
+            dp / cal_path,
+            dp / "results" / "calibration" / p.name,
+        ])
+    for cand in candidates:
+        if cand.exists() and cand.is_file():
+            return cand.resolve()
+    return None
 
 
 def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
@@ -64,6 +109,8 @@ def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
 
 def run_screening(
     checkpoint_path: str = "checkpoints/jepa_crafter_v3_phase2.pt",
+    calibrator_path: str = "results/calibration/event_head_calibrator.json",
+    allow_uncalibrated_diagnostic: bool = False,
     num_episodes: int = 50,
     seed_start: int = 2050,
     max_steps: int = 1000,
@@ -113,6 +160,51 @@ def run_screening(
     model.load_checkpoint(checkpoint_path, device=dev)
     model.to(dev)
     model.eval()
+
+    # 1.1 Strict Protocol Lock: Calibrator Verification
+    cal_resolved = _resolve_calibrator(calibrator_path, drive_dir)
+    cal_sha256 = None
+    if cal_resolved is not None and not allow_uncalibrated_diagnostic:
+        try:
+            from models.calibration import EventHeadCalibrator
+            cal = EventHeadCalibrator.load(str(cal_resolved))
+            model.set_calibrator(cal)
+            cal_sha256 = _sha256_file(cal_resolved)
+            print(f"[Protocol Lock] Event-head calibrator verified: {cal_resolved}")
+            print(f"  -> Calibrator SHA256: {cal_sha256}")
+        except Exception as e:
+            raise RuntimeError(
+                f"[Protocol Lock Violation] Calibrator failed to parse from {cal_resolved}: {e}. "
+                "Benchmark evaluation requires a valid calibrator. "
+                "Pass --allow_uncalibrated_diagnostic ONLY for explicit non-benchmark diagnostics."
+            ) from e
+    else:
+        if not allow_uncalibrated_diagnostic:
+            raise RuntimeError(
+                f"[Protocol Lock Violation] Calibrator not found at '{calibrator_path}' "
+                f"(checked repo root: {REPO_ROOT}, drive: {drive_dir}). "
+                "Benchmark evaluation requires an explicit, verified calibrator. "
+                "Pass --allow_uncalibrated_diagnostic ONLY for explicit non-benchmark diagnostics."
+            )
+        # Explicit diagnostic mode: detach any auto-loaded calibrator so it runs truly uncalibrated
+        model.set_calibrator(None)
+        cal_resolved = None
+        cal_sha256 = None
+        print(f"[Protocol Warning] Running in uncalibrated diagnostic mode! Calibrator detached. Result is non-benchmark.")
+
+    ckpt_p = Path(checkpoint_path)
+    ckpt_sha256 = _sha256_file(ckpt_p) if ckpt_p.exists() else None
+    git_commit = _get_git_commit()
+
+    is_calibrated = (model.event_head.calibrator is not None)
+    if not is_calibrated and not allow_uncalibrated_diagnostic:
+        raise RuntimeError(
+            "[Protocol Lock Violation] Model event head remains uncalibrated! "
+            "Benchmark evaluations must be calibrated. Never silently continue uncalibrated."
+        )
+
+    protocol_id = "strict_visual_jepa_clean_v1" if (is_calibrated and not allow_uncalibrated_diagnostic) else "uncalibrated_diagnostic_not_a_benchmark"
+    print(f"[Protocol Lock] Protocol ID: {protocol_id} (Git: {git_commit[:8]}, Checkpoint SHA: {ckpt_sha256[:12] if ckpt_sha256 else 'none'}...)")
 
     # 2. Build Planner & Belief with Adaptive Frontier Thresholds
     planner = RecurrentMPCPlanner(
@@ -219,11 +311,28 @@ def run_screening(
     score_stats = compute_crafter_score(achievement_records)
 
     summary = {
+        "protocol_id": protocol_id,
+        "git_commit": git_commit,
         "checkpoint": checkpoint_path,
+        "checkpoint_sha256": ckpt_sha256,
+        "calibrator": str(cal_resolved) if cal_resolved else None,
+        "calibrator_sha256": cal_sha256,
         "track": "strict_visual_jepa",
         "privileged_inventory_used": False,
         "num_episodes": num_episodes,
         "seed_range": [seed_start, seed_start + num_episodes - 1],
+        "horizon": horizon,
+        "num_candidates": num_candidates,
+        "cem_iterations": cem_iterations,
+        "frontier_threshold": frontier_threshold,
+        "common_threshold": common_threshold,
+        "vital_weight": vital_weight,
+        "action_persistence": action_persistence,
+        "death_risk_factor": death_risk_factor,
+        "harvest_bonus": harvest_bonus,
+        "denormalize_q": denormalize_q,
+        "tte_weight": tte_weight,
+        "standardize_scores": standardize_scores,
         "total_runtime_seconds": round(total_time, 2),
         "mean_survival_length": float(np.mean(survival_lengths)),
         "std_survival_length": float(np.std(survival_lengths)),
@@ -233,7 +342,6 @@ def run_screening(
         "mean_achievements_per_ep": score_stats["mean_achievements_per_ep"],
         "unlocked_achievement_count": score_stats["unlocked_count"],
         "unlock_percentages": score_stats["unlock_percentages"],
-        "standardize_scores": standardize_scores,
         "episodes": episode_records,
     }
 
@@ -280,6 +388,18 @@ def run_screening(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 50-episode screening of JEPA v3.")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_step1_stone.pt")
+    parser.add_argument(
+        "--calibrator_path",
+        type=str,
+        default="results/calibration/event_head_calibrator.json",
+        help="Path to event head calibrator JSON. Required for strict benchmark runs.",
+    )
+    parser.add_argument(
+        "--allow_uncalibrated_diagnostic",
+        action="store_true",
+        default=False,
+        help="Explicit diagnostic flag allowing uncalibrated evaluation. Output will be marked as non-benchmark.",
+    )
     parser.add_argument("--num_episodes", "--episodes", dest="num_episodes", type=int, default=50)
     parser.add_argument("--seed_start", "--start_seed", dest="seed_start", type=int, default=2050)
     parser.add_argument("--max_steps", type=int, default=1000)
@@ -319,6 +439,8 @@ if __name__ == "__main__":
 
     run_screening(
         checkpoint_path=resolved_ckpt,
+        calibrator_path=args.calibrator_path,
+        allow_uncalibrated_diagnostic=args.allow_uncalibrated_diagnostic,
         num_episodes=args.num_episodes,
         seed_start=args.seed_start,
         max_steps=args.max_steps,
