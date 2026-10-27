@@ -1,0 +1,88 @@
+{
+  "phase": "phase1.5",
+  "run_id": "run_3b",
+  "run_name": "Run 3B: Reproducibility Run with Split Statistics & Verified Git Provenance",
+  "run_notes": "Second consecutive execution passing the causal gate on genuinely held-out validation data. Confirmed state_delta_mse (0.01589) < persistence_mse (0.01598) with state_delta_beats_persistence: true.",
+  "status": "completed",
+  "gate_passed": true,
+  "commit": "67bff020dead6aa056dbc7996bbfcb67eb28d7ed",
+  "checkpoint_init": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_t2_final.pt",
+  "output_checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt",
+  "manifest": "/content/drive/MyDrive/learn-a-world/results/phase1_5_manifest.json",
+  "horizons": [1, 5, 10, 25, 50],
+  "seq_len": 51,
+  "batch_size": 16,
+  "steps": 1000,
+  "split_seed": 17,
+  "labeled_ratio": 0.5,
+  "dataset": {
+    "total_episodes": 3448,
+    "total_transitions": 599171,
+    "state_delta_valid_transitions": 1685,
+    "per_source_counts": {
+      "curiosity_v3": 144896,
+      "unknown": 177017,
+      "self_play_mpc": 8405,
+      "structured_random": 133123,
+      "teacher_hybrid": 135730
+    }
+  },
+  "validation": {
+    "total_episodes": 384,
+    "total_transitions": 67167,
+    "state_delta_valid_transitions": 315,
+    "per_source_counts": {
+      "curiosity_v3": 17080,
+      "unknown": 18476,
+      "self_play_mpc": 464,
+      "structured_random": 16877,
+      "teacher_hybrid": 14270
+    }
+  },
+  "train_labeled_stats": {
+    "total_episodes": 3448,
+    "labeled_episodes": 11,
+    "total_transitions": 599171,
+    "labeled_transitions": 1685,
+    "labeled_density_pct": 0.2812
+  },
+  "val_labeled_stats": {
+    "total_episodes": 384,
+    "labeled_episodes": 2,
+    "total_transitions": 67167,
+    "labeled_transitions": 315,
+    "labeled_density_pct": 0.469
+  },
+  "training_progression": [
+    {"step": 1, "total_loss": 1.8199, "loss_jepa": 1.0293, "loss_state_delta": 0.0103},
+    {"step": 100, "total_loss": 0.4750, "loss_jepa": 0.6202, "loss_state_delta": 0.0139},
+    {"step": 200, "total_loss": 0.4511, "loss_jepa": 0.6521, "loss_state_delta": 0.0119},
+    {"step": 300, "total_loss": 0.3493, "loss_jepa": 0.5656, "loss_state_delta": 0.0134},
+    {"step": 400, "total_loss": 0.3303, "loss_jepa": 0.5457, "loss_state_delta": 0.0109},
+    {"step": 500, "total_loss": 0.2896, "loss_jepa": 0.5453, "loss_state_delta": 0.0104},
+    {"step": 600, "total_loss": 0.1339, "loss_jepa": 0.4149, "loss_state_delta": 0.0067},
+    {"step": 700, "total_loss": 0.3830, "loss_jepa": 0.5837, "loss_state_delta": 0.0138},
+    {"step": 800, "total_loss": 0.2113, "loss_jepa": 0.5050, "loss_state_delta": 0.0102},
+    {"step": 900, "total_loss": 0.1269, "loss_jepa": 0.4033, "loss_state_delta": 0.0089},
+    {"step": 1000, "total_loss": 0.1868, "loss_jepa": 0.4128, "loss_state_delta": 0.0066}
+  ],
+  "metrics": {
+    "state_delta_mse": 0.015893064658431447,
+    "state_delta_persistence_mse": 0.015979243259803922,
+    "state_delta_beats_persistence": true,
+    "state_delta_valid_transitions": 6528.0,
+    "reward_mae": 0.03140805603242388,
+    "termination_accuracy": 0.9998468137254902,
+    "termination_majority_baseline": 0.9998468137254902,
+    "termination_recall": 0.0,
+    "termination_precision": 0.0,
+    "termination_positives": 2,
+    "termination_true_positives": 0,
+    "counterfactual_action_separation": 0.00012716978517346433,
+    "latent_std_mean": 1.331472136080265,
+    "latent_std_min": 0.7240917086601257,
+    "latent_std_max": 2.3712823390960693,
+    "latent_collapse_detected": false
+  },
+  "elapsed_seconds": 450.84
+}
