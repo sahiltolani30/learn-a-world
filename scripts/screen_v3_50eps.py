@@ -419,8 +419,9 @@ def run_screening(
         if dp.exists():
             drive_out = dp / "results" / out_p.name
             drive_out.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(str(out_p), str(drive_out))
-            print(f"[Drive] Mirrored screening results to: {drive_out}")
+            if out_p.resolve() != drive_out.resolve():
+                shutil.copy2(str(out_p), str(drive_out))
+                print(f"[Drive] Mirrored screening results to: {drive_out}")
 
     print("\n" + "=" * 80)
     print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")
