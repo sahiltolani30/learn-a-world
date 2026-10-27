@@ -1,0 +1,43 @@
+{
+  "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase1_5.pt",
+  "track": "strict_visual_jepa",
+  "privileged_inventory_used": false,
+  "num_episodes": 50,
+  "seed_range": [
+    2050,
+    2099
+  ],
+  "total_runtime_seconds": 915.6,
+  "mean_survival_length": 178.34,
+  "std_survival_length": 32.78817469759486,
+  "mean_episode_reward": 3.42,
+  "std_episode_reward": 1.3919770113044252,
+  "crafter_score": 3.3979530093890213,
+  "mean_achievements_per_ep": 4.32,
+  "unlocked_achievement_count": 10,
+  "unlock_percentages": {
+    "collect_coal": 0.0,
+    "collect_diamond": 0.0,
+    "collect_drink": 44.0,
+    "collect_iron": 0.0,
+    "collect_sapling": 66.0,
+    "collect_stone": 0.0,
+    "collect_wood": 84.0,
+    "defeat_skeleton": 0.0,
+    "defeat_zombie": 4.0,
+    "eat_cow": 4.0,
+    "eat_plant": 0.0,
+    "make_iron_pickaxe": 0.0,
+    "make_iron_sword": 0.0,
+    "make_stone_pickaxe": 0.0,
+    "make_stone_sword": 0.0,
+    "make_wood_pickaxe": 6.0,
+    "make_wood_sword": 8.0,
+    "place_furnace": 0.0,
+    "place_plant": 60.0,
+    "place_stone": 0.0,
+    "place_table": 56.0,
+    "wake_up": 100.0
+  },
+  "standardize_scores": false
+}

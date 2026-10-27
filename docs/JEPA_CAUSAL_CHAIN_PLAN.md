@@ -41,9 +41,9 @@ The Run 3 JSON artifacts and review report confirm two Colab executions wrote `/
 - [PARTIAL] Loss progression, latent variance, and collapse metrics are reported; finite gradients, horizon-specific validation metrics, full checkpoint-loading audit, and the Run 3B episode-count discrepancy remain open.
 - [PARTIAL] A validation split is reported, but episode/seed identities and fallback behavior are not independently verified.
 - [PARTIAL] Reward MAE is reported batch-invariant. Termination has a majority baseline, but recall/precision are both zero, so the termination head has not passed.
-- [OPEN] Gameplay regression against the initialization checkpoint was not provided.
+- [COMPLETE, REGRESSION] Gameplay regression across locked seeds 2050–2099 (50 episodes) completed. Score regressed from 4.55% to 3.40% (-1.15%); survival was preserved at 178.34 ± 32.79 vs 181.36 ± 51.63 steps; table placement improved from 52.0% to 56.0%; wood pickaxe regressed from 10.0% to 6.0%; stone mining regressed from 2.0% to 0.0%. This confirms Run 3B must NOT be promoted to agent champion, but remains a transition-model candidate only.
 
-Run 3 may be recorded as passing the narrow state-delta gate, but preserve the checkpoint as a transition-model candidate until provenance and gameplay regression are checked. Before Phase 2, verify the manifest/episode-count discrepancy, add measured-outcome intervention tests, and run frozen-vs-finetuned gameplay regression. More sampled points alone are not enough.
+Run 3 passes the narrow state-delta gate, but downstream gameplay regression confirms the model is not ready for champion promotion. Full Phase 1.5 agent gate remains PENDING. Phase 2 remains NOT STARTED.
 
 ### Collaboration
 
