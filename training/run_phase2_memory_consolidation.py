@@ -111,58 +111,81 @@ def consolidate_phase2_memory(
                 break
             try:
                 data = np.load(str(sf), allow_pickle=True)
-                obs = data.get("obs")
-                actions = data.get("actions")
-                rewards = data.get("rewards")
-                dones = data.get("dones")
-                if dones is None:
-                    dones = data.get("done")
+                cat_obs = data.get("obs")
+                cat_actions = data.get("actions")
+                cat_rewards = data.get("rewards")
+                cat_dones = data.get("dones")
+                if cat_dones is None:
+                    cat_dones = data.get("done")
 
-                if obs is None or actions is None or rewards is None:
+                if cat_obs is None or cat_actions is None or cat_rewards is None:
                     continue
 
-                N = len(actions)
-                if N == 0:
-                    continue
+                ep_lens = data.get("episode_lengths")
+                if ep_lens is None:
+                    if cat_dones is not None and np.any(cat_dones):
+                        done_idx = np.where(cat_dones)[0]
+                        ep_lens = np.diff(np.concatenate([[-1], done_idx]))
+                    else:
+                        ep_lens = np.array([len(cat_actions)], dtype=np.int64)
 
-                # Batch encode observations through visual encoder
-                # Sample window
-                window_len = min(N, 64)
-                obs_t = torch.from_numpy(obs[:window_len]).permute(0, 3, 1, 2).float() / 255.0
-                obs_t = obs_t.to(dev)
-                z_all = model.encode(obs_t, use_target=True)  # [W, 128]
+                offset = 0
+                for ep_idx, ep_len in enumerate(ep_lens):
+                    if episodes_ingested >= max_episodes:
+                        break
+                    ep_len = int(ep_len)
+                    if ep_len <= 5:
+                        offset += ep_len
+                        continue
 
-                # Recurrent unroll for state readout
-                h_t = torch.zeros(1, 256, device=dev)
-                states_all = []
-                for t in range(window_len):
-                    s_t = torch.cat([z_all[t:t+1], h_t], dim=-1)
-                    x_hat_t, _ = model.predict_state(s_t)
-                    states_all.append(x_hat_t.squeeze(0))
-                    a_t = torch.tensor([actions[t]], dtype=torch.long, device=dev)
-                    _, h_t = model.recurrent_step(z_all[t:t+1], a_t, h_t)
+                    ep_o = cat_obs[offset : offset + ep_len]
+                    ep_a = cat_actions[offset : offset + ep_len]
+                    ep_r = cat_rewards[offset : offset + ep_len]
+                    ep_d = cat_dones[offset : offset + ep_len] if cat_dones is not None else np.zeros(ep_len, dtype=bool)
+                    offset += ep_len
 
-                for t in range(window_len - 1):
-                    act = int(actions[t])
-                    rew = float(rewards[t])
-                    d = bool(dones[t]) if dones is not None else False
+                    # Batch encode visual observations in 64-step chunks to fit GPU VRAM
+                    chunk_size = 64
+                    z_chunks = []
+                    for b_start in range(0, ep_len, chunk_size):
+                        b_end = min(b_start + chunk_size, ep_len)
+                        obs_b = torch.from_numpy(ep_o[b_start:b_end]).permute(0, 3, 1, 2).float() / 255.0
+                        obs_b = obs_b.to(dev)
+                        z_b = model.encode(obs_b, use_target=True)
+                        z_chunks.append(z_b)
+                    z_all = torch.cat(z_chunks, dim=0)
 
-                    store.record_step(
-                        obs_latent=z_all[t],
-                        grounded_state=states_all[t],
-                        action=act,
-                        reward=rew,
-                        done=d,
-                        next_obs_latent=z_all[t + 1],
-                        next_grounded_state=states_all[t + 1],
-                        episode_id=s_idx,
-                        step_id=t,
-                    )
-                    transitions_ingested += 1
+                    # Recurrent unroll for state readout across the complete episode
+                    h_t = torch.zeros(1, 256, device=dev)
+                    states_all = []
+                    for t in range(ep_len):
+                        s_t = torch.cat([z_all[t:t+1], h_t], dim=-1)
+                        x_hat_t, _ = model.predict_state(s_t)
+                        states_all.append(x_hat_t.squeeze(0))
+                        a_t = torch.tensor([ep_a[t]], dtype=torch.long, device=dev)
+                        _, h_t = model.recurrent_step(z_all[t:t+1], a_t, h_t)
 
-                # Commit final window step
-                store.commit_episode()
-                episodes_ingested += 1
+                    for t in range(ep_len - 1):
+                        act = int(ep_a[t])
+                        rew = float(ep_r[t])
+                        d = bool(ep_d[t])
+
+                        store.record_step(
+                            obs_latent=z_all[t],
+                            grounded_state=states_all[t],
+                            action=act,
+                            reward=rew,
+                            done=d,
+                            next_obs_latent=z_all[t + 1],
+                            next_grounded_state=states_all[t + 1],
+                            episode_id=episodes_ingested,
+                            step_id=t,
+                        )
+                        transitions_ingested += 1
+
+                    # Commit full episode to evidence store
+                    store.commit_episode()
+                    episodes_ingested += 1
 
             except Exception as e:
                 continue

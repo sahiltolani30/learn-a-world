@@ -262,10 +262,10 @@ class RelationHypothesisBank:
             if not ev_list:
                 continue
 
-            # Separate productive breakthroughs (reward > 0 or resource delta > 0.25) from idle transitions
+            # Separate productive breakthroughs (reward > 0 or resource delta magnitude >= 0.35) from idle transitions
             breakthroughs = [
                 e for e in ev_list
-                if e.reward > 0.0 or any(d > 0.25 for d in e.state_delta)
+                if e.reward > 0.0 or any(abs(d) >= 0.35 for d in e.state_delta)
             ]
             failures = [
                 e for e in ev_list
@@ -307,10 +307,13 @@ class RelationHypothesisBank:
                 z_post_mean = np.mean([e.next_obs_latent for e in cluster], axis=0)
                 z_post_norm = (z_post_mean / max(float(np.linalg.norm(z_post_mean)), 1e-6)).tolist()
 
-                # Empirical minimum required preconditions (e.g. minimum wood present in cluster)
-                pre_min = np.min([e.grounded_state for e in cluster], axis=0)
-                # Keep significant preconditions (item >= 0.5)
-                precond_state = [float(v) if v >= 0.5 else 0.0 for v in pre_min]
+                # Empirical minimum required preconditions (robust quantile to filter readout noise)
+                if len(cluster) >= 3:
+                    pre_min = np.quantile([e.grounded_state for e in cluster], 0.15, axis=0)
+                else:
+                    pre_min = np.min([e.grounded_state for e in cluster], axis=0)
+                # Keep significant preconditions (item >= 0.45)
+                precond_state = [float(v) if v >= 0.45 else 0.0 for v in pre_min]
 
                 # Mean observed effect delta
                 delta_mean = np.mean([e.state_delta for e in cluster], axis=0).tolist()
