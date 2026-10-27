@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "protocol_id": "strict_visual_jepa_clean_v2",
+    "evaluation_seeds": [
+      2050,
+      2099
+    ],
+    "num_episodes": 50,
+    "ablation_a": "Clean T2 Baseline",
+    "ablation_b": "Frozen Phase 1.5 Candidate (Shadow)",
+    "ablation_c": "Active Consequence Candidate (Transition Active)"
+  },
+  "scores": {
+    "ablation_a_clean_t2": 3.179714799755639,
+    "ablation_b_frozen": 2.883842752992269,
+    "ablation_c_active": 4.306366133616255,
+    "gain_c_vs_a_pp": 1.13,
+    "gain_c_vs_b_pp": 1.42,
+    "c_vs_a_score_95_ci": [
+      0.46,
+      1.92
+    ],
+    "c_vs_b_score_95_ci": [
+      0.84,
+      2.05
+    ]
+  },
+  "rewards": {
+    "ablation_a": 2.88,
+    "ablation_b": 3.18,
+    "ablation_c": 4.3,
+    "gain_c_vs_a": 1.42,
+    "gain_c_vs_a_pvalue": 2.254231578755399e-06,
+    "gain_c_vs_b": 1.12,
+    "gain_c_vs_b_pvalue": 7.926209858877282e-06
+  },
+  "survival_steps": {
+    "ablation_a": 174.5,
+    "ablation_b": 176.82,
+    "ablation_c": 184.86,
+    "gain_c_vs_a": 10.4,
+    "gain_c_vs_b": 8.0
+  },
+  "achievements_per_ep": {
+    "ablation_a": 3.78,
+    "ablation_b": 4.1,
+    "ablation_c": 5.22,
+    "gain_c_vs_a": 1.44,
+    "gain_c_vs_b": 1.12
+  },
+  "key_achievement_unlock_rates": {
+    "make_wood_pickaxe": {
+      "ablation_a": 10.0,
+      "ablation_b": 8.0,
+      "ablation_c": 16.0
+    },
+    "make_wood_sword": {
+      "ablation_a": 8.0,
+      "ablation_b": 4.0,
+      "ablation_c": 12.0
+    },
+    "place_table": {
+      "ablation_a": 50.0,
+      "ablation_b": 54.0,
+      "ablation_c": 56.00000000000001
+    },
+    "collect_wood": {
+      "ablation_a": 82.0,
+      "ablation_b": 90.0,
+      "ablation_c": 88.0
+    },
+    "defeat_zombie": {
+      "ablation_a": 2.0,
+      "ablation_b": 2.0,
+      "ablation_c": 18.0
+    }
+  }
+}
