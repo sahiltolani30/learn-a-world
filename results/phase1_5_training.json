@@ -1,5 +1,8 @@
 {
   "phase": "phase1.5",
+  "run_id": "run_3a",
+  "run_name": "Run 3A: First Execution of Commit 2b952a4",
+  "run_notes": "First execution with direct MSE loss, projection init (std=1e-3), and dedicated head learning rate (5e-4). Passed causal gate with MSE 0.01612 < persistence 0.01640.",
   "status": "completed",
   "gate_passed": true,
   "commit": "2b952a4",
