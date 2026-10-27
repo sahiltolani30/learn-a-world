@@ -52,7 +52,7 @@ class RecurrentMPCPlanner:
         harvest_bonus: float = 0.15,
         semantic_memory: Optional[Any] = None,
         memory_sim_threshold: float = 0.58,
-        memory_inject_ratio: float = 0.50,
+        memory_inject_ratio: float = 0.25,
         use_landmark_guidance: bool = True,
         use_policy_prior: bool = True,
         strict_inference: bool = True,
@@ -204,16 +204,21 @@ class RecurrentMPCPlanner:
                 subgoal_info = self.compositional_planner.plan_subgoal(
                     obs_latent=z_0,
                     grounded_state=x_hat_root if x_hat_root is not None else torch.zeros(16, device=self.device),
+                    m_bin=m_bin_0,
                 )
                 if subgoal_info is not None:
+                    # chain_value is marginal (drops to ~0 once the target's achievement
+                    # is locked in m_bin) — it replaces the old static mean_return weight.
+                    chain_value = float(subgoal_info.get("chain_value", subgoal_info.get("expected_return", 0.5)))
                     active_subgoal = {
                         "status": subgoal_info["status"],
                         "producer_action": subgoal_info.get("producer_action", subgoal_info["recommended_action"]),
                         "producer_key": subgoal_info.get("visual_key", z_0),
-                        "producer_return": subgoal_info.get("expected_return", 1.0),
+                        "chain_value": chain_value,
                         "target_action": subgoal_info["recommended_action"],
                         "target_key": subgoal_info.get("visual_key", z_0),
                         "target_name": subgoal_info.get("prototype_id", "phase2_subgoal"),
+                        "chain": subgoal_info.get("chain", []),
                     }
                     if subgoal_info.get("visual_sim", 0.0) >= 0.35:
                         retrieved_action = subgoal_info["recommended_action"]
@@ -273,9 +278,17 @@ class RecurrentMPCPlanner:
             action_deltas_tensor[3] = torch.tensor([0.0, -1.0], device=self.device)
             action_deltas_tensor[4] = torch.tensor([0.0, 1.0], device=self.device)
 
-            # Determine action injection: direct affordance or backward subgoal intention
-            inject_action = retrieved_action
-            if inject_action is None and active_subgoal is not None:
+            # Determine action injection: direct affordance or backward subgoal intention.
+            # Injection gated on chain value for the causal-memory path: a weak
+            # (marginal-value ~0) subgoal must not commit candidates (plan Stage 6).
+            # The semantic-memory path (privileged mode) has no chain value — unaffected.
+            inject_action = None
+            subgoal_injectable = (
+                active_subgoal is None or float(active_subgoal.get("chain_value", 0.0)) >= 0.3
+            )
+            if retrieved_action is not None and subgoal_injectable:
+                inject_action = retrieved_action
+            if inject_action is None and active_subgoal is not None and subgoal_injectable:
                 if active_subgoal["status"] == "HARVESTING_INPUT":
                     prod_key = active_subgoal["producer_key"].to(self.device)
                     cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), prod_key.flatten().unsqueeze(0)).item())
@@ -439,23 +452,27 @@ class RecurrentMPCPlanner:
                         affordance_reward = (a_t == retrieved_action).float() * (0.35 * match_sim)
 
                     # Sub-Goal Affordance Pull (Autonomous Backward Goal Chaining):
+                    # Weight scales with the chain's MARGINAL value (drops to ~0 once the
+                    # target's achievement is locked) — replaces the old static mean_return
+                    # weight that caused the planting loop (plan Stage 6).
                     subgoal_reward = 0.0
                     if active_subgoal is not None:
+                        subgoal_scale = min(float(active_subgoal.get("chain_value", 0.5)), 1.0)
                         if active_subgoal["status"] == "HARVESTING_INPUT":
                             prod_act = active_subgoal["producer_action"]
                             prod_key = active_subgoal["producer_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, prod_key, dim=-1), min=0.0)
                             # Pull agent towards producer visual cues while executing producer action
-                            action_reward = (a_t == prod_act).float() * (0.25 * sim_cue * min(active_subgoal["producer_return"], 2.0))
-                            # Continuous visual navigation gradient pulling candidate trajectories toward harvest cues (trees/water)
-                            nav_reward = 0.10 * sim_cue
+                            action_reward = (a_t == prod_act).float() * (0.25 * sim_cue * subgoal_scale)
+                            # Visual navigation gradient toward harvest cues, gated by value
+                            nav_reward = 0.05 * sim_cue * subgoal_scale
                             subgoal_reward = action_reward + nav_reward
                         elif active_subgoal["status"] == "READY_TO_EXECUTE":
                             tgt_act = active_subgoal["target_action"]
                             tgt_key = active_subgoal["target_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
                             # Multi-step crafting affordance: rewards crafting at any point in the lookahead horizon
-                            subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue)
+                            subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue * subgoal_scale)
 
                     # Landmark anchor guidance (Preserved in privileged mode; enabled in strict mode via learned state readout)
                     landmark_reward = 0.0
@@ -527,8 +544,12 @@ class RecurrentMPCPlanner:
                         r_trans = self.transition_weight * reward_hat.reshape(-1)
                         # 2. Death avoidance penalty: penalize imagined transitions leading to termination
                         done_pen = - self.transition_done_penalty * done_prob.reshape(-1)
-                        # 3. Resource consequence progress: reward transitions predicting positive resource acquisition (wood, stone, tools)
-                        res_prog = self.transition_resource_weight * torch.clamp(delta_hat, min=0.0).sum(dim=-1).reshape(-1)
+                        # 3. Resource consequence progress: reward transitions predicting positive resource acquisition.
+                        #    Clipped to <= 0.25 total per step (plan Stage 6): unbounded, it can reach ~2.0/step
+                        #    and out-shout both the Q term and subgoal shaping (harvest-spam driver).
+                        res_prog = self.transition_resource_weight * torch.clamp(
+                            torch.clamp(delta_hat, min=0.0).sum(dim=-1), max=1.0
+                        ).reshape(-1)
                         consequence_reward = r_trans + done_pen + res_prog
 
                     step_reward = (
