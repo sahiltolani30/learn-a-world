@@ -113,16 +113,16 @@ class CompositionalCausalPlanner:
                 missing_dim = deficit_indices[0]
                 deficit_amount = float(target.precondition_state[missing_dim] - x_t[missing_dim])
 
-                # Search for producer prototype that yields positive delta on missing_dim
+                # Search for producer prototype that yields positive delta on missing_dim (>= 0.40 filters neural readout noise)
                 producers = [
                     p for p in active_protos
-                    if p.effect_delta[missing_dim] > 0.25 and p.prototype_id != target.prototype_id
+                    if p.effect_delta[missing_dim] > 0.40 and p.prototype_id != target.prototype_id
                 ]
                 if producers:
                     # Choose producer with highest success probability & visual alignment
                     best_producer = max(
                         producers,
-                        key=lambda p: p.success_probability * p.confidence,
+                        key=lambda p: p.effect_delta[missing_dim] * p.success_probability * p.confidence,
                     )
                     k_prod = torch.tensor(best_producer.precondition_key, dtype=torch.float32, device=self.device)
                     sim_prod = float(torch.dot(z_norm, k_prod).item())
