@@ -53,11 +53,8 @@ def _resolve_ckpt(ckpt_path: str) -> Path:
 
 def load_model_from_checkpoint(ckpt_path: Path, device: torch.device) -> JEPAv3:
     model = JEPAv3(transition_state_dim=16)
-    ckpt = torch.load(ckpt_path, map_location=device)
-    state = ckpt.get("model_state", ckpt.get("model", ckpt))
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    print(f"[Audit] Loaded {ckpt_path.name}: {len(missing)} missing keys, {len(unexpected)} unexpected keys")
     model.to(device)
+    model.load_checkpoint(str(ckpt_path), device=device)
     model.eval()
     return model
 
@@ -89,14 +86,10 @@ def run_compatibility_audit(
     normalizer_stats: Dict[str, Any] = {}
     if norm_a and norm_b:
         normalizer_stats = {
-            "model_a_low": float(getattr(norm_a, "low_value", 0.0)),
-            "model_a_high": float(getattr(norm_a, "high_value", 12.0)),
-            "model_b_low": float(getattr(norm_b, "low_value", 0.0)),
-            "model_b_high": float(getattr(norm_b, "high_value", 12.0)),
-            "drift_detected": bool(
-                getattr(norm_a, "low_value", 0.0) != getattr(norm_b, "low_value", 0.0)
-                or getattr(norm_a, "high_value", 12.0) != getattr(norm_b, "high_value", 12.0)
-            ),
+            "model_a_low": float(getattr(norm_a, "low_value", getattr(norm_a, "low", 0.0))),
+            "model_a_high": float(getattr(norm_a, "high_value", getattr(norm_a, "high", 12.0))),
+            "model_b_low": float(getattr(norm_b, "low_value", getattr(norm_b, "low", 0.0))),
+            "model_b_high": float(getattr(norm_b, "high_value", getattr(norm_b, "high", 12.0))),
         }
 
     # 2. Sample inputs (from real data if available, or synthetic fallback)
@@ -132,9 +125,10 @@ def run_compatibility_audit(
         s_a = torch.cat([z_a, h_a], dim=-1)
         s_b = torch.cat([z_b, h_b], dim=-1)
 
-        # 4. Policy Prior Divergence
-        logits_a = model_a.policy_prior(s_a)
-        logits_b = model_b.policy_prior(s_b)
+        # 4. Policy Prior Divergence (requires mask)
+        mask_dummy = torch.zeros(N, 22, device=dev)
+        logits_a = model_a.policy_prior(s_a, mask_dummy)
+        logits_b = model_b.policy_prior(s_b, mask_dummy)
         p_a = F.softmax(logits_a, dim=-1)
         p_b = F.softmax(logits_b, dim=-1)
 
@@ -148,8 +142,8 @@ def run_compatibility_audit(
         q_b_all = []
         for a_idx in range(model_a.num_actions):
             act = torch.full((N,), a_idx, dtype=torch.long, device=dev)
-            qa = model_a.q_ensemble(s_a, act).mean(dim=0)
-            qb = model_b.q_ensemble(s_b, act).mean(dim=0)
+            qa = model_a.q_ensemble.q_values(s_a, act).mean(dim=0)
+            qb = model_b.q_ensemble.q_values(s_b, act).mean(dim=0)
             q_a_all.append(qa)
             q_b_all.append(qb)
         q_a_tensor = torch.stack(q_a_all, dim=1)  # [N, num_actions]
@@ -158,7 +152,6 @@ def run_compatibility_audit(
         q_rank_agreement = (q_a_tensor.argmax(dim=-1) == q_b_tensor.argmax(dim=-1)).float().mean().item()
 
         # 6. Event Head Probability Divergence
-        mask_dummy = torch.zeros(N, 22, device=dev)
         ev_logits_a = model_a.event_head(s_a, actions_batch, mask_dummy)
         ev_logits_b = model_b.event_head(s_b, actions_batch, mask_dummy)
         ev_prob_diff = (torch.sigmoid(ev_logits_a) - torch.sigmoid(ev_logits_b)).abs().mean().item()
