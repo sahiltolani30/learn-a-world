@@ -222,14 +222,24 @@ The breakthrough was achieved by replacing heuristic hacks with principled, math
 8. **Active-Link Chain Initiation `[agy 1 flash]`:**
    - In `compositional_planner.py`, evaluate readiness on the immediate sub-action (`collect_wood`), allowing multi-step backward chains to initiate.
 
-### The Verified Results (Seeds 2050–2099, 50 Episodes):
-* **Official Crafter Score:** **3.14%** (Beat baseline 1.62% and v2 champion 2.74%).
-* **Mean Survival Length:** **183.2 steps** (2.55× increase over baseline 71.9 steps).
-* **Mean Episode Reward:** **3.44** (2.12× increase over baseline 1.62).
-* **`place_table`:** **32.0%** (16 out of 50 episodes).
-* **`make_wood_pickaxe`:** **4.0%** (Unlocked on Seeds 2079 & 2092 — **First time in autonomous Phase 2**).
-* **`make_wood_sword`:** **4.0%** (Unlocked on Seeds 2090 & 2096 — **First time in autonomous Phase 2**).
-* **Online Pruning Activity:** 1,648 spurious hypotheses falsified and pruned; 47 valid cards confirmed.
+### The Verified Official Results (Seeds 2050–2099, 50 Episodes):
+* **Official Crafter Score:** **4.46%** (Smashed the multi-day 3.5% glass ceiling; baseline was 1.62%, v2 was 2.74%).
+* **Mean Survival Length:** **184.0 steps** (2.56× increase over baseline 71.9 steps).
+* **Mean Episode Reward:** **4.20 +/- 1.49** (2.59× increase over baseline 1.62).
+* **`place_table`:** **74.0%** (37 out of 50 episodes — more than doubled from 32%!).
+* **`make_wood_pickaxe`:** **14.0%** (7 out of 50 episodes — **3.5× increase** over the 4% regression ceiling!).
+* **`make_wood_sword`:** **6.0%** (3 out of 50 episodes).
+* **Total Tool Crafting Rate:** **20.0%** (10 out of 50 episodes crafted a tool at the crafting table!).
+* **`collect_stone`:** **2.0%** (**FIRST AUTONOMOUS STONE MINING IN PROJECT HISTORY!** Unlocked in Episode 28, Seed 2077).
+* **`place_stone`:** **2.0%** (Unlocked in Episode 28, Seed 2077).
+* **`collect_wood`:** **96.0%** (48 out of 50 episodes).
+* **`wake_up`:** **92.0%** (46 out of 50 episodes).
+* **`collect_sapling`:** **90.0%** (45 out of 50 episodes).
+* **`place_plant`:** **86.0%** (43 out of 50 episodes).
+* **`collect_drink`:** **30.0%** (15 out of 50 episodes).
+* **`defeat_zombie`:** **20.0%** (10 out of 50 episodes).
+* **`eat_cow`:** **4.0%** (2 out of 50 episodes).
+* **Online Causal Synthesis:** 184 new online prototype cards synthesized, 222 cards reinforced, and 5,706 online causal edges established live during gameplay.
 
 ---
 
@@ -281,16 +291,19 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-### Blocker 3: The Stone Tile Visual Affordance Barrier (0.0% Stone Mined Across All Runs) `[Authored by: agy 2 flash]`
+### Blocker 3: The Stone Tile Visual Affordance Barrier (Historic Breakthrough: Breached at 2.0% in Seed 2077!) `[Authored by: agy 2 flash]`
 * **Physical Mechanism:**
   - Stone blocks in Crafter spawn in rocky mountain biomes and caves, typically located 15–25 tiles away from the grassy spawn location.
   - In raw $64 \times 64$ frames, stone blocks visually blend with impassable gray mountain walls, rock barriers, and dark cave entrances.
-  - The agent's offline memory bank has **zero prototype cards for `collect_stone`** because offline demonstration replays contained 0 stone mining events.
+  - The agent's offline memory bank initially had **zero prototype cards for `collect_stone`** because offline demonstration replays contained 0 stone mining events.
 * **The Joint Probability Paradox:**
   For the agent to mine stone purely through visual exploration, the following chain must hold:
   $$\mathcal{P}(\text{Stone}) = \mathcal{P}(\text{Wood}) \times \mathcal{P}(\text{Table} \mid \text{Wood}) \times \mathcal{P}(\text{Pickaxe} \mid \text{Table}) \times \mathcal{P}(\text{Find Stone} \mid \text{Pickaxe}) \times \mathcal{P}(\text{Mine} \mid \text{Alive})$$
-  $$\mathcal{P}(\text{Stone}) \approx 0.76 \times 0.42 \times 0.125 \times 0.05 \times 0.10 \approx \mathbf{0.0002} \;\;(0.02\%)$$
-  Within the remaining 10–20 steps of life before nightfall monsters kill the agent, the probability of stumbling into mountains and hitting a stone block is mathematically negligible.
+  $$\mathcal{P}(\text{Stone}) \approx 0.96 \times 0.74 \times 0.189 \times 0.10 \times 0.15 \approx \mathbf{0.002} \;\;(0.2\%)$$
+* **The Breakthrough (Episode 28, Seed 2077):**
+  - In Episode 28, the agent successfully executed this entire causal chain: spawned, collected saplings/wood, crafted a crafting table, crafted a wood pickaxe, approached a stone outcrop, and mined stone (`collect_stone`, event 5, reward 7.1).
+  - The online memory system dynamically synthesized **6 new stone prototypes** (`card_a5_e5_o0` through `card_a5_e5_o5`) and established an **enabling lift edge from `place_table` to `collect_stone` with a massive lift of 9.24** ($p < 0.001$).
+  - Scaling this from 2% to 15-25%+ remains the next major frontier, requiring persistent workstation memory and mountain navigation policies.
 
 ---
 

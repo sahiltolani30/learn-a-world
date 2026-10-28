@@ -50,7 +50,7 @@ def inspect_decisions(
     with open(res_p, "r") as f:
         data = json.load(f)
 
-    episodes = data.get("episode_records", [])
+    episodes = data.get("episodes", data.get("episode_records", []))
     print("=" * 80)
     print("       DUAL-STORE AGENT: IN-GAME DECISION & MEMORY AUDIT")
     print(f"       Results File: {res_p}")
@@ -94,10 +94,26 @@ def inspect_decisions(
                     meaning = "Goal: Crafting Table"
                 elif "e15" in target:
                     meaning = "Goal: Wood Pickaxe"
-                elif "e6" in target:
-                    meaning = "Goal: Harvest Wood"
                 elif "e16" in target:
                     meaning = "Goal: Wood Sword"
+                elif "e5" in target:
+                    meaning = "Goal: Mine Stone"
+                elif "e6" in target:
+                    meaning = "Goal: Harvest Wood"
+                elif "e18" in target:
+                    meaning = "Goal: Place Plant"
+                elif "e4" in target:
+                    meaning = "Goal: Collect Sapling"
+                elif "e2" in target:
+                    meaning = "Goal: Drink Water"
+                elif "e8" in target:
+                    meaning = "Goal: Defeat Zombie"
+                elif "e9" in target:
+                    meaning = "Goal: Eat Cow"
+                elif "e19" in target:
+                    meaning = "Goal: Place Stone"
+                elif "e21" in target:
+                    meaning = "Goal: Wake Up"
                 
                 print(f"      • Step {st:3d}: Status = {status:<22s} | Target = {target:<18s} | {meaning}")
         else:
