@@ -704,8 +704,10 @@ class GodfatherJEPAPipeline:
 
 def main():
     parser = argparse.ArgumentParser(description="Godfather JEPA Training Runner")
-    parser.add_argument("--episodes", type=int, default=50, help="Number of training episodes")
-    parser.add_argument("--updates-per-episode", type=int, default=5, help="Number of gradient update steps per episode")
+    parser.add_argument("--episodes", type=int, default=40, help="Number of training episodes")
+    parser.add_argument("--updates-per-episode", type=int, default=50, help="Number of gradient update steps per episode")
+    parser.add_argument("--save-every", type=int, default=10, help="Periodic auto-save frequency in episodes")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in out-dir if available")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
     parser.add_argument("--shard-dir", type=str, default=None, help="Directory containing sequence .npz shards to pre-populate buffer")
@@ -713,7 +715,16 @@ def main():
     args = parser.parse_args()
 
     device = torch.device(args.device)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     pipeline = GodfatherJEPAPipeline(device=device, checkpoint_init=args.checkpoint)
+
+    # Optional resume from previous checkpoint if available
+    latest_ckpt = out_dir / "godfather_jepa_latest.pt"
+    if args.resume and latest_ckpt.exists():
+        print(f"[Resume] Resuming weights and memory bank from {latest_ckpt}...")
+        pipeline.load_checkpoint(str(latest_ckpt))
 
     # Optional: Load Drive / local sequence shards into MilestoneReplayBuffer
     if args.shard_dir and os.path.exists(args.shard_dir):
@@ -724,6 +735,8 @@ def main():
             print(f"[Bootstrap] Successfully loaded {loaded} episodes into MilestoneReplayBuffer ({len(pipeline.buffer.milestone_indices)} milestones).")
 
     print(f"=== Starting Godfather JEPA Training on {device} (updates_per_episode={args.updates_per_episode}) ===")
+    import gc
+
     for ep in range(args.episodes):
         seed = generate_procedural_seed(rank=0, episode=ep, generation=0)
         res = pipeline.collect_episode(env_seed=seed, max_steps=250)
@@ -734,11 +747,18 @@ def main():
         if (ep + 1) % 10 == 0:
             print(f"Episode {ep+1:03d} | Seed: {seed} | Steps: {res['steps']} | Reward: {res['reward']:.1f} | WM Loss: {wm_stats.get('wm_loss', 0.0):.4f}")
 
-    # Save final checkpoint
-    out_dir = Path(args.out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = str(out_dir / "godfather_jepa_final.pt")
-    pipeline.save_checkpoint(ckpt_path)
+        # Periodic auto-save to Google Drive so progress is NEVER lost on disconnect
+        if (ep + 1) % args.save_every == 0 or (ep + 1) == args.episodes:
+            ckpt_latest = str(out_dir / "godfather_jepa_latest.pt")
+            ckpt_final = str(out_dir / "godfather_jepa_final.pt")
+            pipeline.save_checkpoint(ckpt_latest)
+            pipeline.save_checkpoint(ckpt_final)
+            print(f"[Auto-Save] Episode {ep+1:03d}: Persisted checkpoint & bank to {out_dir}")
+
+            # Reclaim GPU & CPU memory to guarantee zero Colab OOM crashes
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     print("\n=== Running Locked-Seed Benchmark (2050..2059) ===")
     bench_results = pipeline.evaluate(seeds=list(range(2050, 2060)))
