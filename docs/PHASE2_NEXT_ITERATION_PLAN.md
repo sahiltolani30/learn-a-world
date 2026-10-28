@@ -16,15 +16,16 @@
 
 **2026-10-28 — MEMORY READ (real 932-card bank): what the agent learned right vs wrong.**
 CORRECT: the notebook's core lessons match reality — wood-producer cards (act5+collect_wood: produces wood ~0.97, no needs), sapling cards (produces sapling ~0.9), 83 event-grounded cards across 8 achievements including **8 defeat_zombie cards, 15 eat_cow cards, 13 collect_wood, 1 place_table, 1 collect_drink**; 3 trusted wood producers; acyclic graph.
-THREE MISTAKES (top priority, in order):
-1. **Vitals preconditions on 750 cards** ("needs health ≥ 4.0") — root cause: with absolute vitals, successes happen while healthy and near-misses while dying, so health/energy are *genuinely enriched* at successes — the enrichment test detects the competence confounder, not causation.
-   - **User Principle (Inventory Deduction Grounding)**: An agent establishing recipe relations must explicitly check **what was deducted from inventory** by comparing what it had **BEFORE** taking the action vs **AFTER** taking the action ($\Delta x[d] = x_{t+1}[d] - x_t[d] < 0$). When placing a table, Wood is deducted ($\Delta \text{wood} < 0$), but Health, Food, Water, and Energy are **never deducted** ($\Delta \text{vital} \approx 0$).
-   - **Fix**: Exclude dims 12–15 from `needs` candidacy (`needs ⊆ dims 0–11`). Vitals are life bars, not crafting ingredients.
-2. **NEW — universal-item false positives: 144 cards demand saplings** (incl. a place_table event-free card: needs sapling ≥ 0.597; even movement cards demand saplings). Root cause: sapling is present ~92% of the time (the agent farms it obsessively); relative-only enrichment (Wilson separation + gap ≥ 0.20) passes when the context-shifted failure pool happens to hold slightly fewer.
-   - **Grounded Fix (Deduction + Failure-Absence F11)**:
-     (a) **Deduction check**: When placing a table, saplings were **not deducted** ($\Delta \text{sapling} \approx 0$).
-     (b) **Absolute failure-absence criterion ($f_d \le 0.50$)**: A non-deducted item can only be a tool/catalyst need if it is **absent** in a substantial fraction of failures. Wood passes (absent in ~82% of failures); sapling fails and dies (present in ~80% of failures — completely undiscriminating).
-3. **Edge explosion: 89,624 edges** (mostly vitals-producer × vitals-needer pairs, plus junk event-free movement/noop cards whose readout noise produced spurious deltas). Fixes: #1 removes vitals needs (edges collapse); **extend the event-free breakthrough criterion to require the productive delta on inventory dims 0–11** (kills movement/noop junk cards at the source).
+1. **Vitals preconditions on 750 cards** ("needs health ≥ 4.0") & **2. Universal-item false positives: 144 cards demand saplings**:
+   - **Root cause**: Statistical enrichment against near-misses is corrupted by competence confounders (dying agents have 0 health) and hoarding confounders (sapling in 92% of transitions).
+   - **User Principle (Inventory Deduction Grounding - IMPLEMENTED in commit `8de14f0`)**:
+     An agent establishing physical recipe requirements directly observes **what was deducted from inventory** by comparing what it had **BEFORE** taking the action vs **AFTER** taking the action:
+     $$\Delta x[d] = x_{t+1}[d] - x_t[d] \le -0.25 \quad (d \in [0..11] \text{ inventory dims})$$
+     - When placing a table: Wood is deducted ($\Delta \text{wood} = -2 < 0$), while saplings and vitals are never deducted ($\Delta \approx 0$).
+     - When crafting a pickaxe: Wood is deducted ($\Delta \text{wood} = -1 < 0$), while saplings and vitals are never deducted.
+     - In both offline consolidation and online learning (`_recompute_status` + `_confirm_card`), confirmed cards ground `needs` directly in `consumes` on inventory dims.
+3. **Edge explosion: 89,624 edges** (mostly vitals-producer × vitals-needer pairs, plus junk event-free movement/noop cards whose readout noise produced spurious deltas).
+   - **Fix (IMPLEMENTED in `8de14f0`)**: Event-free breakthrough criterion requires productive delta on **inventory dims 0..11** (`max(abs(delta[:12])) >= 0.35`). Kills movement/noop junk cards at the source and collapses spurious edges.
 Also noted: most event cards have low Wilson LB (0.02–0.09) because near-miss pools are huge — ranking works on relative order (smoke proved it), but expect compressed trust values; and only ONE event-grounded place_table card exists (second placements within an episode are event-free) — acceptable, but the sapling fix must cover event-free cards too (F11 does).
 
 ## 0b. User ruling + the STONE PACKAGE (2026-10-28)
