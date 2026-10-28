@@ -24,8 +24,8 @@ class HomeostaticArbiter:
         thirst_threshold: float = 3.0,
         hunger_threshold: float = 3.0,
         health_threshold: float = 4.0,
-        dusk_step_threshold: int = 135,
-        night_end_step: int = 260,
+        dusk_step_threshold: Optional[int] = None,
+        night_end_step: Optional[int] = None,
         combat_cadence: int = 3,
     ):
         self.thirst_threshold = thirst_threshold
@@ -38,13 +38,16 @@ class HomeostaticArbiter:
     def evaluate_urgency(
         self,
         vitals: Dict[str, float],
-        step: int,
+        step: int = 0,
         continuation_prob: float = 1.0,
+        visual_darkness: Optional[float] = None,
     ) -> Dict[str, float]:
         """
         Computes continuous urgency signals across vital dimensions.
         When any vital drops to or below its maintenance threshold, its urgency
         is calibrated to fall in [0.5, 1.0], guaranteeing homeostatic priority.
+        Rely on learned continuation probability c(s_t) and visual signals instead
+        of hardcoded environmental clock constants.
         """
         drink = vitals.get("drink", 9.0)
         food = vitals.get("food", 9.0)
@@ -68,11 +71,14 @@ class HomeostaticArbiter:
         else:
             u_health = 0.0
 
-        # Ambient nightfall factor: dusk to dawn (step 135..260 out of 300)
-        cycle_step = step % 300
-        is_night = self.dusk_step_threshold <= cycle_step <= self.night_end_step
-        # Ambient dusk raises alertness (0.5), but does NOT unilaterally force stationary combat strikes
-        dusk_factor = 0.5 if is_night else 0.0
+        # Ambient darkness factor: from visual input or continuation head drop
+        if visual_darkness is not None:
+            dusk_factor = float(visual_darkness)
+        elif self.dusk_step_threshold is not None and self.night_end_step is not None:
+            cycle_step = step % 300
+            dusk_factor = 0.5 if (self.dusk_step_threshold <= cycle_step <= self.night_end_step) else 0.0
+        else:
+            dusk_factor = 0.5 if continuation_prob <= 0.3 else 0.0
 
         # Imminent combat threat from survival continuation head drop (predicted death)
         imminent_threat = max(0.0, 1.0 - continuation_prob)
@@ -100,6 +106,7 @@ class HomeostaticArbiter:
         monster_adjacent: bool = False,
         can_sleep: bool = False,
         continuation_prob: float = 1.0,
+        visual_darkness: Optional[float] = None,
     ) -> Tuple[int, str]:
         """
         Selects whether to execute the tech-tree action or override with a homeostatic reflex.
@@ -117,7 +124,9 @@ class HomeostaticArbiter:
             (selected_action, active_drive_mode)
         """
         drink = vitals.get("drink", 9.0)
-        urgency = self.evaluate_urgency(vitals, step, continuation_prob=continuation_prob)
+        urgency = self.evaluate_urgency(
+            vitals, step, continuation_prob=continuation_prob, visual_darkness=visual_darkness
+        )
 
         # 1. Preemptive opportunistic drinking reflex (Highest vital priority)
         # Triggers whenever adjacent to water and thirst is at or below threshold
@@ -129,8 +138,8 @@ class HomeostaticArbiter:
             return 5, "homeostatic_combat"
 
         # 3. Nightfall sleep reflex (Skip dangerous night hours if possible)
-        cycle_step = step % 300
-        if can_sleep and (self.dusk_step_threshold <= cycle_step <= self.night_end_step):
+        is_night = (urgency["dusk_factor"] >= 0.5) or (urgency["imminent_threat"] >= 0.5)
+        if can_sleep and is_night:
             return 6, "homeostatic_sleep"
 
         # 4. Safe: Teleological Drive active

@@ -56,92 +56,14 @@ class CausalHypergraph:
     def __init__(self, storage_path: Optional[str] = None):
         self.storage_path = storage_path
         self.cards: Dict[str, CausalCard] = {}
-        self._init_foundational_grammar()
-
-    def _init_foundational_grammar(self) -> None:
-        """
-        Initializes physical action grammar observed from primitive environment mechanics.
-        """
-        # Wood harvest: Action 5 (do)
-        self.cards["collect_wood"] = CausalCard(
-            action=5,
-            name="collect_wood",
-            consumes={},
-            produces={"wood": 1},
-        )
-        # Place table: Action 8 (requires 2 wood)
-        self.cards["place_table"] = CausalCard(
-            action=8,
-            name="place_table",
-            consumes={"wood": 2},
-            produces={"table_placed": 1},
-            predecessors=["collect_wood"],
-        )
-        # Craft wood pickaxe: Action 11 (requires 1 wood + table catalyst)
-        self.cards["make_wood_pickaxe"] = CausalCard(
-            action=11,
-            name="make_wood_pickaxe",
-            consumes={"wood": 1},
-            produces={"wood_pickaxe": 1},
-            catalyst_needed="table_placed",
-            predecessors=["place_table"],
-        )
-        # Craft wood sword: Action 14 (requires 1 wood + table catalyst)
-        self.cards["make_wood_sword"] = CausalCard(
-            action=14,
-            name="make_wood_sword",
-            consumes={"wood": 1},
-            produces={"wood_sword": 1},
-            catalyst_needed="table_placed",
-            predecessors=["place_table"],
-        )
-        # Mine stone: Action 5 (requires wood pickaxe)
-        self.cards["collect_stone"] = CausalCard(
-            action=5,
-            name="collect_stone",
-            consumes={},
-            produces={"stone": 1},
-            catalyst_needed="wood_pickaxe",
-            predecessors=["make_wood_pickaxe"],
-        )
-        # Place furnace: Action 9 (requires 4 stone)
-        self.cards["place_furnace"] = CausalCard(
-            action=9,
-            name="place_furnace",
-            consumes={"stone": 4},
-            produces={"furnace_placed": 1},
-            predecessors=["collect_stone"],
-        )
-        # Mine coal: Action 5 (requires wood pickaxe)
-        self.cards["collect_coal"] = CausalCard(
-            action=5,
-            name="collect_coal",
-            consumes={},
-            produces={"coal": 1},
-            catalyst_needed="wood_pickaxe",
-            predecessors=["make_wood_pickaxe"],
-        )
-        # Mine iron: Action 5 (requires stone pickaxe)
-        self.cards["collect_iron"] = CausalCard(
-            action=5,
-            name="collect_iron",
-            consumes={},
-            produces={"iron": 1},
-            catalyst_needed="stone_pickaxe",
-            predecessors=["make_stone_pickaxe"],
-        )
 
     def find_producer(self, item_name: str) -> Optional[str]:
         """
         Finds the causal card that produces the specified resource, tool, or workstation.
         """
-        # 1. Direct name match
-        for prefix in ("collect_", "make_", "place_"):
-            candidate = f"{prefix}{item_name}"
-            if candidate in self.cards:
-                return candidate
+        if item_name in self.cards and self.cards[item_name].produces.get(item_name, 0) > 0:
+            return item_name
 
-        # 2. Search produces dictionaries
         for name, card in self.cards.items():
             if card.produces.get(item_name, 0) > 0:
                 return name
@@ -232,12 +154,14 @@ class CausalHypergraph:
                     for res, req_amt in needed_res.items():
                         if current_inventory.get(res, 0) < req_amt:
                             # Not enough total resources! Collect more inputs first.
-                            res_producer = self.find_producer(res) or f"collect_{res}"
-                            if res_producer in self.cards and res_producer not in visited:
+                            res_producer = self.find_producer(res)
+                            if res_producer and res_producer in self.cards and res_producer not in visited:
                                 return self.determine_subgoal(
                                     res_producer, current_inventory, workstations_present, visited
                                 )
-                            return (f"collect_{res}", self.cards.get(f"collect_{res}", CausalCard(5, "hit")).action)
+                            elif res_producer and res_producer in self.cards:
+                                return (res_producer, self.cards[res_producer].action)
+                            return ("explore", 0)
 
                     # We hold total aggregated budget! Recursively resolve producer subgoal.
                     return self.determine_subgoal(
@@ -247,12 +171,14 @@ class CausalHypergraph:
         # 2. Check direct consumable inventory
         for res, amt in card.consumes.items():
             if current_inventory.get(res, 0) < amt:
-                res_producer = self.find_producer(res) or f"collect_{res}"
-                if res_producer in self.cards and res_producer not in visited:
+                res_producer = self.find_producer(res)
+                if res_producer and res_producer in self.cards and res_producer not in visited:
                     return self.determine_subgoal(
                         res_producer, current_inventory, workstations_present, visited
                     )
-                return (f"collect_{res}", self.cards.get(f"collect_{res}", CausalCard(5, "hit")).action)
+                elif res_producer and res_producer in self.cards:
+                    return (res_producer, self.cards[res_producer].action)
+                return ("explore", 0)
 
         # 3. All preconditions met -> execute target action!
         return (target_goal, card.action)

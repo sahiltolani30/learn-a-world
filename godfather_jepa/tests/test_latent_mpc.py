@@ -13,7 +13,7 @@ from godfather_jepa.models.survival import SurvivalContinuationHead
 from godfather_jepa.models.symlog_critic import SymlogCategoricalCritic, SymlogTwoHotCoder
 from godfather_jepa.models.belief import SpatialConvGRU, VectorBeliefCore
 from godfather_jepa.models.odometry import TopologicalAnchorGraph
-from godfather_jepa.planning.causal_hypergraph import CausalHypergraph
+from godfather_jepa.planning.causal_hypergraph import CausalHypergraph, CausalCard
 from godfather_jepa.planning.latent_mpc_planner import LatentMPCPlanner
 
 
@@ -29,6 +29,15 @@ class TestLatentMPCPlanner:
         spatial_gru = SpatialConvGRU(channels=64)
         vector_belief = VectorBeliefCore(latent_dim=512, spatial_channels=64)
         causal_hypergraph = CausalHypergraph()
+        causal_hypergraph.cards["collect_wood"] = CausalCard(
+            action=5, name="collect_wood", consumes={}, produces={"wood": 1}
+        )
+        causal_hypergraph.cards["place_table"] = CausalCard(
+            action=8, name="place_table", consumes={"wood": 2}, produces={"table_placed": 1}, predecessors=["collect_wood"]
+        )
+        causal_hypergraph.cards["make_wood_pickaxe"] = CausalCard(
+            action=11, name="make_wood_pickaxe", consumes={"wood": 1}, produces={"wood_pickaxe": 1}, catalyst_needed="table_placed", predecessors=["place_table"]
+        )
 
         planner = LatentMPCPlanner(
             predictor=predictor,

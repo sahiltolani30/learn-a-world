@@ -40,24 +40,39 @@ class TestDenseRewardHead:
 
 
 class TestCausalHypergraphAndBudgeting:
-    def test_foundational_grammar_loaded(self):
+    @staticmethod
+    def _create_induced_graph() -> CausalHypergraph:
         graph = CausalHypergraph()
-        assert "collect_wood" in graph.cards
-        assert "place_table" in graph.cards
-        assert "make_wood_pickaxe" in graph.cards
-        assert "collect_stone" in graph.cards
+        graph.cards["collect_wood"] = CausalCard(
+            action=5, name="collect_wood", consumes={}, produces={"wood": 1}
+        )
+        graph.cards["place_table"] = CausalCard(
+            action=8, name="place_table", consumes={"wood": 2}, produces={"table_placed": 1}, predecessors=["collect_wood"]
+        )
+        graph.cards["make_wood_pickaxe"] = CausalCard(
+            action=11, name="make_wood_pickaxe", consumes={"wood": 1}, produces={"wood_pickaxe": 1}, catalyst_needed="table_placed", predecessors=["place_table"]
+        )
+        graph.cards["make_wood_sword"] = CausalCard(
+            action=14, name="make_wood_sword", consumes={"wood": 1}, produces={"wood_sword": 1}, catalyst_needed="table_placed", predecessors=["place_table"]
+        )
+        return graph
+
+    def test_tabula_rasa_initialization_no_cheats(self):
+        """Verifies that CausalHypergraph initializes completely empty (pure tabula rasa, zero hardcoding)."""
+        graph = CausalHypergraph()
+        assert len(graph.cards) == 0
 
     def test_upstream_budget_wood_pickaxe(self):
         """
         Critical test: Verifies that make_wood_pickaxe aggregates:
         Cost(Table) [2 wood] + Cost(Pickaxe) [1 wood] = 3 Wood total.
         """
-        graph = CausalHypergraph()
+        graph = self._create_induced_graph()
         budget = graph.calculate_upstream_budget("make_wood_pickaxe")
         assert budget.get("wood") == 3
 
     def test_upstream_budget_wood_sword(self):
-        graph = CausalHypergraph()
+        graph = self._create_induced_graph()
         budget = graph.calculate_upstream_budget("make_wood_sword")
         assert budget.get("wood") == 3
 
@@ -67,7 +82,7 @@ class TestCausalHypergraphAndBudgeting:
         When the agent has 2 wood and wants a pickaxe, it must NOT place the table yet!
         It must gather 1 more wood first.
         """
-        graph = CausalHypergraph()
+        graph = self._create_induced_graph()
         # Has 2 wood, table not placed
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
@@ -81,7 +96,7 @@ class TestCausalHypergraphAndBudgeting:
         """
         When the agent has 3 wood, it is cleared to place the table.
         """
-        graph = CausalHypergraph()
+        graph = self._create_induced_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={"wood": 3},
@@ -94,7 +109,7 @@ class TestCausalHypergraphAndBudgeting:
         """
         After table is placed and wood drops from 3 -> 1, immediately craft pickaxe!
         """
-        graph = CausalHypergraph()
+        graph = self._create_induced_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={"wood": 1},

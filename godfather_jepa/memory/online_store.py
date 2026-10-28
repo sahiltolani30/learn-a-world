@@ -43,6 +43,7 @@ class OnlineEpisodicStore:
         self.steps: List[TransitionStep] = []
         self.workstation_placed_step: Optional[int] = None
         self.workstation_pos: np.ndarray = np.zeros(2, dtype=np.float32)
+        self.placed_workstations: Dict[str, Tuple[int, np.ndarray]] = {}
         self.current_displacement: np.ndarray = np.zeros(2, dtype=np.float32)
         self.current_inventory: Dict[str, int] = {}
         self.milestones_unlocked: List[str] = []
@@ -75,7 +76,9 @@ class OnlineEpisodicStore:
 
         if unlocked_achievement:
             self.milestones_unlocked.append(unlocked_achievement)
-            if unlocked_achievement == "place_table":
+            if unlocked_achievement.startswith("place_"):
+                station_key = unlocked_achievement[len("place_") :] + "_placed"
+                self.placed_workstations[station_key] = (step_idx, self.current_displacement.copy())
                 self.workstation_placed_step = step_idx
                 self.workstation_pos = self.current_displacement.copy()
                 self.subgoal_state = "IMMEDIATE_ASSEMBLY"
@@ -93,20 +96,31 @@ class OnlineEpisodicStore:
         )
         self.steps.append(trans)
 
-    def is_adjacent_to_workstation(self, threshold: float = 1.5) -> bool:
+    def is_adjacent_to_workstation(
+        self, workstation_type: Optional[str] = None, threshold: float = 1.5
+    ) -> bool:
         """
-        Verifies physical spatial proximity to placed table.
+        Verifies physical spatial proximity to placed workstation.
         Prevents workstation affordance amnesia.
         """
+        if workstation_type is not None and workstation_type in self.placed_workstations:
+            pos = self.placed_workstations[workstation_type][1]
+            dist = float(np.linalg.norm(self.current_displacement - pos))
+            return dist <= threshold
+
         if self.workstation_placed_step is None:
             return False
         dist = float(np.linalg.norm(self.current_displacement - self.workstation_pos))
         return dist <= threshold
 
-    def get_return_vector(self) -> Optional[np.ndarray]:
+    def get_return_vector(self, workstation_type: Optional[str] = None) -> Optional[np.ndarray]:
         """
         Returns displacement vector pointing back to placed workstation.
         """
+        if workstation_type is not None and workstation_type in self.placed_workstations:
+            pos = self.placed_workstations[workstation_type][1]
+            return pos - self.current_displacement
+
         if self.workstation_placed_step is None:
             return None
         return self.workstation_pos - self.current_displacement
@@ -115,6 +129,7 @@ class OnlineEpisodicStore:
         self.steps.clear()
         self.workstation_placed_step = None
         self.workstation_pos = np.zeros(2, dtype=np.float32)
+        self.placed_workstations.clear()
         self.current_displacement = np.zeros(2, dtype=np.float32)
         self.current_inventory.clear()
         self.milestones_unlocked.clear()

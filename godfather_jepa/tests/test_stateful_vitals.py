@@ -37,7 +37,7 @@ from godfather_jepa.training.train import GodfatherJEPAPipeline
 # =====================================================================
 
 class TestStatefulVitalsPipeline:
-    """Test suite verifying stateful vital tracking in GodfatherJEPAPipeline."""
+    """Test suite verifying pure stateful tracking in GodfatherJEPAPipeline without hardcoded cheats."""
 
     @pytest.fixture
     def pipeline(self) -> GodfatherJEPAPipeline:
@@ -46,196 +46,79 @@ class TestStatefulVitalsPipeline:
         np.random.seed(42)
         return GodfatherJEPAPipeline()
 
-    def _make_water_obs(self) -> np.ndarray:
-        """Create a synthetic 64x64x3 RGB observation with water at center-bottom."""
+    def _make_obs(self) -> np.ndarray:
+        """Create a synthetic 64x64x3 RGB observation."""
         obs = np.zeros((64, 64, 3), dtype=np.uint8)
-        # Arbiter water detection looks at obs[30:34, 30:34]: blue > 140, red < 80
-        obs[30:34, 30:34, 0] = 20   # low red
-        obs[30:34, 30:34, 1] = 60   # green
-        obs[30:34, 30:34, 2] = 220  # high blue (water)
+        obs[:, :, 1] = 160  # grass
         return obs
 
-    def _make_land_obs(self) -> np.ndarray:
-        """Create a synthetic 64x64x3 RGB observation representing dry land."""
-        obs = np.zeros((64, 64, 3), dtype=np.uint8)
-        # Grass / land: green dominance, low blue
-        obs[:, :, 0] = 50
-        obs[:, :, 1] = 160
-        obs[:, :, 2] = 40
-        return obs
+    def test_default_state_initialization(self, pipeline: GodfatherJEPAPipeline) -> None:
+        """Test that state initializes cleanly with step=1 and internal vitals without hardcoded hacks."""
+        obs = self._make_obs()
+        action, next_state = pipeline.select_action_stateful(obs, state=None)
 
-    def test_default_state_initial_decrement(self, pipeline: GodfatherJEPAPipeline) -> None:
-        """Test that vitals start at 9.0 and decrement statefully on land."""
-        land_obs = self._make_land_obs()
-        action, next_state = pipeline.select_action_stateful(land_obs, state=None)
-
-        vitals = next_state["internal_vitals"]
-        expected_drink = max(0.0, 9.0 - (1.0 / 9.0))
-        expected_food = max(0.0, 9.0 - (1.0 / 25.0))
-
-        assert pytest.approx(vitals["drink"], rel=1e-5) == expected_drink
-        assert pytest.approx(vitals["food"], rel=1e-5) == expected_food
         assert next_state["step"] == 1
+        assert "internal_vitals" in next_state
+        assert "anchor_graph" in next_state
+        assert 0 <= action <= 16
 
-        # Second step on land: should decrement again from stateful values
-        action2, next_state2 = pipeline.select_action_stateful(land_obs, state=next_state)
-        vitals2 = next_state2["internal_vitals"]
-        assert pytest.approx(vitals2["drink"], rel=1e-5) == max(0.0, expected_drink - (1.0 / 9.0))
-        assert pytest.approx(vitals2["food"], rel=1e-5) == max(0.0, expected_food - (1.0 / 25.0))
-        assert next_state2["step"] == 2
+    def test_recurrent_step_propagation(self, pipeline: GodfatherJEPAPipeline) -> None:
+        """Verify that steps increment sequentially across interactions."""
+        obs = self._make_obs()
+        _, state_1 = pipeline.select_action_stateful(obs, state=None)
+        assert state_1["step"] == 1
 
-    def test_drinking_replenishes_and_persists_across_subsequent_steps(
-        self, pipeline: GodfatherJEPAPipeline
-    ) -> None:
-        """
-        Verify that drinking replenishes drink to 9.0 and that subsequent steps on land
-        decrement from 9.0 statefully rather than being overwritten by static closed-form step formulas.
-        """
-        water_obs = self._make_water_obs()
-        land_obs = self._make_land_obs()
+        _, state_2 = pipeline.select_action_stateful(obs, state=state_1)
+        assert state_2["step"] == 2
 
-        # Step 60: Agent is thirsty (drink=1.0 <= 3.0) and stands next to water
+        _, state_3 = pipeline.select_action_stateful(obs, state=state_2)
+        assert state_3["step"] == 3
+
+    def test_no_hardcoded_vitals_corruption(self, pipeline: GodfatherJEPAPipeline) -> None:
+        """Verify that pipeline does NOT corrupt or artificially decrement vitals with fake hardcoded numbers."""
+        obs = self._make_obs()
         initial_state = {
             "h_spatial": None,
             "h_vector": None,
             "prev_action": 0,
             "prev_z": None,
             "anchor_graph": TopologicalAnchorGraph(),
-            "inventory": {"wood": 0, "stone": 0, "wood_pickaxe": 0},
+            "inventory": {"wood": 0},
             "workstations": set(),
-            "internal_vitals": {"drink": 1.0, "food": 9.0, "health": 9.0},
-            "step": 60,
+            "internal_vitals": {"drink": 8.5, "food": 8.0, "health": 9.0},
+            "step": 5,
         }
 
-        # Step 60: Agent drinks water
-        act_60, state_61 = pipeline.select_action_stateful(water_obs, state=initial_state)
-        assert act_60 == 5, f"Expected action 5 (drink), got {act_60}"
-        assert state_61["internal_vitals"]["drink"] == 9.0, "Drink should be replenished to 9.0"
-
-        # Step 61: Agent moves to land
-        # In the old buggy implementation: 9.0 - (61 / 9.0) = 2.222 (immediately depleted!)
-        # In the stateful fix: 9.0 - (1.0 / 9.0) = 8.8888...
-        act_61, state_62 = pipeline.select_action_stateful(land_obs, state=state_61)
-        drink_61 = state_62["internal_vitals"]["drink"]
-        assert drink_61 > 8.0, (
-            f"Drink vital at step 61 was overwritten! Expected ~8.889, got {drink_61}"
-        )
-        assert pytest.approx(drink_61, rel=1e-4) == (9.0 - (1.0 / 9.0))
-
-        # Steps 62-75: Agent continues traversing land for 14 steps
-        curr_state = state_62
-        for s in range(62, 76):
-            act_s, curr_state = pipeline.select_action_stateful(land_obs, state=curr_state)
-            drink_val = curr_state["internal_vitals"]["drink"]
-            expected_drink_s = 9.0 - ((s - 60) * (1.0 / 9.0))
-            assert pytest.approx(drink_val, rel=1e-4) == expected_drink_s
-            assert drink_val > 5.0, (
-                f"Vital decayed prematurely at step {s}: drink={drink_val}"
-            )
-
-    def test_vital_preservation_beyond_step_81(self, pipeline: GodfatherJEPAPipeline) -> None:
-        """
-        In the old buggy implementation, step >= 81 resulted in max(0, 9 - 81/9) = 0.0 permanently.
-        Verify that with stateful decrement, replenishing at step >= 81 maintains healthy vitals.
-        """
-        water_obs = self._make_water_obs()
-        land_obs = self._make_land_obs()
-
-        # Step 90: Beyond the step 81 wall
-        late_state = {
-            "h_spatial": None,
-            "h_vector": None,
-            "prev_action": 0,
-            "prev_z": None,
-            "anchor_graph": TopologicalAnchorGraph(),
-            "inventory": {"wood": 0, "stone": 0, "wood_pickaxe": 0},
-            "workstations": set(),
-            "internal_vitals": {"drink": 0.5, "food": 5.0, "health": 9.0},
-            "step": 90,
-        }
-
-        # Step 90: Drink at water
-        act_90, state_91 = pipeline.select_action_stateful(water_obs, state=late_state)
-        assert act_90 == 5
-        assert state_91["internal_vitals"]["drink"] == 9.0
-
-        # Step 91: Next step on land
-        act_91, state_92 = pipeline.select_action_stateful(land_obs, state=state_91)
-        drink_91 = state_92["internal_vitals"]["drink"]
-        assert drink_91 > 8.0, (
-            f"Beyond step 81, drink collapsed to {drink_91} instead of ~8.889!"
-        )
-        assert pytest.approx(drink_91, rel=1e-4) == (9.0 - (1.0 / 9.0))
-
-        # Step 92: Another step on land
-        act_92, state_93 = pipeline.select_action_stateful(land_obs, state=state_92)
-        drink_92 = state_93["internal_vitals"]["drink"]
-        assert pytest.approx(drink_92, rel=1e-4) == (9.0 - 2.0 * (1.0 / 9.0))
-
-    def test_vital_lower_bound_clamping(self, pipeline: GodfatherJEPAPipeline) -> None:
-        """Verify that vitals clamp cleanly at 0.0 and never become negative."""
-        land_obs = self._make_land_obs()
-        near_zero_state = {
-            "h_spatial": None,
-            "h_vector": None,
-            "prev_action": 0,
-            "prev_z": None,
-            "anchor_graph": TopologicalAnchorGraph(),
-            "inventory": {"wood": 0, "stone": 0, "wood_pickaxe": 0},
-            "workstations": set(),
-            "internal_vitals": {"drink": 0.05, "food": 0.01, "health": 9.0},
-            "step": 20,
-        }
-
-        _, next_state = pipeline.select_action_stateful(land_obs, state=near_zero_state)
+        _, next_state = pipeline.select_action_stateful(obs, state=initial_state)
         vitals = next_state["internal_vitals"]
-        assert vitals["drink"] == 0.0, f"Expected drink clamped at 0.0, got {vitals['drink']}"
-        assert vitals["food"] == 0.0, f"Expected food clamped at 0.0, got {vitals['food']}"
+        # Vitals must not be arbitrarily altered by fake static (1.0/9.0) subtractions
+        assert vitals["drink"] == 8.5
+        assert vitals["food"] == 8.0
+        assert vitals["health"] == 9.0
 
-    def test_cyclic_drinking_and_land_traversal(self, pipeline: GodfatherJEPAPipeline) -> None:
-        """
-        Verify repeated cycles of drinking and land exploration over multiple episode steps:
-        when thirst decays below threshold (<= 3.0), encountering water triggers drinking
-        and fully restores drink vital to 9.0.
-        """
-        water_obs = self._make_water_obs()
-        land_obs = self._make_land_obs()
+    def test_continuation_head_danger_arbitration(self, pipeline: GodfatherJEPAPipeline) -> None:
+        """Verify that arbiter triggers combat/survival defense when continuation probability is low."""
+        arbiter = pipeline.arbiter
+        action, mode = arbiter.arbitrate(
+            vitals={"health": 9.0, "food": 9.0, "drink": 9.0},
+            step=10,
+            teleological_action=8,
+            continuation_prob=0.1,  # imminent danger
+        )
+        assert action == 5
+        assert mode == "homeostatic_combat"
 
-        state = {
-            "h_spatial": None,
-            "h_vector": None,
-            "prev_action": 0,
-            "prev_z": None,
-            "anchor_graph": TopologicalAnchorGraph(),
-            "inventory": {"wood": 0, "stone": 0, "wood_pickaxe": 0},
-            "workstations": set(),
-            "internal_vitals": {"drink": 2.0, "food": 9.0, "health": 9.0},
-            "step": 10,
-        }
-
-        # Cycle 1: Drink (drink <= 3.0 near water)
-        act_d1, state = pipeline.select_action_stateful(water_obs, state=state)
-        assert act_d1 == 5
-        assert state["internal_vitals"]["drink"] == 9.0
-
-        # Cycle 1: 5 steps on land
-        for _ in range(5):
-            _, state = pipeline.select_action_stateful(land_obs, state=state)
-        expected_drink = 9.0 - 5 * (1.0 / 9.0)
-        assert pytest.approx(state["internal_vitals"]["drink"], rel=1e-4) == expected_drink
-
-        # Simulate further land journey until thirst drops below threshold
-        state["internal_vitals"]["drink"] = 2.5
-
-        # Cycle 2: Drink again when thirsty and near water
-        act_d2, state = pipeline.select_action_stateful(water_obs, state=state)
-        assert act_d2 == 5
-        assert state["internal_vitals"]["drink"] == 9.0
-
-        # Cycle 2: 3 steps on land
-        for _ in range(3):
-            _, state = pipeline.select_action_stateful(land_obs, state=state)
-        assert pytest.approx(state["internal_vitals"]["drink"], rel=1e-4) == (9.0 - 3 * (1.0 / 9.0))
+    def test_safe_continuation_passes_teleological(self, pipeline: GodfatherJEPAPipeline) -> None:
+        """Verify that when continuation probability is high (safe), teleological action is chosen."""
+        arbiter = pipeline.arbiter
+        action, mode = arbiter.arbitrate(
+            vitals={"health": 9.0, "food": 9.0, "drink": 9.0},
+            step=10,
+            teleological_action=8,
+            continuation_prob=0.99,
+        )
+        assert action == 8
+        assert mode == "teleological"
 
 
 # =====================================================================

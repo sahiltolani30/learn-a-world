@@ -60,27 +60,54 @@ class TestCausalCardProperties:
             assert confidences[i] > confidences[i + 1]
 
 
+def _build_test_graph() -> CausalHypergraph:
+    graph = CausalHypergraph()
+    graph.cards["collect_wood"] = CausalCard(
+        action=5, name="collect_wood", consumes={}, produces={"wood": 1}
+    )
+    graph.cards["place_table"] = CausalCard(
+        action=8, name="place_table", consumes={"wood": 2}, produces={"table_placed": 1, "place_table": 1}, predecessors=["collect_wood"]
+    )
+    graph.cards["make_wood_pickaxe"] = CausalCard(
+        action=11, name="make_wood_pickaxe", consumes={"wood": 1}, produces={"wood_pickaxe": 1}, catalyst_needed="table_placed", predecessors=["place_table"]
+    )
+    graph.cards["make_wood_sword"] = CausalCard(
+        action=14, name="make_wood_sword", consumes={"wood": 1}, produces={"wood_sword": 1}, catalyst_needed="table_placed", predecessors=["place_table"]
+    )
+    graph.cards["collect_stone"] = CausalCard(
+        action=5, name="collect_stone", consumes={}, produces={"stone": 1}, catalyst_needed="wood_pickaxe", predecessors=["make_wood_pickaxe"]
+    )
+    graph.cards["place_furnace"] = CausalCard(
+        action=9, name="place_furnace", consumes={"stone": 4}, produces={"furnace_placed": 1}, predecessors=["collect_stone"]
+    )
+    return graph
+
+
 class TestHierarchicalWoodBudgeting:
     """
     Empirically verifies the Hierarchical Upstream Budgeter.
     Solves the Wood-Count Deficit Trap: agent holding < 3 wood must NOT place table.
     """
 
+    def test_tabula_rasa_init_clean(self):
+        graph = CausalHypergraph()
+        assert len(graph.cards) == 0
+
     def test_recursive_upstream_budget_wood_pickaxe(self):
         """Budget(Wood Pickaxe) = Cost(Table)[2 wood] + Cost(Pickaxe)[1 wood] = 3 Wood."""
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         budget = graph.calculate_upstream_budget("make_wood_pickaxe")
         assert budget == {"wood": 3}
 
     def test_recursive_upstream_budget_wood_sword(self):
         """Budget(Wood Sword) = Cost(Table)[2 wood] + Cost(Sword)[1 wood] = 3 Wood."""
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         budget = graph.calculate_upstream_budget("make_wood_sword")
         assert budget == {"wood": 3}
 
     def test_direct_table_budget(self):
         """Budget(Place Table) = 2 Wood."""
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         budget = graph.calculate_upstream_budget("place_table")
         assert budget == {"wood": 2}
 
@@ -101,7 +128,7 @@ class TestHierarchicalWoodBudgeting:
         Adversarially sweep wood count from negative through surplus (0, 1, 2, 3, 4).
         Assert that when holding < 3 wood, table placement (action 8) is strictly blocked.
         """
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={"wood": wood_count},
@@ -116,7 +143,7 @@ class TestHierarchicalWoodBudgeting:
 
     def test_inventory_without_wood_key_treated_as_zero(self):
         """Empty inventory dictionary should safely default to 0 wood and block table placement."""
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={},
@@ -130,7 +157,7 @@ class TestHierarchicalWoodBudgeting:
         Once table is placed and inventory drops from 3 -> 1 wood,
         the agent must immediately execute Action 11 (make_wood_pickaxe).
         """
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={"wood": 1},
@@ -143,7 +170,7 @@ class TestHierarchicalWoodBudgeting:
         """
         If table is placed but wood is 0, the agent must gather 1 wood (Action 5).
         """
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="make_wood_pickaxe",
             current_inventory={"wood": 0},
@@ -213,7 +240,7 @@ class TestCausalCardPersistenceAndLifecycle:
 
     def test_simulated_step_lifecycle(self):
         """Simulates 10 steps of interactions tracking success/failure feedback."""
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         card = graph.cards["place_table"]
         assert card.confidence == 0.0
 
@@ -231,7 +258,8 @@ class TestCausalCardPersistenceAndLifecycle:
 
     def test_serialization_roundtrip(self):
         """Verifies graph state (cards, counts, storage_path) can be saved and restored."""
-        graph = CausalHypergraph(storage_path="/tmp/causal_memory.json")
+        graph = _build_test_graph()
+        graph.storage_path = "/tmp/causal_memory.json"
         graph.cards["place_table"].success_count = 42
         graph.cards["place_table"].failure_count = 3
 
@@ -270,7 +298,7 @@ class TestAdversarialSubgoalVulnerabilities:
         without recursively resolving if pred has its own unsatisfied catalyst ('table_placed').
         Now properly resolved: returns ('place_table', 8).
         """
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="collect_stone",
             current_inventory={"wood": 3},
@@ -284,7 +312,7 @@ class TestAdversarialSubgoalVulnerabilities:
         When target_goal is 'place_furnace' with stone=0 and wood=0,
         recursive upstream budgeting correctly chains back to root input ('collect_wood', 5).
         """
-        graph = CausalHypergraph()
+        graph = _build_test_graph()
         subgoal, action = graph.determine_subgoal(
             target_goal="place_furnace",
             current_inventory={"stone": 0, "wood": 0},

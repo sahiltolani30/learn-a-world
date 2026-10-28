@@ -63,6 +63,65 @@ from godfather_jepa.training.checkpoint_adapter import audit_and_adapt_checkpoin
 from godfather_jepa.training.latent_ac import compute_lambda_returns
 from godfather_jepa.training.replay_buffer import MilestoneReplayBuffer
 from godfather_jepa.utils.seed_guard import generate_procedural_seed, assert_training_seed_pure
+from godfather_jepa.utils.visual_decoder import (
+    decode_inventory_from_frame,
+    decode_vitals_from_frame,
+    compute_visual_darkness,
+)
+
+
+def compute_empirical_displacement(
+    obs_curr: torch.Tensor,
+    obs_next: torch.Tensor,
+    actions: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Computes empirical spatial displacement from world image cross-correlation/optical flow.
+    Replaces rigid kinematic assumptions so collisions (walking into trees/water)
+    correctly supervise with [0.0, 0.0].
+    """
+    b = obs_curr.shape[0]
+    device = obs_curr.device
+    displacements = torch.zeros(b, 2, device=device)
+
+    # World view is top 49 rows and 63 cols
+    w1 = obs_curr[:, :49, :63].float().mean(dim=-1)
+    w2 = obs_next[:, :49, :63].float().mean(dim=-1)
+
+    # Central evaluation mask excluding the player character at center (rows 18..31, cols 25..38)
+    mask = torch.ones(35, 49, device=device)
+    mask[11:24, 18:31] = 0.0
+
+    for i in range(b):
+        act = int(actions[i].item())
+        if act not in (1, 2, 3, 4):
+            continue
+
+        im1_center = w1[i, 7:42, 7:56]
+        im2_center = w2[i, 7:42, 7:56]
+        dz = ((im1_center - im2_center).abs() * mask).mean()
+
+        if act == 1:    # Left: expected world scroll right (+7 px in col)
+            im2_moved = w2[i, 7:42, 14:63]
+            nom = torch.tensor([-1.0, 0.0], device=device)
+        elif act == 2:  # Right: expected world scroll left (-7 px in col)
+            im2_moved = w2[i, 7:42, 0:49]
+            nom = torch.tensor([1.0, 0.0], device=device)
+        elif act == 3:  # Up: expected world scroll down (+7 px in row)
+            im2_moved = w2[i, 14:49, 7:56]
+            nom = torch.tensor([0.0, -1.0], device=device)
+        elif act == 4:  # Down: expected world scroll up (-7 px in row)
+            im2_moved = w2[i, 0:35, 7:56]
+            nom = torch.tensor([0.0, 1.0], device=device)
+
+        dm = ((im1_center - im2_moved).abs() * mask).mean()
+
+        if dm >= 3.5 and dm > dz * 1.1:
+            displacements[i] = torch.tensor([0.0, 0.0], device=device)
+        else:
+            displacements[i] = nom
+
+    return displacements
 
 
 class GodfatherJEPAPipeline:
@@ -106,7 +165,6 @@ class GodfatherJEPAPipeline:
             thirst_threshold=3.0,
             hunger_threshold=3.0,
             health_threshold=4.0,
-            dusk_step_threshold=135,
         )
 
         # 2. Actor-Critic
@@ -225,13 +283,10 @@ class GodfatherJEPAPipeline:
         vitals = state["internal_vitals"]
         step = state["step"]
 
-        # Update empirical mental inventory when positive reward is received on action 5 (Do)
-        last_rew = state.get("last_reward", 0.0)
-        if last_rew > 0.0 and prev_act == 5:
-            if inv.get("wood_pickaxe", 0) == 0:
-                inv["wood"] = inv.get("wood", 0) + 1
-            else:
-                inv["stone"] = inv.get("stone", 0) + 1
+        # Strict pixel-only empirical visual decoding from observation HUD (rows 49..63)
+        if hasattr(obs, "shape") and obs.shape[0] >= 63 and obs[49:].sum() > 0:
+            inv.update(decode_inventory_from_frame(obs))
+            vitals.update(decode_vitals_from_frame(obs))
 
         self.encoder.eval()
         self.actor.eval()
@@ -278,42 +333,27 @@ class GodfatherJEPAPipeline:
                     current_inventory=inv,
                     workstations_present=ws,
                 )
-                if subgoal in ("place_table", "make_wood_pickaxe", "make_wood_sword", "place_furnace"):
-                    teleo_action = determined_action
-                else:
-                    teleo_action = actor_action if actor_action in (1, 2, 3, 4, 5) else determined_action
+                teleo_action = determined_action if (determined_action != 0 and subgoal != "explore") else actor_action
 
-                # Workstation navigation override if return needed
-                if "table_placed" in ws and inv.get("wood", 0) >= 1 and inv.get("wood_pickaxe", 0) == 0:
-                    return_act = anchor.get_return_action("table")
-                    if return_act is not None and return_act != 0:
-                        teleo_action = return_act
+            # 5. Visual darkness signal from world view
+            visual_darkness = compute_visual_darkness(obs)
 
-            # 6. Homeostatic arbitration (preemptive drinking reflex / danger)
-            # Detect water adjacency from center-bottom visual patch (RGB blue channel dominance)
-            water_adjacent = bool((obs[30:34, 30:34, 2].mean() > 140) and (obs[30:34, 30:34, 0].mean() < 80))
-            # Stateful vital decay: decrement per step rather than overwriting from global step count
-            vitals["drink"] = max(0.0, vitals.get("drink", 9.0) - (1.0 / 9.0))
-            vitals["food"] = max(0.0, vitals.get("food", 9.0) - (1.0 / 25.0))
-
+            # 6. Homeostatic arbitration (relying on learned continuation probability and visual darkness)
             final_action, mode = self.arbiter.arbitrate(
                 vitals=vitals,
                 step=step,
                 teleological_action=teleo_action,
-                water_adjacent=water_adjacent,
                 continuation_prob=contin_prob,
+                visual_darkness=visual_darkness,
             )
 
-            # 7. Update internal mental inventory
-            if final_action == 8:  # place table
+            # 7. Register landmark and update active workstations if placing workstation
+            if final_action == 8:
                 ws.add("table_placed")
-                inv["wood"] = max(0, inv.get("wood", 0) - 2)
-                anchor.register_landmark("table", latent_key=z.cpu().numpy())
-            elif final_action == 11:  # make wood pickaxe
-                inv["wood_pickaxe"] = 1
-                inv["wood"] = max(0, inv.get("wood", 0) - 1)
-            elif mode == "homeostatic_drink":
-                vitals["drink"] = 9.0
+                anchor.register_landmark("table", latent_key=z.detach().cpu().numpy())
+            elif final_action == 9:
+                ws.add("furnace_placed")
+                anchor.register_landmark("furnace", latent_key=z.detach().cpu().numpy())
 
         next_state = {
             "h_spatial": h_spatial,
@@ -337,6 +377,8 @@ class GodfatherJEPAPipeline:
         env = CrafterEnvWrapper(seed=env_seed, max_steps=max_steps, training=True)
         res = env.reset()
         obs = res[0] if isinstance(res, tuple) else res
+        initial_info = res[1] if isinstance(res, tuple) and len(res) > 1 else {}
+        prev_inv = dict(initial_info.get("inventory", {}))
 
         obs_list, act_list, rew_list, done_list = [obs], [], [], []
         achievements_dict: Dict[str, List[int]] = {}
@@ -364,28 +406,51 @@ class GodfatherJEPAPipeline:
                     unlocked = a_name
                     break
 
+            # Track empirical item deltas directly from environment transitions
+            curr_inv = info.get("inventory", {})
             item_deltas = {}
-            if act == 5 and reward > 0 and unlocked == "collect_wood":
-                item_deltas["wood"] = 1
-            elif act == 8:
-                item_deltas["wood"] = -2
-            elif act == 11:
-                item_deltas["wood"] = -1
-            elif act == 5 and reward > 0 and unlocked == "collect_stone":
-                item_deltas["stone"] = 1
+            for k, v in curr_inv.items():
+                if k in ("health", "food", "drink", "energy"):
+                    continue
+                diff = int(v - prev_inv.get(k, 0))
+                if diff != 0:
+                    item_deltas[k] = diff
+            prev_inv = dict(curr_inv)
+
+            # Compute true z_next and displacement delta_p via visual odometry
+            prev_z = state.get("prev_z")
+            with torch.no_grad():
+                obs_next_t = torch.as_tensor(obs_next, dtype=torch.float32, device=self.device).unsqueeze(0)
+                z_next_t, _ = self.encoder(obs_next_t)
+                act_t = torch.tensor([act], dtype=torch.long, device=self.device)
+                if prev_z is not None:
+                    delta_p_t = self.odometry_head(prev_z, act_t, z_next_t)
+                else:
+                    delta_p_t = torch.zeros(1, 2, device=self.device)
+
+            z_np = prev_z.detach().cpu().numpy().squeeze(0) if prev_z is not None else np.zeros(512, dtype=np.float32)
+            z_next_np = z_next_t.detach().cpu().numpy().squeeze(0)
+            delta_p_np = delta_p_t.detach().cpu().numpy().squeeze(0)
+
+            # Update state inventory and milestones for online step continuity
+            if state is not None:
+                if "inventory" in state:
+                    for k, v in item_deltas.items():
+                        state["inventory"][k] = max(0, state["inventory"].get(k, 0) + v)
+                if "workstations" in state and unlocked and unlocked.startswith("place_"):
+                    state["workstations"].add(f"{unlocked[len('place_'):]}_placed")
 
             # Record transition into online episodic working memory
-            prev_z = state.get("prev_z")
-            z_np = prev_z.detach().cpu().numpy().squeeze(0) if prev_z is not None else np.zeros(512, dtype=np.float32)
             online_store.record_step(
                 step_idx=steps,
                 z_t=z_np,
                 action=act,
                 reward=reward,
                 done=done,
-                z_next=z_np,
+                z_next=z_next_np,
                 item_deltas=item_deltas,
                 unlocked_achievement=unlocked,
+                delta_p=delta_p_np,
             )
 
             obs_list.append(obs_next)
@@ -487,17 +552,11 @@ class GodfatherJEPAPipeline:
             r_loss = F.mse_loss(pred_rew, target_rew)
             contin_losses.append(r_loss)
 
-            # Kinematic displacement mapping for Crafter primitive actions:
-            # Action 1: Left (-1, 0), Action 2: Right (+1, 0), Action 3: Up (0, -1), Action 4: Down (0, +1)
-            kinematic_deltas = torch.zeros(b, 2, device=self.device)
-            kinematic_deltas[act_s == 1] = torch.tensor([-1.0, 0.0], device=self.device)
-            kinematic_deltas[act_s == 2] = torch.tensor([1.0, 0.0], device=self.device)
-            kinematic_deltas[act_s == 3] = torch.tensor([0.0, -1.0], device=self.device)
-            kinematic_deltas[act_s == 4] = torch.tensor([0.0, 1.0], device=self.device)
-
+            # Empirical displacement from world image cross-correlation/optical flow
+            empirical_deltas = compute_empirical_displacement(obs[:, step], obs[:, step + 1], act_s)
             next_z_step = z[:, step + 1]
             pred_delta_p = self.odometry_head(z_s, act_s, next_z_step)
-            odo_loss = F.mse_loss(pred_delta_p, kinematic_deltas)
+            odo_loss = F.mse_loss(pred_delta_p, empirical_deltas)
             contin_losses.append(odo_loss)
 
         total_wm_loss = vicreg_loss_val + torch.stack(pred_losses).mean() + torch.stack(contin_losses).mean()

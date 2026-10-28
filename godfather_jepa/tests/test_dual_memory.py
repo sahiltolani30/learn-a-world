@@ -18,6 +18,7 @@ import torch
 from godfather_jepa.memory.online_store import OnlineEpisodicStore
 from godfather_jepa.memory.semantic_bank import SemanticConsolidatedBank
 from godfather_jepa.memory.consolidation import OfflineConsolidationEngine
+from godfather_jepa.planning.causal_hypergraph import CausalCard
 
 
 class TestOnlineEpisodicStore:
@@ -76,6 +77,9 @@ class TestOnlineEpisodicStore:
 class TestSemanticConsolidatedBank:
     def test_upstream_budget(self):
         bank = SemanticConsolidatedBank()
+        bank.cards["collect_wood"] = CausalCard(action=5, name="collect_wood", consumes={}, produces={"wood": 1})
+        bank.cards["place_table"] = CausalCard(action=8, name="place_table", consumes={"wood": 2}, produces={"table_placed": 1}, predecessors=["collect_wood"])
+        bank.cards["make_wood_pickaxe"] = CausalCard(action=11, name="make_wood_pickaxe", consumes={"wood": 1}, produces={"wood_pickaxe": 1}, catalyst_needed="table_placed", predecessors=["place_table"])
         budget = bank.calculate_upstream_budget("make_wood_pickaxe")
         assert budget.get("wood") == 3
 
@@ -83,7 +87,7 @@ class TestSemanticConsolidatedBank:
         with tempfile.TemporaryDirectory() as tmpdir:
             pt_path = os.path.join(tmpdir, "test_bank.pt")
             bank = SemanticConsolidatedBank()
-            bank.cards["collect_wood"].success_count = 42
+            bank.cards["collect_wood"] = CausalCard(action=5, name="collect_wood", consumes={}, produces={"wood": 1}, success_count=42)
             bank.save(pt_path)
 
             loaded_bank = SemanticConsolidatedBank()
@@ -93,6 +97,30 @@ class TestSemanticConsolidatedBank:
 
 
 class TestOfflineConsolidationEngine:
+    def test_empirical_recipe_induction_from_deltas(self):
+        """Verifies empirical discovery of consumes from negative deltas and produces from positive deltas."""
+        bank = SemanticConsolidatedBank()
+        engine = OfflineConsolidationEngine(semantic_bank=bank)
+        store = OnlineEpisodicStore()
+        z = np.zeros(512, dtype=np.float32)
+
+        # Step 0: collect wood
+        store.record_step(step_idx=0, z_t=z, action=5, reward=1.0, done=False, z_next=z, item_deltas={"wood": 1}, unlocked_achievement="collect_wood")
+        # Step 1: place table (consumes 2 wood)
+        store.record_step(step_idx=1, z_t=z, action=8, reward=1.0, done=False, z_next=z, item_deltas={"wood": -2}, unlocked_achievement="place_table")
+        # Step 2: make pickaxe at table (consumes 1 wood)
+        store.record_step(step_idx=2, z_t=z, action=11, reward=1.0, done=False, z_next=z, item_deltas={"wood": -1, "wood_pickaxe": 1}, unlocked_achievement="make_wood_pickaxe")
+
+        engine.consolidate_episode(store)
+
+        assert bank.cards["collect_wood"].produces == {"wood": 1, "collect_wood": 1}
+        assert bank.cards["place_table"].consumes == {"wood": 2}
+        assert bank.cards["place_table"].produces["table_placed"] == 1
+        assert "collect_wood" in bank.cards["place_table"].predecessors
+        assert bank.cards["make_wood_pickaxe"].consumes == {"wood": 1}
+        assert bank.cards["make_wood_pickaxe"].catalyst_needed == "table_placed"
+        assert "place_table" in bank.cards["make_wood_pickaxe"].predecessors
+
     def test_rule1_rare_milestone_preservation(self):
         """
         Rule 1: An achievement unlock with n=1 is consolidated and never pruned.
@@ -121,6 +149,9 @@ class TestOfflineConsolidationEngine:
         Rule 2: Swinging in grass with 0 materials does NOT penalize pickaxe card!
         """
         bank = SemanticConsolidatedBank()
+        bank.cards["make_wood_pickaxe"] = CausalCard(
+            action=11, name="make_wood_pickaxe", consumes={"wood": 1}, catalyst_needed="table_placed"
+        )
         initial_fail_count = bank.cards["make_wood_pickaxe"].failure_count
         engine = OfflineConsolidationEngine(semantic_bank=bank)
         store = OnlineEpisodicStore()
@@ -146,6 +177,9 @@ class TestOfflineConsolidationEngine:
         Rule 3: Swinging when away from table does NOT penalize pickaxe card!
         """
         bank = SemanticConsolidatedBank()
+        bank.cards["make_wood_pickaxe"] = CausalCard(
+            action=11, name="make_wood_pickaxe", consumes={"wood": 1}, catalyst_needed="table_placed"
+        )
         initial_fail_count = bank.cards["make_wood_pickaxe"].failure_count
         engine = OfflineConsolidationEngine(semantic_bank=bank)
         store = OnlineEpisodicStore()
