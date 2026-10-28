@@ -133,7 +133,9 @@ class BenchmarkRunner:
             "mean_survival_length": float(np.mean(total_steps_list)),
             "std_survival_length": float(np.std(total_steps_list)),
             "mean_episode_reward": float(np.mean(total_rewards_list)),
+            "mean_reward": float(np.mean(total_rewards_list)),
             "unlock_percentages": unlock_percentages,
+            "achievements": unlock_percentages,
             "total_runtime_seconds": elapsed,
             "episodes": episode_records,
         }
