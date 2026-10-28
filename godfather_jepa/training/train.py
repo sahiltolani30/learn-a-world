@@ -744,8 +744,11 @@ def main():
             wm_stats = pipeline.train_world_model_step()
             ac_stats = pipeline.train_actor_critic_step()
 
-        if (ep + 1) % 10 == 0:
-            print(f"Episode {ep+1:03d} | Seed: {seed} | Steps: {res['steps']} | Reward: {res['reward']:.1f} | WM Loss: {wm_stats.get('wm_loss', 0.0):.4f}")
+        # Print live progress every single episode with immediate stdout flush
+        print(
+            f"Episode {ep+1:03d}/{args.episodes:03d} | Seed: {seed} | Steps: {res['steps']:3d} | Reward: {res['reward']:4.1f} | WM Loss: {wm_stats.get('wm_loss', 0.0):.4f}",
+            flush=True,
+        )
 
         # Periodic auto-save to Google Drive so progress is NEVER lost on disconnect
         if (ep + 1) % args.save_every == 0 or (ep + 1) == args.episodes:
