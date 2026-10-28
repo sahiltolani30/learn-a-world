@@ -139,13 +139,14 @@ def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> 
     if not bank_path:
         return None
     p = Path(bank_path)
-    if p.exists():
-        return str(p)
     candidates = [
+        p,
         REPO_ROOT / bank_path,
         REPO_ROOT / "checkpoints" / p.name,
+        REPO_ROOT / "results" / "diagnostics" / p.name,
         Path("/content/drive/MyDrive/learn-a-world") / bank_path,
         Path("/content/drive/MyDrive/learn-a-world/checkpoints") / p.name,
+        Path("/content/drive/MyDrive/learn-a-world/results/diagnostics") / p.name,
         Path("/content/drive/MyDrive/learn-a-world") / p.name,
         Path("/content/drive/MyDrive") / bank_path,
         Path("/content/drive/MyDrive/checkpoints") / p.name,
@@ -157,10 +158,22 @@ def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> 
         candidates.extend([
             dp / bank_path,
             dp / "checkpoints" / p.name,
+            dp / "results" / "diagnostics" / p.name,
             dp / p.name,
         ])
     for cand in candidates:
         if cand.exists():
+            try:
+                with open(cand, "r") as f:
+                    meta = json.load(f)
+                if "prototypes" in meta and len(meta["prototypes"]) > 0:
+                    return str(cand)
+                if "bank_path" in meta and meta["bank_path"]:
+                    sub_cand = _resolve_bank(meta["bank_path"], drive_dir)
+                    if sub_cand and Path(sub_cand).exists():
+                        return sub_cand
+            except Exception:
+                pass
             return str(cand)
     return str(bank_path)
 
