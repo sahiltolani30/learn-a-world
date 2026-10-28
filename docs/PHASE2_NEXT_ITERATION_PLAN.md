@@ -4,6 +4,16 @@
 >
 > Companion docs: `CRAFTER_MECHANICS_REFERENCE.md` (ground truth), `PHASE2_MEMORY_REDESIGN_PLAN.md` (what is already implemented).
 
+## 0. Results log (updated as runs complete)
+
+**2026-10-28 — Cell 1 + smoke (pre-arms):**
+- Retrain v2: Gate 5 PASS on the full Drive corpus (3,832 eps / 666k transitions); held-out MSE 0.0507 vs persistence 1.0000 (**94.9% improvement**; the 0.0323/58.1% figures circulating are the v1 record — the results JSON was overwritten by the v2 run). Pre-train MSE 20.3 → confirms the absolute-vitals label change took effect.
+- Consolidation v2: 47,272 transitions / 300 episodes / **100% label coverage** / **932 prototypes** (old bank: 520). Vectorization commit 3c05aab verified: **34/34 phase2 tests pass, zero threshold/constant changes** — semantics preserved.
+- Audit gate: **C, E, F, G PASS** (3 trusted wood producers, 3 enabling edges, acyclic, deltas aligned). **A, B, D FAIL** — vitals dims 12–15 entered NEEDS via statistical enrichment: successes occur while healthy, near-misses while dying → the Wilson test correctly detects enrichment, but it is a *confounder* (agent competence), not an action requirement. The engine's requirements are inventory+nearby only.
+- **Decision (green-lit): exclude dims 12–15 from NEEDS candidacy** — a registered hypothesis-space restriction ("needs ⊆ inventory"), pre-sanctioned by the redesign plan's Amendment 2 fallback. Vitals remain fully active in the transition/health/maintenance channels. Not a semantic cheat: no item or action names; it restricts the hypothesis class, and vitals-causality is learned elsewhere (F1).
+- Smoke (5 eps, bank+online): **3.87%**, 9/22 achievements, place_table 80%, and the designed chain fired live in one episode: collect_wood → place_table → make_wood_sword → defeat_zombie (7 unlocks, reward 6.1). ~20 hypotheses tested per episode, stable. Caveat: n=5, high variance — the arms decide.
+- **Next: apply vitals exclusion → re-consolidate (~84s) → re-audit (A–D must pass) → re-read cards → launch 3-arm screening.**
+
 ## 1. Where the agent actually is (empirical, from recorded runs)
 
 - **93% of audited deaths are monsters; 73% at night.** Mean death step 177.7 (of 500-step diagnostic episodes); 0/15 episodes survived to the cap. Starvation/dehydration only 7%.
