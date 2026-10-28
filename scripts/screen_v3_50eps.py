@@ -388,6 +388,13 @@ def run_screening(
                 mask_before = belief.get_mask()  # copied BEFORE belief.update
 
             belief.update(event_probs, reward, next_h=next_h.squeeze(0))
+            if hasattr(belief, "update_working_memory"):
+                belief.update_working_memory(
+                    z_t=z_t,
+                    action=action,
+                    reward=reward,
+                    next_h=next_h.squeeze(0),
+                )
             obs = next_obs
 
             if online_learning and recorder is not None:
@@ -568,6 +575,12 @@ def run_screening(
             if out_p.resolve() != drive_out.resolve():
                 shutil.copy2(str(out_p), str(drive_out))
                 print(f"[Drive] Mirrored screening results to: {drive_out}")
+            if online_learning and Path(online_bank_path).exists():
+                drive_bank = dp / "results" / Path(online_bank_path).name
+                drive_bank.parent.mkdir(parents=True, exist_ok=True)
+                if Path(online_bank_path).resolve() != drive_bank.resolve():
+                    shutil.copy2(str(online_bank_path), str(drive_bank))
+                    print(f"[Drive] Mirrored online bank to: {drive_bank}")
 
     print("\n" + "=" * 80)
     print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")

@@ -223,6 +223,9 @@ class RecurrentMPCPlanner:
                     if subgoal_info.get("visual_sim", 0.0) >= 0.35:
                         retrieved_action = subgoal_info["recommended_action"]
                         match_sim = float(subgoal_info.get("visual_sim", 0.5))
+                    if subgoal_info.get("visual_sim", 0.0) >= 0.70 and hasattr(belief, "working_memory"):
+                        if not belief.working_memory.has_anchor("structure"):
+                            belief.working_memory.set_anchor("structure", z_0.flatten().cpu())
 
             # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
             structure_anchor = None

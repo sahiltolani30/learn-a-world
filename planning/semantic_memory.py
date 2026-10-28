@@ -214,6 +214,12 @@ class ShortTermWorkingMemory:
 
         self.prev_z = z_cpu.clone()
 
+        # Closed-loop sensory relocalization: if agent visually encounters an anchor (cos >= 0.75), eliminate drift:
+        for anc_name, anc_z in list(self.landmark_anchors.items()):
+            sim_anc = float(F.cosine_similarity(z_cpu.unsqueeze(0), anc_z.unsqueeze(0)).item())
+            if sim_anc >= 0.75:
+                self.anchor_offsets[anc_name] = np.array([0.0, 0.0], dtype=np.float32)
+
         # Generic Object Permanence: track placed structures until subsequent breakthrough
         if unlocked_event is not None:
             if "place_" in unlocked_event:
