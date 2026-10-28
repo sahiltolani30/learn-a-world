@@ -236,6 +236,17 @@ def consolidate_phase2_memory(
     bank.save(out_bank_p)
     print(f"-> Saved Relation Hypothesis Bank to: {out_bank_p}")
 
+    drive_root = Path("/content/drive/MyDrive/learn-a-world")
+    if drive_root.exists():
+        try:
+            drive_bank_p = drive_root / "checkpoints" / out_bank_p.name
+            if drive_bank_p.resolve() != out_bank_p.resolve():
+                drive_bank_p.parent.mkdir(parents=True, exist_ok=True)
+                bank.save(drive_bank_p)
+                print(f"-> [Auto-Drive Sync] Mirrored memory bank to Google Drive: {drive_bank_p}")
+        except Exception as e:
+            print(f"Warning: Could not mirror memory bank to Drive: {e}")
+
     diag_summary = {
         "phase": "phase2_grounded_memory_consolidation",
         "checkpoint": str(checkpoint_path),
@@ -289,6 +300,17 @@ def consolidate_phase2_memory(
     with open(diag_p, "w") as f:
         json.dump(diag_summary, f, indent=2)
     print(f"-> Saved consolidation diagnostic to: {diag_p}")
+
+    if drive_root.exists():
+        try:
+            drive_diag_p = drive_root / "results/diagnostics" / diag_p.name
+            if drive_diag_p.resolve() != diag_p.resolve():
+                drive_diag_p.parent.mkdir(parents=True, exist_ok=True)
+                with open(drive_diag_p, "w") as f:
+                    json.dump(diag_summary, f, indent=2)
+                print(f"-> [Auto-Drive Sync] Mirrored diagnostic to Google Drive: {drive_diag_p}")
+        except Exception as e:
+            print(f"Warning: Could not mirror diagnostic to Drive: {e}")
 
     return diag_summary
 
