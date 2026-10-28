@@ -126,6 +126,26 @@ class CompositionalCausalPlanner:
                 return float(amt)
         return 0.0
 
+    def _project_state(self, x_base: np.ndarray, chain: List[Dict[str, Any]]) -> np.ndarray:
+        """Projects continuous inventory forward through a sequence of planned chain steps."""
+        x_proj = np.copy(x_base)
+        for link in chain:
+            c = link.get("card")
+            if c is None:
+                continue
+            apps = float(link.get("applications", 1))
+            if hasattr(c, "consumes") and c.consumes:
+                for d, amt in c.consumes:
+                    idx = int(d)
+                    if 0 <= idx < len(x_proj):
+                        x_proj[idx] -= float(amt) * apps
+            if hasattr(c, "produces") and c.produces:
+                for d, amt in c.produces:
+                    idx = int(d)
+                    if 0 <= idx < len(x_proj):
+                        x_proj[idx] += float(amt) * apps
+        return x_proj
+
     def _resolve_chain(
         self,
         card: TransitionPrototype,
@@ -136,13 +156,14 @@ class CompositionalCausalPlanner:
         z_norm: Optional[torch.Tensor] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """DFS: returns the ordered chain [{card, action, applications}] that makes
-        `card` executable, or None if not groundable within the depth limit."""
+        `card` executable, or None if not groundable within the depth limit.
+        Uses forward state projection to guarantee cumulative resource satisfaction."""
         if depth > self.chain_depth or card.prototype_id in visited:
             return None
         visited = visited | {card.prototype_id}
-        prefix: List[Dict[str, Any]] = []
 
-        # 1. Enablers first: unsatisfied enabling predecessors must happen before us.
+        # 1. Enablers: resolve any unsatisfied enabling predecessors
+        enabler_chains: List[Dict[str, Any]] = []
         for edge in sorted(
             self.hypothesis_bank.edges.get(card.prototype_id, []),
             key=lambda e: -float(e.lift),
@@ -155,10 +176,15 @@ class CompositionalCausalPlanner:
             sub = self._resolve_chain(enabler, x_t, m_bin, depth + 1, visited, z_norm)
             if sub is None:
                 return None  # enabler ungroundable -> the whole chain is
-            prefix.extend(sub)
+            enabler_chains.extend(sub)
 
-        # 2. Resource deficits: best producer per deficit, recursed.
-        for dim, amount in self._deficits(card, x_t):
+        # 2. Forward state projection: project inventory after enablers to find remaining deficits
+        x_after_enablers = self._project_state(x_t, enabler_chains)
+
+        # 3. Resource deficits: best producer per deficit, recursed against projected inventory
+        producer_chains: List[Dict[str, Any]] = []
+        x_working = np.copy(x_after_enablers)
+        for dim, amount in self._deficits(card, x_working):
             producers = [
                 p
                 for p in self.hypothesis_bank.producers_for_dim(dim)
@@ -173,24 +199,38 @@ class CompositionalCausalPlanner:
             )
             chained = None
             for producer in producers:
-                sub = self._resolve_chain(producer, x_t, m_bin, depth + 1, visited, z_norm)
+                sub = self._resolve_chain(producer, x_working, m_bin, depth + 1, visited, z_norm)
                 if sub is not None:
                     chained = sub
                     break
             if chained is None:
                 return None
             per_apply = max(self._producer_amount(chained[-1]["card"], dim), 1e-6)
-            # Cap applications per deficit: protects the cost term from a producer with a
-            # tiny learned delta demanding absurd repeat counts within one plan step.
             applications = int(min(10, max(1, int(np.ceil(amount / per_apply)))))
             for link in chained:
                 link["applications"] = link.get("applications", 0)
             chained[-1]["applications"] = applications
-            prefix.extend(chained)
+            producer_chains.extend(chained)
+            x_working = self._project_state(x_working, chained)
 
-        # 3. This card itself: one execution.
-        prefix.append({"card": card, "card_id": card.prototype_id, "action": int(card.action), "applications": 1})
-        return prefix
+        # 4. Topological assembly:
+        # Stationary workstation enablers (cards with 0 inventory produces) must be executed
+        # immediately before the dependent action, AFTER all resource producers have finished.
+        # This prevents the agent from placing a workstation and then wandering off to harvest.
+        final_chain: List[Dict[str, Any]] = []
+        station_enablers: List[Dict[str, Any]] = []
+        for link in enabler_chains:
+            l_card = link["card"]
+            has_item_produces = any(0 <= int(d) < 12 and amt > 0.1 for d, amt in getattr(l_card, "produces", []))
+            if not has_item_produces:
+                station_enablers.append(link)
+            else:
+                final_chain.append(link)
+
+        final_chain.extend(producer_chains)
+        final_chain.extend(station_enablers)
+        final_chain.append({"card": card, "card_id": card.prototype_id, "action": int(card.action), "applications": 1})
+        return final_chain
 
     def _chain_stats(self, chain: List[Dict[str, Any]], target: TransitionPrototype) -> Tuple[float, int]:
         trust_prod = 1.0

@@ -244,3 +244,63 @@ def test_member_latents_compaction_on_save_and_load(tmp_path):
     assert len(fresh._member_latents["card_bloated"]) == 8
     assert fresh._member_latents["card_bloated"][-1] == [19.0] * 128
 
+
+def test_forward_state_projection_chains_cumulative_resources():
+    """Verifies that multi-step backward chaining uses forward state projection to accumulate
+    cumulative resources across enablers and consumers without any hardcoded thresholds."""
+    from dual_store.causal_memory import RelationHypothesisBank, TransitionPrototype, RelationEdge
+    from dual_store.compositional_planner import CompositionalCausalPlanner
+
+    bank = RelationHypothesisBank()
+    wood_c = TransitionPrototype(
+        "card_wood", 5, [0.0]*128, [0.0]*16, [0.0]*16, [0.0]*128, 10.0, 1.0, 1.0, 1.0, 0.9,
+        [0.0]*22, 6, [], [[0.0, 1.0]], [], 0.9, 0.8, 0.5, "confirmed", 10.0, 0.0, 1.0, 0.0, "offline"
+    )
+    bank.prototypes["card_wood"] = wood_c
+
+    table_c = TransitionPrototype(
+        "card_table", 8, [0.0]*128, [0.0]*16, [0.0]*16, [0.0]*128, 10.0, 1.0, 1.0, 1.0, 0.9,
+        [0.0]*22, 20, [[0.0, 2.0]], [], [[0.0, 2.0]], 0.9, 0.8, 0.5, "confirmed", 10.0, 0.0, 1.0, 0.0, "offline"
+    )
+    bank.prototypes["card_table"] = table_c
+
+    pick_c = TransitionPrototype(
+        "card_pickaxe", 11, [0.0]*128, [0.0]*16, [0.0]*16, [0.0]*128, 10.0, 1.0, 1.0, 1.0, 0.9,
+        [0.0]*22, 15, [[0.0, 1.0]], [], [[0.0, 1.0]], 0.9, 0.8, 0.5, "confirmed", 10.0, 0.0, 1.0, 0.0, "offline"
+    )
+    bank.prototypes["card_pickaxe"] = pick_c
+
+    bank.refresh_edges()
+    bank.edges["card_pickaxe"] = [RelationEdge("card_table", "card_pickaxe", "enabling_lift", None, 10.0, 5, 1.0)]
+
+    planner = CompositionalCausalPlanner(bank, device="cpu")
+    m_bin = np.zeros(22, dtype=np.float32)
+
+    # 1. With 0 wood: must plan 2 wood (for table) + 1 wood (for pickaxe) = 3 total wood before table
+    x_0 = np.zeros(16, dtype=np.float32)
+    chain_0 = planner._resolve_chain(pick_c, x_0, m_bin, 0, set())
+    assert chain_0 is not None
+    wood_apps = sum(step["applications"] for step in chain_0 if step["card"].prototype_id == "card_wood")
+    assert wood_apps == 3, f"Expected 3 cumulative wood applications, got {wood_apps}"
+    # Verify table comes AFTER wood harvesting
+    wood_idx = [i for i, s in enumerate(chain_0) if s["card"].prototype_id == "card_wood"]
+    table_idx = [i for i, s in enumerate(chain_0) if s["card"].prototype_id == "card_table"][0]
+    assert max(wood_idx) < table_idx, "All wood harvesting must precede table placement"
+
+    # 2. With 2 wood: table consumes 2, so 1 more wood is needed for pickaxe
+    x_2 = np.zeros(16, dtype=np.float32)
+    x_2[0] = 2.0
+    chain_2 = planner._resolve_chain(pick_c, x_2, m_bin, 0, set())
+    assert chain_2 is not None
+    wood_apps_2 = sum(step["applications"] for step in chain_2 if step["card"].prototype_id == "card_wood")
+    assert wood_apps_2 == 1, f"Expected 1 wood application, got {wood_apps_2}"
+
+    # 3. With 3 wood: both table and pickaxe are fully covered, 0 wood harvesting needed
+    x_3 = np.zeros(16, dtype=np.float32)
+    x_3[0] = 3.0
+    chain_3 = planner._resolve_chain(pick_c, x_3, m_bin, 0, set())
+    assert chain_3 is not None
+    wood_apps_3 = sum(step["applications"] for step in chain_3 if step["card"].prototype_id == "card_wood")
+    assert wood_apps_3 == 0, f"Expected 0 wood applications, got {wood_apps_3}"
+
+
