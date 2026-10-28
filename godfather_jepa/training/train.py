@@ -133,7 +133,9 @@ class GodfatherJEPAPipeline:
 
         # 4. Checkpoint warm-start adaptation if supplied
         if checkpoint_init and os.path.exists(checkpoint_init):
-            success, report = audit_and_adapt_checkpoint(checkpoint_init, self.encoder, device=device)
+            success, report = audit_and_adapt_checkpoint(
+                checkpoint_init, self.encoder, target_actor=self.actor, device=device
+            )
             print(f"[Adapter] Audit verdict: {report.verdict}")
 
         # 5. Buffer

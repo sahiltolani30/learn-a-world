@@ -58,6 +58,7 @@ class CheckpointAuditReport:
 def audit_and_adapt_checkpoint(
     checkpoint_path: str,
     target_encoder: VisualConv4Encoder,
+    target_actor: Optional[Any] = None,
     device: torch.device = torch.device("cpu"),
 ) -> Tuple[bool, CheckpointAuditReport]:
     """
@@ -157,6 +158,21 @@ def audit_and_adapt_checkpoint(
 
     # Load matched parameters
     target_encoder.load_state_dict(clean_sd, strict=False)
+
+    # Conditionally adapt policy prior action head into actor if supplied
+    if target_actor is not None and isinstance(ckpt, dict) and "policy_prior" in ckpt:
+        try:
+            prior_sd = ckpt["policy_prior"]
+            actor_sd = target_actor.state_dict()
+            if "net.4.weight" in prior_sd and "net.2.weight" in actor_sd:
+                if prior_sd["net.4.weight"].shape == actor_sd["net.2.weight"].shape:
+                    actor_sd["net.2.weight"] = prior_sd["net.4.weight"]
+                    if "net.4.bias" in prior_sd and "net.2.bias" in actor_sd:
+                        actor_sd["net.2.bias"] = prior_sd["net.4.bias"]
+                    target_actor.load_state_dict(actor_sd)
+                    print("[Adapter] Successfully adapted policy prior action head into actor (shape [17, 256]).")
+        except Exception as e:
+            print(f"[Adapter] Warning: could not adapt policy prior: {e}")
 
     # Representation Health Check: evaluate variance over random test batch
     target_encoder.eval()
