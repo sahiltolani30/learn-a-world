@@ -35,7 +35,7 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS, compute_crafter_score
 from dual_store.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from dual_store.mpc_v3 import RecurrentMPCPlanner
-from planning.playtime_recorder import PlaytimeRecorder
+from dual_store.playtime_recorder import PlaytimeRecorder
 
 
 def _sha256_file(filepath: Path) -> Optional[str]:
