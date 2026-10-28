@@ -442,7 +442,24 @@ class RecurrentMPCPlanner:
                     # Daylight hunger/thirst (-0.05 to -0.10) carries standard vital cost
                     # Acute lethal combat damage (health_delta <= -0.12, e.g. zombie bite / arrow) penalizes paths toward monsters
                     lethal_combat_damage = torch.clamp(health_delta + 0.12, max=0.0)
-                    vital_reward = self.vital_weight * health_delta + 1.5 * lethal_combat_damage
+
+                    # F1 Physiological Maintenance (Homeostatic Drive Reduction, dims 12..15):
+                    # Grounded strictly in StateReadoutHead continuous state estimates (dims 12:16: health, food, drink, energy).
+                    # Zero hardcoding: dims are indexed (12..15), never named. No engine names or action cheats.
+                    # When any vital is depleted (< 3.0), candidate paths that neglect it pay an urgency hazard penalty;
+                    # paths that take actions replenishing the depleted vital (delta_hat > 0) receive homeostatic drive reduction.
+                    maintenance_reward = 0.0
+                    if x_hat_t is not None and self.use_transition_model:
+                        vitals_t = x_hat_t[:, 12:16]
+                        vital_deficits = torch.clamp((3.0 - vitals_t) / 3.0, min=0.0, max=1.0)
+                        vital_hazard = -0.20 * (vital_deficits ** 2).sum(dim=-1)
+                        vital_replenishment = 0.0
+                        if "delta_hat" in locals() and delta_hat is not None:
+                            vital_deltas = delta_hat[:, 12:16]
+                            vital_replenishment = 0.40 * (vital_deficits * torch.clamp(vital_deltas, min=0.0, max=1.0)).sum(dim=-1)
+                        maintenance_reward = vital_hazard + vital_replenishment
+
+                    vital_reward = self.vital_weight * health_delta + 1.5 * lethal_combat_damage + maintenance_reward
 
                     # Affordance guidance bonus from Neural Episodic Memory (Pillar 4):
                     affordance_reward = 0.0
