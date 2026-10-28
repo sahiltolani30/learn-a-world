@@ -44,7 +44,13 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NUM_ACTIONS = 17
 STATE_DIM = 16  # Canonical 16-D resource/vital state space
+NUM_ITEMS = 12  # Backpack inventory items (dims 0..11: wood, stone, tools, etc.)
+NUM_VITALS = 4  # Physiological vitals (dims 12..15: health, food, drink, energy)
 NUM_ACHIEVEMENTS = len(CRAFTER_ACHIEVEMENTS)  # 22
+
+# Discrete item deduction threshold (3*sigma neural readout noise floor: sigma ~= 0.22).
+# Crafter items are integer counters (>= 1.0); deductions < 0.70 are sensor/visual noise.
+DISCRETE_DEDUCTION_THRESHOLD = 0.70
 
 # 80% two-sided Wilson score interval (z of the standard normal at 90% quantile).
 WILSON_Z_80 = 1.2816
@@ -583,11 +589,11 @@ class RelationHypothesisBank:
 
     def _recompute_status(self, p: TransitionPrototype) -> None:
         p.status = "confirmed" if p.weighted_successes >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
-        is_craft = (p.event_dim is not None) or any(0 <= int(d) < 12 for d, _ in p.produces)
+        is_craft = (p.event_dim is not None) or any(0 <= int(d) < NUM_ITEMS for d, _ in p.produces)
         if p.status == "confirmed" and is_craft:
             # Pure causal consumption grounding: an action requires what it consumes from inventory (dims 0..11).
-            # True crafts consume discrete material (amt >= 0.70) to produce an item or achieve a milestone.
-            p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < 12 and amt >= 0.70]
+            # True crafts consume discrete material (amt >= DISCRETE_DEDUCTION_THRESHOLD) to produce an item or achieve a milestone.
+            p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < NUM_ITEMS and amt >= DISCRETE_DEDUCTION_THRESHOLD]
             p.precondition_state = [0.0] * STATE_DIM
             for nd in p.needs:
                 d = int(nd[0])
@@ -797,12 +803,12 @@ class RelationHypothesisBank:
 
         status = "confirmed" if n_succ >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
         needs: List[List[float]] = []
-        is_craft = (event_dim is not None) or any(0 <= int(d) < 12 for d, _ in produces)
+        is_craft = (event_dim is not None) or any(0 <= int(d) < NUM_ITEMS for d, _ in produces)
         if status == "confirmed" and is_craft:
             # Pure causal consumption grounding: what was deducted from inventory (dims 0..11)
             # is what this action needs to be executed (Conservation of Inventory).
-            # True crafts consume discrete material (amt >= 0.70) to produce an item or achieve a milestone.
-            needs = [[float(d), amt] for d, amt in consumes if 0 <= int(d) < 12 and amt >= 0.70]
+            # True crafts consume discrete material (amt >= DISCRETE_DEDUCTION_THRESHOLD) to produce an item or achieve a milestone.
+            needs = [[float(d), amt] for d, amt in consumes if 0 <= int(d) < NUM_ITEMS and amt >= DISCRETE_DEDUCTION_THRESHOLD]
 
         # Legacy precondition interface: sparse needs vector.
         precondition_state = [0.0] * STATE_DIM
