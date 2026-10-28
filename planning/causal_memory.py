@@ -583,9 +583,11 @@ class RelationHypothesisBank:
 
     def _recompute_status(self, p: TransitionPrototype) -> None:
         p.status = "confirmed" if p.weighted_successes >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
-        if p.status == "confirmed":
+        is_craft = (p.event_dim is not None) or any(0 <= int(d) < 12 for d, _ in p.produces)
+        if p.status == "confirmed" and is_craft:
             # Pure causal consumption grounding: an action requires what it consumes from inventory (dims 0..11).
-            p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < 12]
+            # True crafts consume discrete material (amt >= 0.70) to produce an item or achieve a milestone.
+            p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < 12 and amt >= 0.70]
             p.precondition_state = [0.0] * STATE_DIM
             for nd in p.needs:
                 d = int(nd[0])
@@ -795,10 +797,12 @@ class RelationHypothesisBank:
 
         status = "confirmed" if n_succ >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
         needs: List[List[float]] = []
-        if status == "confirmed":
+        is_craft = (event_dim is not None) or any(0 <= int(d) < 12 for d, _ in produces)
+        if status == "confirmed" and is_craft:
             # Pure causal consumption grounding: what was deducted from inventory (dims 0..11)
             # is what this action needs to be executed (Conservation of Inventory).
-            needs = [[float(d), amt] for d, amt in consumes if 0 <= int(d) < 12]
+            # True crafts consume discrete material (amt >= 0.70) to produce an item or achieve a milestone.
+            needs = [[float(d), amt] for d, amt in consumes if 0 <= int(d) < 12 and amt >= 0.70]
 
         # Legacy precondition interface: sparse needs vector.
         precondition_state = [0.0] * STATE_DIM

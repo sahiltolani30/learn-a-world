@@ -62,8 +62,19 @@ def inspect_bank(bank_path: str):
         return 1
 
     data = json.loads(p.read_text())
-    protos = data.get("prototypes", {})
-    edges = data.get("edges", {})
+    if "prototypes" in data and isinstance(data["prototypes"], dict):
+        protos = data["prototypes"]
+    elif "prototype_summary" in data and isinstance(data["prototype_summary"], list):
+        protos = {item.get("prototype_id", item.get("id")): item for item in data["prototype_summary"]}
+    else:
+        protos = {}
+
+    if "edges" in data and isinstance(data["edges"], dict):
+        edges = data["edges"]
+    elif "causal_edges" in data and isinstance(data["causal_edges"], dict):
+        edges = data["causal_edges"]
+    else:
+        edges = {}
 
     print("=" * 80)
     print(f"       CAUSAL MEMORY BANK DIAGNOSTIC INSPECTION: {p.name}")
@@ -126,7 +137,7 @@ def inspect_bank(bank_path: str):
     table_cards = [card for card in protos.values() if card.get("action") == 8]
     print(f"\n[Place Table Cards] Count: {len(table_cards)}")
     for card in table_cards[:3]:
-        pid = card["prototype_id"]
+        pid = card.get("prototype_id", card.get("id"))
         status = card.get("status")
         needs = fmt_items(card.get("needs", []))
         consumes = fmt_items(card.get("consumes", []))
@@ -139,11 +150,11 @@ def inspect_bank(bank_path: str):
 
     # Wood Pickaxe Cards (Action 11 in code: MAKE_WOOD_PICKAXE)
     pickaxe_cards = [card for card in protos.values() if card.get("action") in (11, 10) and (
-        card.get("event_dim") == 15 or "pickaxe" in card["prototype_id"]
+        card.get("event_dim") == 15 or "pickaxe" in card.get("prototype_id", card.get("id", ""))
     )]
     print(f"\n[Wood Pickaxe Cards] Count: {len(pickaxe_cards)}")
     for card in pickaxe_cards[:3]:
-        pid = card["prototype_id"]
+        pid = card.get("prototype_id", card.get("id"))
         status = card.get("status")
         needs = fmt_items(card.get("needs", []))
         consumes = fmt_items(card.get("consumes", []))
@@ -158,7 +169,7 @@ def inspect_bank(bank_path: str):
     wood_cards = [card for card in protos.values() if card.get("action") == 5 and any(int(d) == 0 for d, _ in card.get("produces", []))]
     print(f"\n[Wood Harvesting Cards] Count: {len(wood_cards)}")
     for card in wood_cards[:3]:
-        pid = card["prototype_id"]
+        pid = card.get("prototype_id", card.get("id"))
         status = card.get("status")
         needs = fmt_items(card.get("needs", []))
         produces = fmt_items(card.get("produces", []))
@@ -171,7 +182,7 @@ def inspect_bank(bank_path: str):
     stone_cards = [card for card in protos.values() if card.get("action") == 5 and any(int(d) == 1 for d, _ in card.get("produces", []))]
     print(f"\n[Stone Mining Cards] Count: {len(stone_cards)}")
     for card in stone_cards[:3]:
-        pid = card["prototype_id"]
+        pid = card.get("prototype_id", card.get("id"))
         status = card.get("status")
         needs = fmt_items(card.get("needs", []))
         produces = fmt_items(card.get("produces", []))
@@ -188,10 +199,11 @@ def inspect_bank(bank_path: str):
     produces_need_edges = []
     for dst, edgelist in edges.items():
         for e in edgelist:
+            src = e.get("src_id", e.get("src"))
             if e.get("kind") == "enabling_lift":
-                enabling_edges.append((e.get("src_id"), dst, e.get("lift", 1.0)))
+                enabling_edges.append((src, dst, e.get("lift", 1.0)))
             elif e.get("kind") == "produces_need":
-                produces_need_edges.append((e.get("src_id"), dst, e.get("dim")))
+                produces_need_edges.append((src, dst, e.get("dim")))
 
     print(f"Total Graph Edges: {len(enabling_edges) + len(produces_need_edges)}")
     print(f"  • produces_need (Material Chains): {len(produces_need_edges)}")
