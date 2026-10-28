@@ -160,6 +160,24 @@ def audit_memory_bank_anti_hardcoding(bank_path: str) -> bool:
     else:
         print("  ✅ [PASS] Empirical Bayesian Tracking: All confidence values computed from empirical counts.")
 
+    # Check F: Online Adaptation Report
+    online_created = [card for card in protos.values() if card.get("created_from") == "online"]
+    online_reinforced = [card for card in protos.values() if card.get("success_online", 0.0) > 0 or card.get("failure_online", 0.0) > 0]
+    if online_created or online_reinforced:
+        print("\n" + "=" * 80)
+        print("   [CRITIC CHECK 3/3] ONLINE ADAPTATION & CAUSAL CARD REPORT")
+        print("=" * 80)
+        print(f"  • Online-Created Cards:   {len(online_created)}")
+        print(f"  • Online-Active Cards:    {len(online_reinforced)}")
+        from eval.metrics import CRAFTER_ACHIEVEMENTS
+        for c in online_created[:15]:
+            ed = c.get("event_dim")
+            ed_name = CRAFTER_ACHIEVEMENTS[ed] if (ed is not None and 0 <= ed < len(CRAFTER_ACHIEVEMENTS)) else "event-free"
+            needs_str = f"needs={c.get('needs', [])}" if c.get('needs') else "needs=[]"
+            print(f"    - {c.get('prototype_id')}: action={c.get('action')} -> event='{ed_name}' | {c.get('status')} | succ_on={c.get('success_online')} fail_on={c.get('failure_online')} conf={c.get('confidence'):.3f} | {needs_str}")
+        if len(online_created) > 15:
+            print(f"    ... and {len(online_created) - 15} more online-discovered cards.")
+
     print("\n" + "-" * 80)
     if not failures:
         print("  🏆 VERDICT: STRICT CRITIC AUDIT PASSED 100%.")
@@ -177,11 +195,14 @@ def audit_memory_bank_anti_hardcoding(bank_path: str) -> bool:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Strict Anti-Hardcoding Critic for Phase 2 Causal Memory.")
-    parser.add_argument("bank_path", type=str, nargs="?", default="results/diagnostics/phase2_memory_consolidation_4.json")
+    parser.add_argument("bank_path", type=str, nargs="?", default=None)
+    parser.add_argument("--bank_path", dest="flag_bank_path", type=str, default=None)
     args = parser.parse_args()
 
+    bank_target = args.flag_bank_path or args.bank_path or "results/diagnostics/phase2_memory_consolidation_4.json"
+
     c1 = audit_codebase_anti_hardcoding()
-    c2 = audit_memory_bank_anti_hardcoding(args.bank_path)
+    c2 = audit_memory_bank_anti_hardcoding(bank_target)
 
     if c1 and c2:
         sys.exit(0)
