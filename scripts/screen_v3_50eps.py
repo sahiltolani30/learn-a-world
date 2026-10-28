@@ -581,7 +581,13 @@ def run_screening(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run 50-episode screening of JEPA v3.")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_step1_stone.pt")
+    parser.add_argument(
+        "--checkpoint",
+        "--checkpoint_path",
+        dest="checkpoint",
+        type=str,
+        default="checkpoints/jepa_crafter_v3_step1_stone.pt",
+    )
     parser.add_argument(
         "--calibrator_path",
         type=str,
@@ -596,6 +602,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--num_episodes", "--episodes", dest="num_episodes", type=int, default=50)
     parser.add_argument("--seed_start", "--start_seed", dest="seed_start", type=int, default=2050)
+    parser.add_argument(
+        "--seeds",
+        nargs=2,
+        type=int,
+        default=None,
+        help="Start and end seeds inclusive, e.g. 2050 2099 (overrides --seed_start and --num_episodes).",
+    )
     parser.add_argument("--max_steps", type=int, default=1000)
     parser.add_argument("--horizon", type=int, default=10)
     parser.add_argument("--num_candidates", type=int, default=64)
@@ -652,6 +665,10 @@ if __name__ == "__main__":
     )
     parser.set_defaults(standardize_scores=False)
     args = parser.parse_args()
+
+    if args.seeds is not None:
+        args.seed_start = int(args.seeds[0])
+        args.num_episodes = int(args.seeds[1]) - int(args.seeds[0]) + 1
 
     resolved_ckpt = _resolve_checkpoint(args.checkpoint, args.drive_dir)
 
