@@ -399,15 +399,6 @@ class JEPAv3(nn.Module):
 
     def predict_state(self, s: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predict generic current state estimate and uncertainty from composite state s_t = [z_t, h_t]."""
-        if hasattr(self, "loaded_component_keys") and "state_readout_head" not in self.loaded_component_keys:
-            # Checkpoint did not contain a trained state_readout_head; return zero state to prevent Gaussian noise corruption
-            if s.dim() > 1:
-                zeros = torch.zeros((s.shape[0], 16), device=s.device, dtype=torch.float32)
-                uncertainty = torch.ones((s.shape[0], 16), device=s.device, dtype=torch.float32)
-            else:
-                zeros = torch.zeros(16, device=s.device, dtype=torch.float32)
-                uncertainty = torch.ones(16, device=s.device, dtype=torch.float32)
-            return zeros, uncertainty
         return self.state_readout_head(s)
 
     def q_min(self, s: torch.Tensor, action: torch.Tensor, use_target: bool = False) -> torch.Tensor:

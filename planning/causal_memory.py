@@ -1179,13 +1179,7 @@ class RelationHypothesisBank:
                             next_z: Optional[Sequence[float]]) -> None:
         """n-weighted running mean of the visual centroids; needs are NEVER touched."""
         members = self._member_latents.setdefault(proto.prototype_id, [])
-        if len(members) < 8:
-            members.append([float(v) for v in z])
-        else:
-            # Bounded exemplar reservoir (K_max = 8): prevent unbounded memory bloat
-            idx = int(np.random.randint(0, max(int(proto.success_count) + 1, 9)))
-            if idx < 8:
-                members[idx] = [float(v) for v in z]
+        members.append([float(v) for v in z])
         proto.precondition_key = _l2_normalize(np.mean(np.asarray(members, dtype=np.float64), axis=0))
         nz = next_z if next_z is not None else z
         try:
@@ -1363,7 +1357,6 @@ class RelationHypothesisBank:
                 source="online",
             ))
 
-            has_physical_consequence = (max_delta >= PRODUCTIVE_DELTA) or (reward >= 1.0)
             if fired:
                 for ed in fired:
                     if ed in fallback_unlocked:
@@ -1371,7 +1364,7 @@ class RelationHypothesisBank:
                         # observation. Matching cards are never confirmed; only
                         # no-match creation of a reduced-prior hypothesis card.
                         match = self._match_card(z, action, ed)
-                        if match is None and has_physical_consequence:
+                        if match is None:
                             self._create_online_card(action, ed, z, next_z, state_delta,
                                                      count_success=False)
                             created += 1
@@ -1381,7 +1374,7 @@ class RelationHypothesisBank:
                         # (2) CONFIRM
                         self._confirm_card(match, z, next_z, state_delta)
                         confirmed += 1
-                    elif ed in confident_events and has_physical_consequence:
+                    elif ed in confident_events:
                         self._create_online_card(action, ed, z, next_z, state_delta,
                                                  count_success=True)
                         created += 1
@@ -1394,26 +1387,6 @@ class RelationHypothesisBank:
                     match.failure_count += 1.0
                     self._recompute_confidence(match)
                     denied += 1
-
-        # Bayesian Falsification Pruning of Sandbox Hypotheses:
-        # Prunes unverified hypotheses that have been attempted and failed repeatedly:
-        # 1. 0 successes with >= 3 failures (conclusively failed conjecture).
-        # 2. Rejection threshold: Wilson upper bound < 0.20 with >= 3 failures.
-        # Rare discovery protection: cards with < 2 failures are NEVER pruned.
-        to_prune = []
-        for pid, card in self.prototypes.items():
-            if card.status == "hypothesis" and getattr(card, "created_from", "") == "online":
-                n_succ = float(card.success_count)
-                n_fail = float(card.failure_count)
-                if n_fail >= 3.0:
-                    wilson_ub = float(wilson_interval(n_succ, n_succ + n_fail)[1])
-                    if n_succ == 0.0 or wilson_ub < 0.20:
-                        to_prune.append(pid)
-
-        for pid in to_prune:
-            self.prototypes.pop(pid, None)
-            self._member_latents.pop(pid, None)
-        self.last_pruned_count = len(to_prune)
 
         return {
             "created": created,
@@ -1462,8 +1435,6 @@ class RelationHypothesisBank:
         """
         p = Path(filepath)
         p.parent.mkdir(parents=True, exist_ok=True)
-        # Compact member latents to at most K_max=8 exemplars per prototype
-        self._member_latents = {k: v[-8:] for k, v in self._member_latents.items()}
         payload = {
             "version": BANK_SCHEMA_VERSION,
             "prototypes": {k: asdict(v) for k, v in self.prototypes.items()},
@@ -1542,7 +1513,7 @@ class RelationHypothesisBank:
             self._rebuild_first_unlock(ep)
 
         self._member_latents = {
-            k: [[float(v) for v in member] for member in members[-8:]]
+            k: [[float(v) for v in member] for member in members]
             for k, members in data.get("member_latents", {}).items()
         }
         self._online_card_counter = {}

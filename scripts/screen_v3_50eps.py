@@ -135,58 +135,6 @@ def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
     return str(ckpt_path)
 
 
-def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> Optional[str]:
-    if not bank_path:
-        return None
-    p = Path(bank_path)
-    
-    # Priority list of search filenames: requested name first, then canonical bank names
-    search_names = [p.name]
-    if "consolidation" in p.name.lower() or "bank" not in p.name.lower():
-        search_names.extend([
-            "phase2_causal_memory_bank_v2.json",
-            "phase2_causal_memory_bank.json",
-        ])
-
-    candidate_roots = [
-        Path("."),
-        REPO_ROOT,
-        REPO_ROOT / "checkpoints",
-        REPO_ROOT / "results" / "diagnostics",
-        Path("/content/drive/MyDrive/learn-a-world/checkpoints"),
-        Path("/content/drive/MyDrive/learn-a-world/results/diagnostics"),
-        Path("/content/drive/MyDrive/learn-a-world"),
-        Path("/content/drive/MyDrive/checkpoints"),
-        Path("/content/drive/MyDrive"),
-        Path("/content/checkpoints"),
-        Path("/content"),
-    ]
-    if drive_dir:
-        dp = Path(drive_dir)
-        candidate_roots.extend([dp, dp / "checkpoints", dp / "results" / "diagnostics"])
-
-    candidates = [p]
-    for sname in search_names:
-        for root in candidate_roots:
-            candidates.append(root / sname)
-
-    for cand in candidates:
-        if cand.exists() and cand.is_file():
-            try:
-                with open(cand, "r") as f:
-                    meta = json.load(f)
-                if "prototypes" in meta and len(meta["prototypes"]) > 0:
-                    return str(cand)
-                if "bank_path" in meta and meta["bank_path"]:
-                    sub_cand = _resolve_bank(meta["bank_path"], drive_dir)
-                    if sub_cand and Path(sub_cand).exists():
-                        return sub_cand
-            except Exception:
-                pass
-            return str(cand)
-    return str(bank_path)
-
-
 def run_screening(
     checkpoint_path: str = "checkpoints/jepa_crafter_v3_phase2.pt",
     calibrator_path: str = "results/calibration/event_head_calibrator.json",
@@ -315,12 +263,11 @@ def run_screening(
             )
 
     if bank_path_loaded is None and causal_memory_bank_path:
-        resolved_bank = _resolve_bank(causal_memory_bank_path, drive_dir)
-        bank_p = Path(resolved_bank) if resolved_bank else None
-        if bank_p and bank_p.exists():
+        bank_p = Path(causal_memory_bank_path)
+        if bank_p.exists():
             bank_path_loaded = str(bank_p)
         else:
-            print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {causal_memory_bank_path}")
+            print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {bank_p}")
 
     if bank_path_loaded is not None:
         from planning.causal_memory import RelationHypothesisBank
@@ -441,13 +388,6 @@ def run_screening(
                 mask_before = belief.get_mask()  # copied BEFORE belief.update
 
             belief.update(event_probs, reward, next_h=next_h.squeeze(0))
-            if hasattr(belief, "update_working_memory"):
-                belief.update_working_memory(
-                    z_t=z_t,
-                    action=action,
-                    reward=reward,
-                    next_h=next_h.squeeze(0),
-                )
             obs = next_obs
 
             if online_learning and recorder is not None:
@@ -628,12 +568,6 @@ def run_screening(
             if out_p.resolve() != drive_out.resolve():
                 shutil.copy2(str(out_p), str(drive_out))
                 print(f"[Drive] Mirrored screening results to: {drive_out}")
-            if online_learning and Path(online_bank_path).exists():
-                drive_bank = dp / "results" / Path(online_bank_path).name
-                drive_bank.parent.mkdir(parents=True, exist_ok=True)
-                if Path(online_bank_path).resolve() != drive_bank.resolve():
-                    shutil.copy2(str(online_bank_path), str(drive_bank))
-                    print(f"[Drive] Mirrored online bank to: {drive_bank}")
 
     print("\n" + "=" * 80)
     print("=== RAW JSON DUMP (COPY & PASTE TO CHAT) ===")

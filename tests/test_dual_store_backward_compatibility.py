@@ -8,15 +8,15 @@ import numpy as np
 import pytest
 import torch
 
-from models.jepa_v3 import JEPAv3
+from dual_store.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
-from planning.causal_memory import (
+from dual_store.causal_memory import (
     NUM_ACHIEVEMENTS,
     RelationHypothesisBank,
     TransitionPrototype,
     wilson_interval,
 )
-from planning.compositional_planner import CompositionalCausalPlanner
+from dual_store.compositional_planner import CompositionalCausalPlanner
 
 
 def make_test_card(

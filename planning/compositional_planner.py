@@ -65,12 +65,10 @@ class CompositionalCausalPlanner:
     # ------------------------------------------------------------------ trust
 
     def _trust(self, card: TransitionPrototype) -> float:
-        """Ranking trust: Wilson lower bound, floored for fresh hypothesis cards so
-        low-evidence high-value cards stay re-testable (exploration, not avoidance).
-        Once a hypothesis card fails when attempted (failure_count > 0), the floor
-        is removed so it cannot hijack planning."""
+        """Ranking trust: Wilson lower bound, floored for hypothesis cards so
+        low-evidence high-value cards stay re-testable (exploration, not avoidance)."""
         trust = float(card.wilson_lb)
-        if card.status == "hypothesis" and float(card.failure_count) == 0.0:
+        if card.status == "hypothesis":
             trust = max(trust, self.hypothesis_trust_floor)
         return trust
 
@@ -262,26 +260,15 @@ class CompositionalCausalPlanner:
             if chain is None:
                 continue
             chain_value, total_cost = self._chain_stats(chain, target)
-            effective_cost = total_cost if target.status == "confirmed" else max(total_cost, 2)
-            score = chain_value / (1.0 + self.chain_cost_penalty * effective_cost) + self._ucb_bonus(target)
+            score = chain_value / (1.0 + self.chain_cost_penalty * total_cost) + self._ucb_bonus(target)
             if best is None or score > best["score"]:
-                first = chain[0]
-                active_card = first["card"]
-                k_active = torch.tensor(active_card.precondition_key, dtype=torch.float32, device=self.device)
-                sim_active = float(torch.dot(z_norm, k_active).item())
-                # Active link ready gate:
-                # 1. Active step's cue is visible (sim >= sim_threshold), OR
-                # 2. Active step is visually invariant (dispersion < 0.70), OR
-                # 3. First step is an intermediate producer/enabler that initiates search/harvesting
-                ready = (
-                    sim_active >= self.sim_threshold
-                    or float(active_card.visual_dispersion) < 0.70
-                    or (first["card_id"] != target.prototype_id)
-                )
-                if not ready:
-                    continue
                 k_tgt = torch.tensor(target.precondition_key, dtype=torch.float32, device=self.device)
                 sim_tgt = float(torch.dot(z_norm, k_tgt).item())
+                # READY gate: visual cue present, or the card's own successes had varied
+                # visuals (dispersion low -> the cue is empirically uninformative for it).
+                ready = sim_tgt >= self.sim_threshold or float(target.visual_dispersion) < 0.70
+                if not ready:
+                    continue
                 best = {
                     "score": score,
                     "status": "READY_TO_EXECUTE",
@@ -304,13 +291,16 @@ class CompositionalCausalPlanner:
                 }
                 # If the first executable link is NOT the target, surface it as the
                 # harvesting step (legacy MPC keys).
+                first = chain[0]
                 if first["card_id"] != target.prototype_id:
+                    first_card = first["card"]
+                    k_prod = torch.tensor(first_card.precondition_key, dtype=torch.float32, device=self.device)
                     best["status"] = "HARVESTING_INPUT"
-                    best["recommended_action"] = int(active_card.action)
-                    best["visual_key"] = k_active
-                    best["visual_sim"] = sim_active
-                    best["producer_prototype_id"] = active_card.prototype_id
-                    best["producer_action"] = int(active_card.action)
+                    best["recommended_action"] = int(first_card.action)
+                    best["visual_key"] = k_prod
+                    best["visual_sim"] = float(torch.dot(z_norm, k_prod).item())
+                    best["producer_prototype_id"] = first_card.prototype_id
+                    best["producer_action"] = int(first_card.action)
                     deficits = self._deficits(target, x_t)
                     if deficits:
                         best["missing_resource_dim"] = deficits[0][0]
