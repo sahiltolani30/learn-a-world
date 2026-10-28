@@ -1320,6 +1320,7 @@ class RelationHypothesisBank:
             mask_vec = [int(v) for v in (step.get("mask_before_vec") or [0] * NUM_ACHIEVEMENTS)]
             confident_events = set(int(v) for v in (step.get("confident_events") or []))
             fallback_unlocked = set(int(v) for v in (step.get("fallback_unlocked") or []))
+            active_target_id = step.get("active_subgoal_target")
 
             if step.get("state_delta") is not None:
                 state_delta = [float(v) for v in step["state_delta"]]
@@ -1364,6 +1365,7 @@ class RelationHypothesisBank:
             ))
 
             has_physical_consequence = (max_delta >= PRODUCTIVE_DELTA) or (reward >= 1.0)
+
             if fired:
                 for ed in fired:
                     if ed in fallback_unlocked:
@@ -1387,33 +1389,21 @@ class RelationHypothesisBank:
                         created += 1
                     # else: unconfirmed noisy unlock — counted nowhere.
             elif max_delta < NEAR_MISS_DELTA and reward <= 0.0:
-                # (3) Near-miss -> DENY the best visually matching card of this action.
-                match = self._match_card(z, action, event_dim=None)
+                # (3) Near-miss -> DENY.
+                # Direct Subgoal Attribution: If the planner actively selected a card to execute,
+                # and that action produced nothing, hold that active hypothesis directly accountable!
+                target_card = self.prototypes.get(active_target_id) if active_target_id else None
+                if target_card is not None and target_card.action == action:
+                    match = target_card
+                else:
+                    match = self._match_card(z, action, event_dim=None)
                 if match is not None:
                     match.failure_online += 1.0
                     match.failure_count += 1.0
                     self._recompute_confidence(match)
                     denied += 1
 
-        # Bayesian Falsification Pruning of Sandbox Hypotheses:
-        # Prunes unverified hypotheses that have been attempted and failed repeatedly:
-        # 1. 0 successes with >= 3 failures (conclusively failed conjecture).
-        # 2. Rejection threshold: Wilson upper bound < 0.20 with >= 3 failures.
-        # Rare discovery protection: cards with < 2 failures are NEVER pruned.
-        to_prune = []
-        for pid, card in self.prototypes.items():
-            if card.status == "hypothesis" and getattr(card, "created_from", "") == "online":
-                n_succ = float(card.success_count)
-                n_fail = float(card.failure_count)
-                if n_fail >= 3.0:
-                    wilson_ub = float(wilson_interval(n_succ, n_succ + n_fail)[1])
-                    if n_succ == 0.0 or wilson_ub < 0.20:
-                        to_prune.append(pid)
-
-        for pid in to_prune:
-            self.prototypes.pop(pid, None)
-            self._member_latents.pop(pid, None)
-        self.last_pruned_count = len(to_prune)
+        self._prune_falsified_hypotheses()
 
         return {
             "created": created,
@@ -1421,6 +1411,35 @@ class RelationHypothesisBank:
             "denied": denied,
             "steps_recorded": len(steps),
         }
+
+    def _prune_falsified_hypotheses(self) -> int:
+        """Bayesian Falsification of Sandbox Hypotheses:
+        Prunes unverified hypotheses (status == 'hypothesis', created_from == 'online')
+        that have been attempted and failed repeatedly:
+        1. 0 successes with >= 2 failures (conclusively failed conjecture).
+        2. <= 1 success with >= 3 failures and empirical rate <= 0.25 (noisy observation falsified by testing).
+        3. Wilson upper bound < 0.20 with >= 3 failures.
+        Confirmed cards (>= 3.0 weighted successes) are never pruned.
+        """
+        to_prune = []
+        for pid, card in self.prototypes.items():
+            if card.status == "hypothesis" and getattr(card, "created_from", "") == "online":
+                n_succ = float(card.success_count)
+                n_fail = float(card.failure_count)
+                n_tot = n_succ + n_fail
+                if n_fail >= 2.0 and n_succ == 0.0:
+                    to_prune.append(pid)
+                elif n_fail >= 3.0:
+                    emp_rate = n_succ / max(n_tot, 1.0)
+                    wilson_ub = float(wilson_interval(n_succ, n_tot)[1])
+                    if emp_rate <= 0.25 or wilson_ub < 0.20:
+                        to_prune.append(pid)
+
+        for pid in to_prune:
+            self.prototypes.pop(pid, None)
+            self._member_latents.pop(pid, None)
+        self.last_pruned_count = len(to_prune)
+        return len(to_prune)
 
     # ------------------------------------------------------------------
     # Interaction outcomes (kept from v1)
@@ -1563,3 +1582,4 @@ class RelationHypothesisBank:
 
         if "edges" not in data:
             self.refresh_edges()
+        self._prune_falsified_hypotheses()

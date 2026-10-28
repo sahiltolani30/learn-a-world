@@ -66,6 +66,7 @@ class PlaytimeRecorder:
         fallback_unlocked: Optional[Any] = None,
         event_probs: Optional[Any] = None,
         thresholds: Optional[Any] = None,
+        active_subgoal_target: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         """Buffers one strict-inference step per the bank learn_from_episode contract.
@@ -133,6 +134,7 @@ class PlaytimeRecorder:
             "mask_before_vec": mask_before_vec,
             "confident_events": confident_events,
             "fallback_unlocked": fallback_list,
+            "active_subgoal_target": str(active_subgoal_target) if active_subgoal_target else None,
         })
 
     def end_episode(self, bank: Any) -> Dict[str, int]:

@@ -1,0 +1,4922 @@
+{
+  "episodes": [
+    {
+      "episode": 7,
+      "seed": 2056,
+      "steps": 199,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 36.08,
+      "online_stats": {
+        "created": 4,
+        "confirmed": 0,
+        "denied": 13,
+        "steps_recorded": 199
+      },
+      "subgoal_trace": [
+        {
+          "step": 16,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 186,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 194,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 198,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 8,
+      "seed": 2057,
+      "steps": 177,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 31.98,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 9,
+        "steps_recorded": 177
+      },
+      "subgoal_trace": [
+        {
+          "step": 21,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 161,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 162,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 168,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 170,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 172,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 9,
+      "seed": 2058,
+      "steps": 179,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 32.53,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 6,
+        "steps_recorded": 179
+      },
+      "subgoal_trace": [
+        {
+          "step": 34,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 43,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 173,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 174,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 175,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 176,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 177,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 178,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 10,
+      "seed": 2059,
+      "steps": 156,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 28.04,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 0,
+        "denied": 7,
+        "steps_recorded": 156
+      },
+      "subgoal_trace": [
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 62,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 63,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 64,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 65,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 103,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 104,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 105,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 106,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 107,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        }
+      ]
+    },
+    {
+      "episode": 11,
+      "seed": 2060,
+      "steps": 194,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 35.53,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 11,
+        "steps_recorded": 194
+      },
+      "subgoal_trace": [
+        {
+          "step": 6,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 7,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 8,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 9,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 10,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 11,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 12,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 13,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 14,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 15,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 16,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 17,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 18,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 19,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 20,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 21,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 22,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        }
+      ]
+    },
+    {
+      "episode": 12,
+      "seed": 2061,
+      "steps": 182,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 33.03,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 2,
+        "denied": 4,
+        "steps_recorded": 182
+      },
+      "subgoal_trace": [
+        {
+          "step": 5,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 6,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 90,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 91,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 92,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 93,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 13,
+      "seed": 2062,
+      "steps": 166,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 28.92,
+      "online_stats": {
+        "created": 4,
+        "confirmed": 0,
+        "denied": 9,
+        "steps_recorded": 166
+      },
+      "subgoal_trace": [
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 132,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 133,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 134,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 135,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 136,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 137,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 138,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 139,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 140,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 141,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 142,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 143,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 144,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 145,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 151,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 152,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 156,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        }
+      ]
+    },
+    {
+      "episode": 14,
+      "seed": 2063,
+      "steps": 164,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "make_wood_sword",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 28.72,
+      "online_stats": {
+        "created": 4,
+        "confirmed": 1,
+        "denied": 14,
+        "steps_recorded": 164
+      },
+      "subgoal_trace": [
+        {
+          "step": 16,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 17,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 18,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 19,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 22,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 26,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        }
+      ]
+    },
+    {
+      "episode": 15,
+      "seed": 2064,
+      "steps": 144,
+      "reward": 1.1,
+      "unlocked": [
+        "collect_sapling",
+        "wake_up"
+      ],
+      "duration_sec": 25.9,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 1,
+        "denied": 11,
+        "steps_recorded": 144
+      },
+      "subgoal_trace": [
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        }
+      ]
+    },
+    {
+      "episode": 16,
+      "seed": 2065,
+      "steps": 151,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "wake_up"
+      ],
+      "duration_sec": 27.6,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 5,
+        "steps_recorded": 151
+      },
+      "subgoal_trace": [
+        {
+          "step": 25,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 88,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 89,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 90,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 91,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 92,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 93,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 94,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        }
+      ]
+    },
+    {
+      "episode": 17,
+      "seed": 2066,
+      "steps": 280,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 50.87,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 2,
+        "denied": 8,
+        "steps_recorded": 280
+      },
+      "subgoal_trace": [
+        {
+          "step": 22,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        }
+      ]
+    },
+    {
+      "episode": 18,
+      "seed": 2067,
+      "steps": 139,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 25.49,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 1,
+        "denied": 4,
+        "steps_recorded": 139
+      },
+      "subgoal_trace": [
+        {
+          "step": 22,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 26,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 27,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 28,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 29,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 30,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 31,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 32,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 33,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 34,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        }
+      ]
+    },
+    {
+      "episode": 19,
+      "seed": 2068,
+      "steps": 170,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 30.85,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 2,
+        "denied": 8,
+        "steps_recorded": 170
+      },
+      "subgoal_trace": [
+        {
+          "step": 13,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 14,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 15,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 16,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 17,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 18,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 19,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 20,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 21,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 22,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 32,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 33,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 34,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        }
+      ]
+    },
+    {
+      "episode": 20,
+      "seed": 2069,
+      "steps": 176,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 32.06,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 2,
+        "denied": 13,
+        "steps_recorded": 176
+      },
+      "subgoal_trace": [
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 89,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 133,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 134,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o1"
+        },
+        {
+          "step": 135,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 136,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 137,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 138,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 139,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 21,
+      "seed": 2070,
+      "steps": 157,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 28.64,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 2,
+        "denied": 6,
+        "steps_recorded": 157
+      },
+      "subgoal_trace": [
+        {
+          "step": 29,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 30,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        }
+      ]
+    },
+    {
+      "episode": 22,
+      "seed": 2071,
+      "steps": 203,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 35.03,
+      "online_stats": {
+        "created": 4,
+        "confirmed": 0,
+        "denied": 5,
+        "steps_recorded": 203
+      },
+      "subgoal_trace": [
+        {
+          "step": 115,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 183,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 184,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 185,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 186,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 187,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 188,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 189,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 190,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 191,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 193,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 194,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 195,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 196,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 197,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 198,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 199,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 23,
+      "seed": 2072,
+      "steps": 218,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 39.9,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 2,
+        "denied": 6,
+        "steps_recorded": 218
+      },
+      "subgoal_trace": [
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 43,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 201,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 202,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 203,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 204,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 206,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 207,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 208,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 209,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 24,
+      "seed": 2073,
+      "steps": 189,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 34.07,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 0,
+        "denied": 13,
+        "steps_recorded": 189
+      },
+      "subgoal_trace": [
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 171,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 172,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 173,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 174,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 177,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 178,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 179,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 180,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 25,
+      "seed": 2074,
+      "steps": 73,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 13.22,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 2,
+        "denied": 5,
+        "steps_recorded": 73
+      },
+      "subgoal_trace": [
+        {
+          "step": 7,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 32,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 33,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 34,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o1"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o1"
+        }
+      ]
+    },
+    {
+      "episode": 26,
+      "seed": 2075,
+      "steps": 160,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 28.79,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 2,
+        "denied": 7,
+        "steps_recorded": 160
+      },
+      "subgoal_trace": [
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 79,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 83,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        }
+      ]
+    },
+    {
+      "episode": 27,
+      "seed": 2076,
+      "steps": 161,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 28.32,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 23,
+        "steps_recorded": 161
+      },
+      "subgoal_trace": [
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 79,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 83,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 84,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 28,
+      "seed": 2077,
+      "steps": 153,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 27.74,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 1,
+        "denied": 6,
+        "steps_recorded": 153
+      },
+      "subgoal_trace": [
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 118,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 119,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 120,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 121,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 122,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 123,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 124,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 125,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        }
+      ]
+    },
+    {
+      "episode": 29,
+      "seed": 2078,
+      "steps": 188,
+      "reward": 1.1,
+      "unlocked": [
+        "defeat_zombie",
+        "wake_up"
+      ],
+      "duration_sec": 33.07,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 0,
+        "denied": 3,
+        "steps_recorded": 188
+      },
+      "subgoal_trace": [
+        {
+          "step": 110,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 111,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 112,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 113,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 114,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 115,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 116,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 117,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 118,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 119,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 120,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 121,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 122,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 123,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 124,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 125,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 126,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 127,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 128,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 129,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        }
+      ]
+    },
+    {
+      "episode": 30,
+      "seed": 2079,
+      "steps": 189,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 34.98,
+      "online_stats": {
+        "created": 0,
+        "confirmed": 2,
+        "denied": 21,
+        "steps_recorded": 189
+      },
+      "subgoal_trace": [
+        {
+          "step": 33,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 79,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 83,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        }
+      ]
+    },
+    {
+      "episode": 31,
+      "seed": 2080,
+      "steps": 128,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 23.0,
+      "online_stats": {
+        "created": 0,
+        "confirmed": 2,
+        "denied": 8,
+        "steps_recorded": 128
+      },
+      "subgoal_trace": [
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 43,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 118,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 119,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        }
+      ]
+    },
+    {
+      "episode": 32,
+      "seed": 2081,
+      "steps": 150,
+      "reward": 0.1,
+      "unlocked": [
+        "wake_up"
+      ],
+      "duration_sec": 26.43,
+      "online_stats": {
+        "created": 0,
+        "confirmed": 1,
+        "denied": 18,
+        "steps_recorded": 150
+      },
+      "subgoal_trace": [
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 87,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 88,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 89,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 90,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 91,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 92,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 93,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 94,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 95,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 96,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        }
+      ]
+    },
+    {
+      "episode": 33,
+      "seed": 2082,
+      "steps": 179,
+      "reward": 0.1,
+      "unlocked": [
+        "wake_up"
+      ],
+      "duration_sec": 31.42,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 0,
+        "denied": 5,
+        "steps_recorded": 179
+      },
+      "subgoal_trace": [
+        {
+          "step": 16,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 83,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 84,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 85,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 86,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 90,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 92,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 93,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        }
+      ]
+    },
+    {
+      "episode": 34,
+      "seed": 2083,
+      "steps": 203,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 35.15,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 0,
+        "denied": 15,
+        "steps_recorded": 203
+      },
+      "subgoal_trace": [
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 79,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 81,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 82,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 83,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 179,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 180,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 181,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 182,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 183,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 35,
+      "seed": 2084,
+      "steps": 200,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 36.03,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 9,
+        "steps_recorded": 200
+      },
+      "subgoal_trace": [
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 42,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 43,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 44,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a8_e21_c0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 36,
+      "seed": 2085,
+      "steps": 221,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 38.48,
+      "online_stats": {
+        "created": 5,
+        "confirmed": 1,
+        "denied": 16,
+        "steps_recorded": 221
+      },
+      "subgoal_trace": [
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 26,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 27,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 90,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 91,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 92,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 93,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 96,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 129,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 130,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 131,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 132,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 133,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 134,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 135,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 136,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 137,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 138,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 37,
+      "seed": 2086,
+      "steps": 59,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant"
+      ],
+      "duration_sec": 10.15,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 0,
+        "denied": 5,
+        "steps_recorded": 59
+      },
+      "subgoal_trace": []
+    },
+    {
+      "episode": 38,
+      "seed": 2087,
+      "steps": 224,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 38.54,
+      "online_stats": {
+        "created": 5,
+        "confirmed": 0,
+        "denied": 7,
+        "steps_recorded": 224
+      },
+      "subgoal_trace": [
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 128,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 129,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 130,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 131,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 132,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 133,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 134,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 135,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 136,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 137,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 138,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 139,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 140,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 141,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 142,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 143,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 144,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 145,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 39,
+      "seed": 2088,
+      "steps": 51,
+      "reward": 0.1,
+      "unlocked": [
+        "collect_drink"
+      ],
+      "duration_sec": 8.61,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 0,
+        "denied": 0,
+        "steps_recorded": 51
+      },
+      "subgoal_trace": [
+        {
+          "step": 19,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        }
+      ]
+    },
+    {
+      "episode": 40,
+      "seed": 2089,
+      "steps": 131,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 22.25,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 1,
+        "denied": 9,
+        "steps_recorded": 131
+      },
+      "subgoal_trace": [
+        {
+          "step": 123,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 124,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 125,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 126,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 127,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 128,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 129,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 130,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        }
+      ]
+    },
+    {
+      "episode": 41,
+      "seed": 2090,
+      "steps": 175,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 30.44,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 0,
+        "denied": 22,
+        "steps_recorded": 175
+      },
+      "subgoal_trace": [
+        {
+          "step": 118,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 119,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 122,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 123,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 124,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 125,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 126,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 127,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 128,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 129,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 130,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 131,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 132,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 133,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 134,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 135,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 136,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 137,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 138,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 140,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        }
+      ]
+    },
+    {
+      "episode": 42,
+      "seed": 2091,
+      "steps": 166,
+      "reward": 1.1,
+      "unlocked": [
+        "defeat_zombie",
+        "wake_up"
+      ],
+      "duration_sec": 29.97,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 0,
+        "denied": 14,
+        "steps_recorded": 166
+      },
+      "subgoal_trace": [
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        }
+      ]
+    },
+    {
+      "episode": 43,
+      "seed": 2092,
+      "steps": 163,
+      "reward": 3.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 29.24,
+      "online_stats": {
+        "created": 1,
+        "confirmed": 2,
+        "denied": 3,
+        "steps_recorded": 163
+      },
+      "subgoal_trace": [
+        {
+          "step": 23,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 24,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 26,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 27,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 28,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 29,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 30,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 31,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 32,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 38,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 39,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 40,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 41,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        }
+      ]
+    },
+    {
+      "episode": 44,
+      "seed": 2093,
+      "steps": 222,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 39.34,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 1,
+        "denied": 8,
+        "steps_recorded": 222
+      },
+      "subgoal_trace": [
+        {
+          "step": 116,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 117,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 118,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 119,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 120,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 121,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 122,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 123,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 124,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 125,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 126,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 127,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 128,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 129,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 130,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 131,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 132,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 133,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 134,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        },
+        {
+          "step": 135,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c1"
+        }
+      ]
+    },
+    {
+      "episode": 45,
+      "seed": 2094,
+      "steps": 156,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "eat_cow",
+        "place_plant",
+        "place_table"
+      ],
+      "duration_sec": 28.59,
+      "online_stats": {
+        "created": 5,
+        "confirmed": 0,
+        "denied": 22,
+        "steps_recorded": 156
+      },
+      "subgoal_trace": [
+        {
+          "step": 21,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 25,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 26,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 46,
+      "seed": 2095,
+      "steps": 194,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 34.78,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 3,
+        "denied": 19,
+        "steps_recorded": 194
+      },
+      "subgoal_trace": [
+        {
+          "step": 31,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 32,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 33,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 34,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 35,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 36,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 37,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 54,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 56,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 57,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 58,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 59,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 60,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 61,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 47,
+      "seed": 2096,
+      "steps": 205,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_pickaxe",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 36.09,
+      "online_stats": {
+        "created": 5,
+        "confirmed": 1,
+        "denied": 15,
+        "steps_recorded": 205
+      },
+      "subgoal_trace": [
+        {
+          "step": 29,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        }
+      ]
+    },
+    {
+      "episode": 48,
+      "seed": 2097,
+      "steps": 177,
+      "reward": 5.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 31.4,
+      "online_stats": {
+        "created": 6,
+        "confirmed": 1,
+        "denied": 5,
+        "steps_recorded": 177
+      },
+      "subgoal_trace": [
+        {
+          "step": 9,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 62,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 63,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 64,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 65,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 66,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 67,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 77,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 78,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 79,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        },
+        {
+          "step": 80,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a14_e16_o0"
+        }
+      ]
+    },
+    {
+      "episode": 49,
+      "seed": 2098,
+      "steps": 172,
+      "reward": 6.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "eat_cow",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 32.31,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 2,
+        "denied": 9,
+        "steps_recorded": 172
+      },
+      "subgoal_trace": [
+        {
+          "step": 8,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 45,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 46,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 47,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 48,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 49,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 50,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 51,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 52,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 53,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 55,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 68,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 69,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 70,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 71,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 72,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 73,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 74,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 75,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        },
+        {
+          "step": 76,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e15_o0"
+        }
+      ]
+    },
+    {
+      "episode": 50,
+      "seed": 2099,
+      "steps": 174,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_drink",
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ],
+      "duration_sec": 30.86,
+      "online_stats": {
+        "created": 4,
+        "confirmed": 0,
+        "denied": 6,
+        "steps_recorded": 174
+      },
+      "subgoal_trace": [
+        {
+          "step": 46,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 47,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 48,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 49,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 50,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 51,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 116,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
+        },
+        {
+          "step": 155,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 156,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 157,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 158,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e9_c3"
+        },
+        {
+          "step": 159,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 160,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 161,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 162,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 163,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 164,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 165,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 166,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        },
+        {
+          "step": 167,
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
+        }
+      ]
+    }
+  ]
+}

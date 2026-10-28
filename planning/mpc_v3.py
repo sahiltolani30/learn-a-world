@@ -210,6 +210,11 @@ class RecurrentMPCPlanner:
                     # chain_value is marginal (drops to ~0 once the target's achievement
                     # is locked in m_bin) — it replaces the old static mean_return weight.
                     chain_value = float(subgoal_info.get("chain_value", subgoal_info.get("expected_return", 0.5)))
+                    current_card_id = (
+                        subgoal_info.get("producer_prototype_id")
+                        if subgoal_info.get("status") == "HARVESTING_INPUT" and subgoal_info.get("producer_prototype_id")
+                        else subgoal_info.get("prototype_id", "phase2_subgoal")
+                    )
                     active_subgoal = {
                         "status": subgoal_info["status"],
                         "producer_action": subgoal_info.get("producer_action", subgoal_info["recommended_action"]),
@@ -217,7 +222,7 @@ class RecurrentMPCPlanner:
                         "chain_value": chain_value,
                         "target_action": subgoal_info["recommended_action"],
                         "target_key": subgoal_info.get("visual_key", z_0),
-                        "target_name": subgoal_info.get("prototype_id", "phase2_subgoal"),
+                        "target_name": current_card_id,
                         "chain": subgoal_info.get("chain", []),
                     }
                     if subgoal_info.get("visual_sim", 0.0) >= 0.35:

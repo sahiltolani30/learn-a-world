@@ -459,6 +459,7 @@ def run_screening(
                 # Strict protocol: unlock labels come from the belief only —
                 # info['achievements'] is scoring-only and never enters the recorder.
                 hist = belief.history[-1]
+                active_target = str(debug.get("active_subgoal_target", "")) if (isinstance(debug, dict) and debug.get("active_subgoal_target")) else None
                 recorder.record_step(
                     z_t=z_t,
                     x_hat=x_hat,
@@ -470,6 +471,7 @@ def run_screening(
                     fallback_unlocked=hist.get("fallback_unlocked", []),
                     event_probs=event_probs.detach().cpu().tolist(),
                     thresholds=np.asarray(belief.thresholds).tolist(),
+                    active_subgoal_target=active_target,
                 )
 
             if done:
