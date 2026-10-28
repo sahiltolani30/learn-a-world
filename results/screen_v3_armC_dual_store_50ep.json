@@ -1,6 +1,6 @@
 {
   "protocol_id": "strict_visual_jepa_clean_v2",
-  "git_commit": "51057c11405682c8863515e59b3ab1c0cc62bfae",
+  "git_commit": "ab5026271df6da43c1387a31ac032a13c43852d3",
   "checkpoint": "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_state_readout_v2.pt",
   "checkpoint_sha256": "fc6cd2cb52accd42e580528c708c3c8a9b3e8787beefb03d472141b7ba9e4d0b",
   "calibrator": "/content/learn-a-world/results/calibration/event_head_calibrator.json",
@@ -39,21 +39,21 @@
     "frontier_threshold": 0.25,
     "common_threshold": 0.5,
     "strict_inference": true,
-    "use_transition_model": true,
-    "transition_scoring": true,
+    "use_transition_model": false,
+    "transition_scoring": false,
     "transition_weight": 0.5,
     "transition_done_penalty": 2.0,
     "transition_resource_weight": 0.25
   },
-  "use_transition_model": true,
-  "transition_scoring": true,
+  "use_transition_model": false,
+  "transition_scoring": false,
   "causal_memory_enabled": true,
-  "causal_memory_prototypes": 447,
+  "causal_memory_prototypes": 403,
   "online_learning": true,
   "online_bank_path": "results/dual_store_memory_bank_online.json",
-  "bank_path_loaded": "results/dual_store_memory_bank_online.json",
-  "bank_sha256": "6e6614fa4980a9b6dbe25f909e39d58d83cb914755ce885967493e4dbacb1c7b",
-  "ablation_mode": "active_consequence",
+  "bank_path_loaded": "checkpoints/dual_store_causal_memory_bank.json",
+  "bank_sha256": "ccc5b5534b51aca515b6eebdc2273523bb6f82932062aec8447f80c70cc1fc31",
+  "ablation_mode": "baseline_t2",
   "horizon": 10,
   "num_candidates": 64,
   "cem_iterations": 2,
@@ -66,57 +66,55 @@
   "denormalize_q": false,
   "tte_weight": 0.0,
   "standardize_scores": false,
-  "total_runtime_seconds": 1497.64,
-  "mean_survival_length": 184.02,
-  "std_survival_length": 54.89826591068246,
-  "mean_episode_reward": 4.199999999999999,
-  "std_episode_reward": 1.4866068747318504,
-  "crafter_score": 4.4592121584576905,
-  "mean_achievements_per_ep": 5.16,
-  "unlocked_achievement_count": 12,
+  "total_runtime_seconds": 1123.0,
+  "mean_survival_length": 177.76,
+  "std_survival_length": 43.1279769986954,
+  "mean_episode_reward": 3.0999999999999988,
+  "std_episode_reward": 1.7320508075688772,
+  "crafter_score": 3.5443591612093144,
+  "mean_achievements_per_ep": 4.02,
+  "unlocked_achievement_count": 11,
   "unlock_percentages": {
     "collect_coal": 0.0,
     "collect_diamond": 0.0,
-    "collect_drink": 30.0,
+    "collect_drink": 26.0,
     "collect_iron": 0.0,
-    "collect_sapling": 90.0,
+    "collect_sapling": 66.0,
     "collect_stone": 2.0,
-    "collect_wood": 96.0,
+    "collect_wood": 74.0,
     "defeat_skeleton": 0.0,
-    "defeat_zombie": 20.0,
+    "defeat_zombie": 6.0,
     "eat_cow": 4.0,
     "eat_plant": 0.0,
     "make_iron_pickaxe": 0.0,
     "make_iron_sword": 0.0,
     "make_stone_pickaxe": 0.0,
     "make_stone_sword": 0.0,
-    "make_wood_pickaxe": 14.000000000000002,
+    "make_wood_pickaxe": 8.0,
     "make_wood_sword": 6.0,
     "place_furnace": 0.0,
-    "place_plant": 86.0,
-    "place_stone": 2.0,
-    "place_table": 74.0,
-    "wake_up": 92.0
+    "place_plant": 66.0,
+    "place_stone": 0.0,
+    "place_table": 50.0,
+    "wake_up": 94.0
   },
   "episodes": [
     {
       "episode": 1,
       "seed": 2050,
-      "steps": 150,
-      "reward": 3.1,
+      "steps": 257,
+      "reward": 2.1,
       "unlocked": [
-        "collect_sapling",
+        "collect_drink",
         "collect_wood",
-        "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 19.38,
+      "duration_sec": 25.32,
       "online_stats": {
-        "created": 4,
-        "confirmed": 1,
-        "denied": 4,
-        "steps_recorded": 150
+        "created": 3,
+        "confirmed": 0,
+        "denied": 1,
+        "steps_recorded": 257
       },
       "subgoal_trace": [
         {
@@ -136,53 +134,53 @@
         },
         {
           "step": 3,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 12,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a5_e6_c1"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 13,
@@ -192,51 +190,49 @@
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a11_e15_c0"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 2,
       "seed": 2051,
-      "steps": 197,
-      "reward": 2.1,
+      "steps": 183,
+      "reward": 0.1,
       "unlocked": [
-        "collect_drink",
-        "collect_wood",
         "wake_up"
       ],
-      "duration_sec": 24.69,
+      "duration_sec": 17.61,
       "online_stats": {
-        "created": 2,
-        "confirmed": 2,
-        "denied": 7,
-        "steps_recorded": 197
+        "created": 1,
+        "confirmed": 0,
+        "denied": 1,
+        "steps_recorded": 183
       },
       "subgoal_trace": [
         {
@@ -297,67 +293,65 @@
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 3,
       "seed": 2052,
-      "steps": 175,
-      "reward": 3.1,
+      "steps": 191,
+      "reward": 1.1,
       "unlocked": [
-        "collect_sapling",
         "collect_wood",
-        "place_plant",
         "wake_up"
       ],
-      "duration_sec": 21.92,
+      "duration_sec": 18.28,
       "online_stats": {
-        "created": 3,
-        "confirmed": 2,
-        "denied": 16,
-        "steps_recorded": 175
+        "created": 2,
+        "confirmed": 0,
+        "denied": 9,
+        "steps_recorded": 191
       },
       "subgoal_trace": [
         {
@@ -465,7 +459,7 @@
     {
       "episode": 4,
       "seed": 2053,
-      "steps": 174,
+      "steps": 132,
       "reward": 4.1,
       "unlocked": [
         "collect_sapling",
@@ -474,12 +468,12 @@
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 22.57,
+      "duration_sec": 12.45,
       "online_stats": {
-        "created": 6,
+        "created": 5,
         "confirmed": 0,
-        "denied": 5,
-        "steps_recorded": 174
+        "denied": 3,
+        "steps_recorded": 132
       },
       "subgoal_trace": [
         {
@@ -550,57 +544,56 @@
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 5,
       "seed": 2054,
-      "steps": 210,
-      "reward": 3.1,
+      "steps": 165,
+      "reward": 2.1,
       "unlocked": [
-        "collect_drink",
         "collect_sapling",
         "place_plant",
         "wake_up"
       ],
-      "duration_sec": 27.91,
+      "duration_sec": 15.72,
       "online_stats": {
-        "created": 4,
+        "created": 2,
         "confirmed": 0,
-        "denied": 8,
-        "steps_recorded": 210
+        "denied": 18,
+        "steps_recorded": 165
       },
       "subgoal_trace": [
         {
@@ -708,22 +701,19 @@
     {
       "episode": 6,
       "seed": 2055,
-      "steps": 195,
-      "reward": 5.1,
+      "steps": 221,
+      "reward": 2.1,
       "unlocked": [
-        "collect_sapling",
         "collect_wood",
-        "make_wood_sword",
-        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 25.62,
+      "duration_sec": 21.02,
       "online_stats": {
-        "created": 6,
+        "created": 4,
         "confirmed": 0,
-        "denied": 3,
-        "steps_recorded": 195
+        "denied": 1,
+        "steps_recorded": 221
       },
       "subgoal_trace": [
         {
@@ -773,79 +763,79 @@
         },
         {
           "step": 9,
-          "status": "READY_TO_EXECUTE",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 7,
       "seed": 2056,
-      "steps": 229,
+      "steps": 207,
       "reward": 4.1,
       "unlocked": [
-        "collect_drink",
+        "collect_sapling",
         "collect_wood",
-        "make_wood_pickaxe",
+        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 30.35,
+      "duration_sec": 19.71,
       "online_stats": {
-        "created": 5,
-        "confirmed": 0,
-        "denied": 1,
-        "steps_recorded": 229
+        "created": 4,
+        "confirmed": 1,
+        "denied": 0,
+        "steps_recorded": 207
       },
       "subgoal_trace": [
         {
@@ -875,58 +865,58 @@
         },
         {
           "step": 5,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
@@ -953,7 +943,7 @@
     {
       "episode": 8,
       "seed": 2057,
-      "steps": 140,
+      "steps": 223,
       "reward": 4.1,
       "unlocked": [
         "collect_sapling",
@@ -962,12 +952,12 @@
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 18.68,
+      "duration_sec": 21.25,
       "online_stats": {
         "created": 4,
-        "confirmed": 2,
-        "denied": 14,
-        "steps_recorded": 140
+        "confirmed": 1,
+        "denied": 10,
+        "steps_recorded": 223
       },
       "subgoal_trace": [
         {
@@ -1067,7 +1057,7 @@
         },
         {
           "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         }
       ]
@@ -1075,22 +1065,21 @@
     {
       "episode": 9,
       "seed": 2058,
-      "steps": 183,
-      "reward": 5.1,
+      "steps": 166,
+      "reward": 4.1,
       "unlocked": [
         "collect_drink",
         "collect_sapling",
         "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 24.16,
+      "duration_sec": 15.62,
       "online_stats": {
-        "created": 4,
-        "confirmed": 2,
-        "denied": 16,
-        "steps_recorded": 183
+        "created": 2,
+        "confirmed": 3,
+        "denied": 5,
+        "steps_recorded": 166
       },
       "subgoal_trace": [
         {
@@ -1170,50 +1159,45 @@
         },
         {
           "step": 15,
-          "status": "HARVESTING_INPUT",
-          "target": "card_a11_e15_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
-          "status": "HARVESTING_INPUT",
-          "target": "card_a11_e15_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
-          "status": "HARVESTING_INPUT",
-          "target": "card_a11_e15_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
-          "status": "HARVESTING_INPUT",
-          "target": "card_a11_e15_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
-          "status": "HARVESTING_INPUT",
-          "target": "card_a11_e15_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 10,
       "seed": 2059,
-      "steps": 167,
-      "reward": 5.1,
+      "steps": 188,
+      "reward": 0.1,
       "unlocked": [
-        "collect_sapling",
-        "collect_wood",
-        "make_wood_pickaxe",
-        "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 21.74,
+      "duration_sec": 18.23,
       "online_stats": {
-        "created": 6,
+        "created": 1,
         "confirmed": 0,
-        "denied": 4,
-        "steps_recorded": 167
+        "denied": 5,
+        "steps_recorded": 188
       },
       "subgoal_trace": [
         {
@@ -1254,74 +1238,74 @@
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 11,
       "seed": 2060,
-      "steps": 206,
+      "steps": 215,
       "reward": 4.1,
       "unlocked": [
         "collect_sapling",
@@ -1330,12 +1314,12 @@
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 27.94,
+      "duration_sec": 20.96,
       "online_stats": {
-        "created": 3,
-        "confirmed": 3,
-        "denied": 15,
-        "steps_recorded": 206
+        "created": 4,
+        "confirmed": 1,
+        "denied": 1,
+        "steps_recorded": 215
       },
       "subgoal_trace": [
         {
@@ -1385,80 +1369,79 @@
         },
         {
           "step": 9,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 10,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 11,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 15,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 16,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         }
       ]
     },
     {
       "episode": 12,
       "seed": 2061,
-      "steps": 121,
-      "reward": 5.1,
+      "steps": 169,
+      "reward": 4.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "make_wood_sword",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 15.99,
+      "duration_sec": 16.24,
       "online_stats": {
-        "created": 5,
-        "confirmed": 1,
-        "denied": 4,
-        "steps_recorded": 121
+        "created": 4,
+        "confirmed": 2,
+        "denied": 13,
+        "steps_recorded": 169
       },
       "subgoal_trace": [
         {
@@ -1518,7 +1501,7 @@
         },
         {
           "step": 11,
-          "status": "READY_TO_EXECUTE",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
@@ -1566,19 +1549,21 @@
     {
       "episode": 13,
       "seed": 2062,
-      "steps": 143,
-      "reward": 2.1,
+      "steps": 202,
+      "reward": 4.1,
       "unlocked": [
+        "collect_sapling",
         "collect_wood",
+        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 18.75,
+      "duration_sec": 19.79,
       "online_stats": {
-        "created": 2,
-        "confirmed": 0,
-        "denied": 0,
-        "steps_recorded": 143
+        "created": 3,
+        "confirmed": 2,
+        "denied": 12,
+        "steps_recorded": 202
       },
       "subgoal_trace": [
         {
@@ -1686,122 +1671,118 @@
     {
       "episode": 14,
       "seed": 2063,
-      "steps": 249,
-      "reward": 5.1,
+      "steps": 220,
+      "reward": 1.1,
       "unlocked": [
         "collect_drink",
-        "collect_sapling",
-        "collect_wood",
-        "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 32.73,
+      "duration_sec": 21.66,
       "online_stats": {
-        "created": 4,
-        "confirmed": 2,
-        "denied": 8,
-        "steps_recorded": 249
+        "created": 1,
+        "confirmed": 1,
+        "denied": 1,
+        "steps_recorded": 220
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c1"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
-          "status": "HARVESTING_INPUT",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         }
       ]
@@ -1809,22 +1790,20 @@
     {
       "episode": 15,
       "seed": 2064,
-      "steps": 207,
-      "reward": 5.1,
+      "steps": 179,
+      "reward": 3.1,
       "unlocked": [
         "collect_drink",
         "collect_sapling",
-        "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 26.87,
+      "duration_sec": 17.58,
       "online_stats": {
         "created": 3,
-        "confirmed": 3,
-        "denied": 5,
-        "steps_recorded": 207
+        "confirmed": 1,
+        "denied": 3,
+        "steps_recorded": 179
       },
       "subgoal_trace": [
         {
@@ -1932,21 +1911,22 @@
     {
       "episode": 16,
       "seed": 2065,
-      "steps": 155,
-      "reward": 4.1,
+      "steps": 183,
+      "reward": 5.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "defeat_zombie",
+        "make_wood_pickaxe",
         "place_plant",
+        "place_table",
         "wake_up"
       ],
-      "duration_sec": 20.5,
+      "duration_sec": 18.02,
       "online_stats": {
-        "created": 2,
-        "confirmed": 4,
-        "denied": 41,
-        "steps_recorded": 155
+        "created": 4,
+        "confirmed": 2,
+        "denied": 2,
+        "steps_recorded": 183
       },
       "subgoal_trace": [
         {
@@ -2021,320 +2001,320 @@
         },
         {
           "step": 14,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a8_e21_c0"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 17,
       "seed": 2066,
-      "steps": 34,
-      "reward": 0.1,
+      "steps": 108,
+      "reward": 4.1,
       "unlocked": [
-        "collect_wood"
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
       ],
-      "duration_sec": 4.56,
+      "duration_sec": 10.83,
       "online_stats": {
-        "created": 0,
-        "confirmed": 0,
-        "denied": 4,
-        "steps_recorded": 34
+        "created": 2,
+        "confirmed": 3,
+        "denied": 0,
+        "steps_recorded": 108
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 10,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 11,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 15,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 16,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a8_e20_c0"
         }
       ]
     },
     {
       "episode": 18,
       "seed": 2067,
-      "steps": 156,
-      "reward": 4.1,
+      "steps": 179,
+      "reward": 1.1,
       "unlocked": [
         "collect_drink",
-        "collect_sapling",
-        "collect_wood",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 20.5,
+      "duration_sec": 17.58,
       "online_stats": {
-        "created": 6,
+        "created": 2,
         "confirmed": 0,
-        "denied": 0,
-        "steps_recorded": 156
+        "denied": 4,
+        "steps_recorded": 179
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 19,
       "seed": 2068,
-      "steps": 144,
-      "reward": 4.1,
+      "steps": 171,
+      "reward": 3.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 18.46,
+      "duration_sec": 16.82,
       "online_stats": {
-        "created": 3,
-        "confirmed": 2,
-        "denied": 11,
-        "steps_recorded": 144
+        "created": 1,
+        "confirmed": 3,
+        "denied": 5,
+        "steps_recorded": 171
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
@@ -2368,7 +2348,7 @@
         },
         {
           "step": 11,
-          "status": "READY_TO_EXECUTE",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
@@ -2388,7 +2368,7 @@
         },
         {
           "step": 15,
-          "status": "READY_TO_EXECUTE",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a5_e6_c1"
         },
         {
@@ -2403,564 +2383,555 @@
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         }
       ]
     },
     {
       "episode": 20,
       "seed": 2069,
-      "steps": 203,
-      "reward": 6.1,
+      "steps": 157,
+      "reward": 4.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "defeat_zombie",
-        "make_wood_pickaxe",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 26.38,
+      "duration_sec": 15.45,
       "online_stats": {
-        "created": 6,
-        "confirmed": 1,
-        "denied": 12,
-        "steps_recorded": 203
+        "created": 3,
+        "confirmed": 2,
+        "denied": 7,
+        "steps_recorded": 157
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         },
         {
           "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "HARVESTING_INPUT",
+          "target": "card_a8_e20_c0"
         }
       ]
     },
     {
       "episode": 21,
       "seed": 2070,
-      "steps": 136,
+      "steps": 217,
       "reward": 3.1,
       "unlocked": [
-        "collect_sapling",
         "collect_wood",
-        "place_plant",
-        "place_table"
+        "make_wood_pickaxe",
+        "place_table",
+        "wake_up"
       ],
-      "duration_sec": 17.87,
+      "duration_sec": 21.35,
       "online_stats": {
-        "created": 4,
-        "confirmed": 0,
-        "denied": 17,
-        "steps_recorded": 136
+        "created": 2,
+        "confirmed": 3,
+        "denied": 11,
+        "steps_recorded": 217
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 22,
       "seed": 2071,
-      "steps": 282,
-      "reward": 5.1,
+      "steps": 196,
+      "reward": 1.1,
       "unlocked": [
-        "collect_sapling",
-        "collect_wood",
-        "defeat_zombie",
-        "place_plant",
-        "place_table",
+        "collect_drink",
         "wake_up"
       ],
-      "duration_sec": 36.97,
+      "duration_sec": 19.49,
       "online_stats": {
-        "created": 4,
+        "created": 2,
         "confirmed": 1,
-        "denied": 16,
-        "steps_recorded": 282
+        "denied": 4,
+        "steps_recorded": 196
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a10_e18_c1"
         }
       ]
     },
     {
       "episode": 23,
       "seed": 2072,
-      "steps": 280,
-      "reward": 4.1,
+      "steps": 272,
+      "reward": 3.1,
       "unlocked": [
+        "collect_drink",
         "collect_sapling",
-        "collect_wood",
-        "defeat_zombie",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 36.69,
+      "duration_sec": 26.85,
       "online_stats": {
-        "created": 2,
-        "confirmed": 2,
-        "denied": 11,
-        "steps_recorded": 280
+        "created": 4,
+        "confirmed": 0,
+        "denied": 4,
+        "steps_recorded": 272
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 24,
       "seed": 2073,
-      "steps": 91,
-      "reward": 2.1,
+      "steps": 152,
+      "reward": 1.1,
       "unlocked": [
-        "collect_sapling",
-        "place_plant",
+        "collect_drink",
         "wake_up"
       ],
-      "duration_sec": 12.11,
+      "duration_sec": 14.95,
       "online_stats": {
-        "created": 1,
-        "confirmed": 2,
-        "denied": 9,
-        "steps_recorded": 91
+        "created": 2,
+        "confirmed": 0,
+        "denied": 2,
+        "steps_recorded": 152
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
@@ -3027,261 +2998,257 @@
     {
       "episode": 25,
       "seed": 2074,
-      "steps": 88,
-      "reward": 0.1,
+      "steps": 85,
+      "reward": 1.1,
       "unlocked": [
-        "collect_wood"
+        "collect_sapling",
+        "place_plant"
       ],
-      "duration_sec": 11.47,
+      "duration_sec": 8.48,
       "online_stats": {
-        "created": 1,
-        "confirmed": 0,
-        "denied": 12,
-        "steps_recorded": 88
+        "created": 0,
+        "confirmed": 2,
+        "denied": 1,
+        "steps_recorded": 85
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 26,
       "seed": 2075,
-      "steps": 168,
-      "reward": 4.1,
+      "steps": 158,
+      "reward": 2.1,
       "unlocked": [
-        "collect_sapling",
+        "collect_drink",
         "collect_wood",
-        "defeat_zombie",
-        "place_plant",
         "wake_up"
       ],
-      "duration_sec": 21.94,
+      "duration_sec": 15.51,
       "online_stats": {
-        "created": 4,
-        "confirmed": 0,
-        "denied": 20,
-        "steps_recorded": 168
+        "created": 1,
+        "confirmed": 2,
+        "denied": 9,
+        "steps_recorded": 158
       },
       "subgoal_trace": [
         {
           "step": 0,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 1,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 2,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 3,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         }
       ]
     },
     {
       "episode": 27,
       "seed": 2076,
-      "steps": 155,
-      "reward": 4.1,
+      "steps": 169,
+      "reward": 1.1,
       "unlocked": [
-        "collect_drink",
-        "collect_sapling",
         "collect_wood",
-        "place_plant",
         "wake_up"
       ],
-      "duration_sec": 19.87,
+      "duration_sec": 16.76,
       "online_stats": {
-        "created": 4,
+        "created": 1,
         "confirmed": 1,
-        "denied": 9,
-        "steps_recorded": 155
+        "denied": 2,
+        "steps_recorded": 169
       },
       "subgoal_trace": [
         {
@@ -3389,24 +3356,25 @@
     {
       "episode": 28,
       "seed": 2077,
-      "steps": 209,
-      "reward": 7.1,
+      "steps": 167,
+      "reward": 8.1,
       "unlocked": [
         "collect_sapling",
         "collect_stone",
         "collect_wood",
+        "eat_cow",
         "make_wood_pickaxe",
+        "make_wood_sword",
         "place_plant",
-        "place_stone",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 26.67,
+      "duration_sec": 16.45,
       "online_stats": {
-        "created": 4,
-        "confirmed": 3,
-        "denied": 11,
-        "steps_recorded": 209
+        "created": 3,
+        "confirmed": 5,
+        "denied": 5,
+        "steps_recorded": 167
       },
       "subgoal_trace": [
         {
@@ -3432,32 +3400,32 @@
         {
           "step": 4,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 5,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
+          "target": "card_a5_e6_c1"
         },
         {
           "step": 10,
@@ -3466,17 +3434,17 @@
         },
         {
           "step": 11,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
           "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
         },
         {
@@ -3514,22 +3482,15 @@
     {
       "episode": 29,
       "seed": 2078,
-      "steps": 171,
-      "reward": 5.1,
-      "unlocked": [
-        "collect_sapling",
-        "collect_wood",
-        "eat_cow",
-        "place_plant",
-        "place_table",
-        "wake_up"
-      ],
-      "duration_sec": 22.04,
+      "steps": 82,
+      "reward": -0.9,
+      "unlocked": [],
+      "duration_sec": 7.95,
       "online_stats": {
-        "created": 3,
-        "confirmed": 3,
-        "denied": 6,
-        "steps_recorded": 171
+        "created": 0,
+        "confirmed": 0,
+        "denied": 1,
+        "steps_recorded": 82
       },
       "subgoal_trace": [
         {
@@ -3580,78 +3541,80 @@
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 30,
       "seed": 2079,
-      "steps": 152,
-      "reward": 4.1,
+      "steps": 169,
+      "reward": 6.1,
       "unlocked": [
+        "collect_drink",
         "collect_sapling",
         "collect_wood",
+        "eat_cow",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 19.71,
+      "duration_sec": 16.68,
       "online_stats": {
-        "created": 4,
-        "confirmed": 1,
-        "denied": 7,
-        "steps_recorded": 152
+        "created": 5,
+        "confirmed": 2,
+        "denied": 12,
+        "steps_recorded": 169
       },
       "subgoal_trace": [
         {
@@ -3759,21 +3722,20 @@
     {
       "episode": 31,
       "seed": 2080,
-      "steps": 166,
-      "reward": 4.1,
+      "steps": 264,
+      "reward": 3.1,
       "unlocked": [
-        "collect_sapling",
         "collect_wood",
-        "place_plant",
+        "make_wood_sword",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 21.58,
+      "duration_sec": 25.79,
       "online_stats": {
         "created": 3,
-        "confirmed": 2,
-        "denied": 8,
-        "steps_recorded": 166
+        "confirmed": 1,
+        "denied": 5,
+        "steps_recorded": 264
       },
       "subgoal_trace": [
         {
@@ -3824,80 +3786,76 @@
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a5_e6_c1"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e9_c3"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e9_c3"
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 32,
       "seed": 2081,
-      "steps": 319,
-      "reward": 6.1,
+      "steps": 232,
+      "reward": 2.1,
       "unlocked": [
-        "collect_drink",
-        "collect_sapling",
         "collect_wood",
-        "make_wood_pickaxe",
-        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 41.15,
+      "duration_sec": 22.81,
       "online_stats": {
-        "created": 7,
-        "confirmed": 0,
-        "denied": 11,
-        "steps_recorded": 319
+        "created": 2,
+        "confirmed": 1,
+        "denied": 3,
+        "steps_recorded": 232
       },
       "subgoal_trace": [
         {
@@ -4005,19 +3963,20 @@
     {
       "episode": 33,
       "seed": 2082,
-      "steps": 90,
-      "reward": 2.1,
+      "steps": 164,
+      "reward": 3.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "place_plant"
+        "place_plant",
+        "wake_up"
       ],
-      "duration_sec": 11.56,
+      "duration_sec": 16.14,
       "online_stats": {
-        "created": 3,
-        "confirmed": 0,
-        "denied": 14,
-        "steps_recorded": 90
+        "created": 2,
+        "confirmed": 1,
+        "denied": 6,
+        "steps_recorded": 164
       },
       "subgoal_trace": [
         {
@@ -4092,7 +4051,7 @@
         },
         {
           "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a10_e18_c6"
         },
         {
@@ -4125,23 +4084,19 @@
     {
       "episode": 34,
       "seed": 2083,
-      "steps": 242,
-      "reward": 6.1,
+      "steps": 147,
+      "reward": 1.1,
       "unlocked": [
-        "collect_sapling",
         "collect_wood",
-        "defeat_zombie",
-        "make_wood_pickaxe",
-        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 30.93,
+      "duration_sec": 14.3,
       "online_stats": {
-        "created": 4,
-        "confirmed": 4,
-        "denied": 7,
-        "steps_recorded": 242
+        "created": 1,
+        "confirmed": 1,
+        "denied": 8,
+        "steps_recorded": 147
       },
       "subgoal_trace": [
         {
@@ -4212,59 +4167,56 @@
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a5_e6_c1"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e9_c3"
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 35,
       "seed": 2084,
-      "steps": 251,
-      "reward": 5.1,
+      "steps": 181,
+      "reward": 2.1,
       "unlocked": [
-        "collect_drink",
-        "collect_sapling",
         "collect_wood",
-        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 32.64,
+      "duration_sec": 17.65,
       "online_stats": {
-        "created": 6,
+        "created": 4,
         "confirmed": 0,
-        "denied": 5,
-        "steps_recorded": 251
+        "denied": 0,
+        "steps_recorded": 181
       },
       "subgoal_trace": [
         {
@@ -4372,7 +4324,7 @@
     {
       "episode": 36,
       "seed": 2085,
-      "steps": 228,
+      "steps": 150,
       "reward": 4.1,
       "unlocked": [
         "collect_sapling",
@@ -4381,12 +4333,12 @@
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 29.84,
+      "duration_sec": 14.62,
       "online_stats": {
-        "created": 4,
+        "created": 5,
         "confirmed": 1,
-        "denied": 9,
-        "steps_recorded": 228
+        "denied": 12,
+        "steps_recorded": 150
       },
       "subgoal_trace": [
         {
@@ -4494,20 +4446,22 @@
     {
       "episode": 37,
       "seed": 2086,
-      "steps": 184,
-      "reward": 3.1,
+      "steps": 257,
+      "reward": 5.1,
       "unlocked": [
+        "collect_drink",
         "collect_sapling",
         "collect_wood",
+        "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 23.43,
+      "duration_sec": 25.14,
       "online_stats": {
-        "created": 3,
-        "confirmed": 1,
-        "denied": 4,
-        "steps_recorded": 184
+        "created": 4,
+        "confirmed": 2,
+        "denied": 7,
+        "steps_recorded": 257
       },
       "subgoal_trace": [
         {
@@ -4615,22 +4569,20 @@
     {
       "episode": 38,
       "seed": 2087,
-      "steps": 192,
-      "reward": 5.1,
+      "steps": 136,
+      "reward": 3.1,
       "unlocked": [
         "collect_drink",
         "collect_sapling",
-        "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 24.88,
+      "duration_sec": 13.25,
       "online_stats": {
-        "created": 4,
-        "confirmed": 2,
-        "denied": 4,
-        "steps_recorded": 192
+        "created": 3,
+        "confirmed": 0,
+        "denied": 13,
+        "steps_recorded": 136
       },
       "subgoal_trace": [
         {
@@ -4706,56 +4658,54 @@
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 39,
       "seed": 2088,
-      "steps": 276,
-      "reward": 7.1,
+      "steps": 173,
+      "reward": 5.1,
       "unlocked": [
-        "collect_drink",
         "collect_sapling",
         "collect_wood",
         "defeat_zombie",
-        "make_wood_pickaxe",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 35.76,
+      "duration_sec": 16.98,
       "online_stats": {
-        "created": 7,
+        "created": 5,
         "confirmed": 1,
-        "denied": 11,
-        "steps_recorded": 276
+        "denied": 3,
+        "steps_recorded": 173
       },
       "subgoal_trace": [
         {
@@ -4863,23 +4813,22 @@
     {
       "episode": 40,
       "seed": 2089,
-      "steps": 236,
-      "reward": 6.1,
+      "steps": 150,
+      "reward": 5.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "defeat_zombie",
-        "make_wood_sword",
+        "make_wood_pickaxe",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 30.34,
+      "duration_sec": 14.51,
       "online_stats": {
         "created": 5,
         "confirmed": 2,
-        "denied": 13,
-        "steps_recorded": 236
+        "denied": 2,
+        "steps_recorded": 150
       },
       "subgoal_trace": [
         {
@@ -4987,20 +4936,21 @@
     {
       "episode": 41,
       "seed": 2090,
-      "steps": 167,
-      "reward": 3.1,
+      "steps": 189,
+      "reward": 4.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
         "place_plant",
+        "place_table",
         "wake_up"
       ],
-      "duration_sec": 21.55,
+      "duration_sec": 18.36,
       "online_stats": {
-        "created": 3,
-        "confirmed": 2,
-        "denied": 14,
-        "steps_recorded": 167
+        "created": 4,
+        "confirmed": 0,
+        "denied": 2,
+        "steps_recorded": 189
       },
       "subgoal_trace": [
         {
@@ -5108,20 +5058,21 @@
     {
       "episode": 42,
       "seed": 2091,
-      "steps": 176,
-      "reward": 3.1,
+      "steps": 162,
+      "reward": 4.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
         "place_plant",
+        "place_table",
         "wake_up"
       ],
-      "duration_sec": 22.45,
+      "duration_sec": 15.85,
       "online_stats": {
-        "created": 4,
-        "confirmed": 0,
-        "denied": 7,
-        "steps_recorded": 176
+        "created": 3,
+        "confirmed": 2,
+        "denied": 5,
+        "steps_recorded": 162
       },
       "subgoal_trace": [
         {
@@ -5216,7 +5167,7 @@
         },
         {
           "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a10_e18_c6"
         },
         {
@@ -5229,254 +5180,9 @@
     {
       "episode": 43,
       "seed": 2092,
-      "steps": 148,
-      "reward": 4.1,
+      "steps": 217,
+      "reward": 5.1,
       "unlocked": [
-        "collect_sapling",
-        "collect_wood",
-        "place_plant",
-        "place_table",
-        "wake_up"
-      ],
-      "duration_sec": 19.17,
-      "online_stats": {
-        "created": 1,
-        "confirmed": 4,
-        "denied": 7,
-        "steps_recorded": 148
-      },
-      "subgoal_trace": [
-        {
-          "step": 0,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 1,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 2,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 3,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 4,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 5,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 6,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 7,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 8,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 9,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 10,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 11,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 15,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 16,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        }
-      ]
-    },
-    {
-      "episode": 44,
-      "seed": 2093,
-      "steps": 173,
-      "reward": 4.1,
-      "unlocked": [
-        "collect_sapling",
-        "collect_wood",
-        "place_plant",
-        "place_table",
-        "wake_up"
-      ],
-      "duration_sec": 22.23,
-      "online_stats": {
-        "created": 0,
-        "confirmed": 5,
-        "denied": 5,
-        "steps_recorded": 173
-      },
-      "subgoal_trace": [
-        {
-          "step": 0,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 1,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 2,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 3,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 4,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 5,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a10_e18_c6"
-        },
-        {
-          "step": 6,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 7,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 8,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 9,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 10,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 11,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 12,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 13,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 14,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 15,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 16,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 17,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 18,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        },
-        {
-          "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
-        }
-      ]
-    },
-    {
-      "episode": 45,
-      "seed": 2094,
-      "steps": 204,
-      "reward": 6.1,
-      "unlocked": [
-        "collect_drink",
         "collect_sapling",
         "collect_wood",
         "defeat_zombie",
@@ -5484,12 +5190,134 @@
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 26.48,
+      "duration_sec": 21.03,
       "online_stats": {
-        "created": 3,
-        "confirmed": 4,
-        "denied": 18,
-        "steps_recorded": 204
+        "created": 4,
+        "confirmed": 2,
+        "denied": 9,
+        "steps_recorded": 217
+      },
+      "subgoal_trace": [
+        {
+          "step": 0,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 1,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 2,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 3,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 4,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 5,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 6,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 7,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 8,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 9,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 10,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 11,
+          "status": "READY_TO_EXECUTE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 12,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 13,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 14,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 15,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 16,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 17,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 18,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 19,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        }
+      ]
+    },
+    {
+      "episode": 44,
+      "seed": 2093,
+      "steps": 164,
+      "reward": 4.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ],
+      "duration_sec": 15.96,
+      "online_stats": {
+        "created": 2,
+        "confirmed": 3,
+        "denied": 2,
+        "steps_recorded": 164
       },
       "subgoal_trace": [
         {
@@ -5589,15 +5417,135 @@
         },
         {
           "step": 19,
-          "status": "APPROACHING_AFFORDANCE",
+          "status": "READY_TO_EXECUTE",
           "target": "card_a5_e6_c1"
+        }
+      ]
+    },
+    {
+      "episode": 45,
+      "seed": 2094,
+      "steps": 61,
+      "reward": 2.1,
+      "unlocked": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant"
+      ],
+      "duration_sec": 5.95,
+      "online_stats": {
+        "created": 3,
+        "confirmed": 0,
+        "denied": 3,
+        "steps_recorded": 61
+      },
+      "subgoal_trace": [
+        {
+          "step": 0,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 1,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 2,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 3,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 4,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 5,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 6,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 7,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 8,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 9,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 10,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 11,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 12,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 13,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 14,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 15,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 16,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 17,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 18,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
+        },
+        {
+          "step": 19,
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 46,
       "seed": 2095,
-      "steps": 151,
+      "steps": 170,
       "reward": 3.1,
       "unlocked": [
         "collect_sapling",
@@ -5605,12 +5553,12 @@
         "place_plant",
         "wake_up"
       ],
-      "duration_sec": 19.44,
+      "duration_sec": 16.54,
       "online_stats": {
-        "created": 3,
-        "confirmed": 1,
-        "denied": 14,
-        "steps_recorded": 151
+        "created": 1,
+        "confirmed": 2,
+        "denied": 4,
+        "steps_recorded": 170
       },
       "subgoal_trace": [
         {
@@ -5718,22 +5666,20 @@
     {
       "episode": 47,
       "seed": 2096,
-      "steps": 292,
-      "reward": 5.1,
+      "steps": 202,
+      "reward": 3.1,
       "unlocked": [
         "collect_sapling",
         "collect_wood",
-        "defeat_zombie",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 37.74,
+      "duration_sec": 19.45,
       "online_stats": {
-        "created": 5,
-        "confirmed": 1,
-        "denied": 25,
-        "steps_recorded": 292
+        "created": 3,
+        "confirmed": 2,
+        "denied": 20,
+        "steps_recorded": 202
       },
       "subgoal_trace": [
         {
@@ -5841,22 +5787,20 @@
     {
       "episode": 48,
       "seed": 2097,
-      "steps": 187,
-      "reward": 5.1,
+      "steps": 179,
+      "reward": 3.1,
       "unlocked": [
-        "collect_drink",
         "collect_sapling",
         "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 24.28,
+      "duration_sec": 17.24,
       "online_stats": {
-        "created": 2,
-        "confirmed": 4,
-        "denied": 2,
-        "steps_recorded": 187
+        "created": 3,
+        "confirmed": 1,
+        "denied": 6,
+        "steps_recorded": 179
       },
       "subgoal_trace": [
         {
@@ -5897,90 +5841,90 @@
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 13,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a5_e6_c1"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 14,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         }
       ]
     },
     {
       "episode": 49,
       "seed": 2098,
-      "steps": 145,
+      "steps": 181,
       "reward": 6.1,
       "unlocked": [
-        "collect_drink",
         "collect_sapling",
         "collect_wood",
-        "eat_cow",
+        "defeat_zombie",
+        "make_wood_sword",
         "place_plant",
         "place_table",
         "wake_up"
       ],
-      "duration_sec": 18.85,
+      "duration_sec": 17.63,
       "online_stats": {
-        "created": 7,
-        "confirmed": 3,
-        "denied": 19,
-        "steps_recorded": 145
+        "created": 6,
+        "confirmed": 1,
+        "denied": 16,
+        "steps_recorded": 181
       },
       "subgoal_trace": [
         {
@@ -6088,21 +6032,19 @@
     {
       "episode": 50,
       "seed": 2099,
-      "steps": 204,
-      "reward": 3.1,
+      "steps": 126,
+      "reward": 2.1,
       "unlocked": [
         "collect_sapling",
-        "collect_wood",
         "place_plant",
-        "place_table",
         "wake_up"
       ],
-      "duration_sec": 27.03,
+      "duration_sec": 12.42,
       "online_stats": {
-        "created": 2,
-        "confirmed": 3,
-        "denied": 4,
-        "steps_recorded": 204
+        "created": 3,
+        "confirmed": 0,
+        "denied": 8,
+        "steps_recorded": 126
       },
       "subgoal_trace": [
         {
@@ -6117,7 +6059,7 @@
         },
         {
           "step": 2,
-          "status": "READY_TO_EXECUTE",
+          "status": "APPROACHING_AFFORDANCE",
           "target": "card_a10_e18_c6"
         },
         {
@@ -6138,75 +6080,75 @@
         {
           "step": 6,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 7,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 8,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 9,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 10,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 11,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 12,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 13,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a5_e6_c1"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 14,
-          "status": "READY_TO_EXECUTE",
-          "target": "card_a5_e6_c1"
+          "status": "APPROACHING_AFFORDANCE",
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 15,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 16,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 17,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 18,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         },
         {
           "step": 19,
           "status": "APPROACHING_AFFORDANCE",
-          "target": "card_a8_e20_c0"
+          "target": "card_a10_e18_c6"
         }
       ]
     }
   ],
-  "final_bank_sha256": "8095f8d76cd86e86130f5a0d9722647bbb76a43f648a24bbfd9afd377fd2191e"
+  "final_bank_sha256": "fe65b779652460979a8c058ad78be16c6f483fc31be0f9ddd2a34ea6aa080337"
 }
