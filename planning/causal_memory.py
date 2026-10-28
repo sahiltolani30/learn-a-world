@@ -44,6 +44,7 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NUM_ACTIONS = 17
 STATE_DIM = 16  # Canonical 16-D resource/vital state space
+INVENTORY_DIM = 12  # Inventory items: dims 0..11; vitals (health, food, drink, energy): dims 12..15
 NUM_ACHIEVEMENTS = len(CRAFTER_ACHIEVEMENTS)  # 22
 
 # 80% two-sided Wilson score interval (z of the standard normal at 90% quantile).
@@ -656,14 +657,15 @@ class RelationHypothesisBank:
                     degraded = False
                 else:
                     fired, degraded = self._fallback_unlock_dims(e.reward)
-                max_delta = max((abs(d) for d in e.state_delta), default=0.0)
+                inv_delta = e.state_delta[:INVENTORY_DIM] if len(e.state_delta) >= INVENTORY_DIM else e.state_delta
+                max_inv_delta = max((abs(d) for d in inv_delta), default=0.0)
                 if fired:
                     successes.append((e, fired, degraded))
-                elif degraded or max_delta >= PRODUCTIVE_DELTA:
+                elif degraded or max_inv_delta >= PRODUCTIVE_DELTA:
                     # Degraded fallback successes carry no grounded event dim ->
-                    # grouped event-free (N7: a guess is not an observation).
+                    # grouped event-free (requires productive delta on inventory dims 0..11).
                     successes.append((e, [], True))
-                elif max_delta < NEAR_MISS_DELTA and e.reward <= 0.0:
+                elif max_inv_delta < NEAR_MISS_DELTA and e.reward <= 0.0:
                     near_misses.append(e)
                 # else: reward > 0 with no unlock and no productive delta ->
                 # unclassified; counted nowhere (same policy as v1 for idle steps).
@@ -851,7 +853,9 @@ class RelationHypothesisBank:
 
         tested: List[Tuple[int, float]] = []
         passed_gates: Dict[int, Tuple[float, float]] = {}  # dim -> (q_d, s_d - f_d)
-        for d in range(STATE_DIM):
+        # Fix F11: Candidate needs are strictly inventory items (dims 0..11).
+        # Dims 12..15 are player life bars (health, hunger, thirst, energy) — not crafting ingredients.
+        for d in range(INVENTORY_DIM):
             q_d = float(np.quantile(S[:, d], NEED_QUANTILE))
             if q_d < NEED_MIN_LEVEL:
                 continue
@@ -864,6 +868,11 @@ class RelationHypothesisBank:
             k_f = int(np.sum(F[:, d] >= q_d))
             s_d = k_s / n_s
             f_d = k_f / n_f
+            # Fix F11 (Failure-Absence Filter):
+            # True prerequisites must be absent/depleted in failure cases (f_d <= 0.50).
+            # Items present in >50% of failures (e.g. ubiquitous saplings) are not discriminating bottlenecks.
+            if f_d > 0.50:
+                continue
             lb_s = wilson_interval(k_s, n_s)[0]
             ub_f = wilson_interval(k_f, n_f)[1]
             if not (lb_s > ub_f):
@@ -874,11 +883,10 @@ class RelationHypothesisBank:
             tested.append((d, p_val))
             passed_gates[d] = (q_d, s_d - f_d)
 
-        # BH-FDR across the 16 per-card dims: dims never entering the test count
-        # as p = 1.0 in the family.
+        # BH-FDR across the candidate inventory dims: untested dims enter family with p = 1.0.
         family: List[Tuple[int, float]] = list(tested)
         tested_dims = {d for d, _ in tested}
-        for d in range(STATE_DIM):
+        for d in range(INVENTORY_DIM):
             if d not in tested_dims:
                 family.append((d, 1.0))
         kept = set(_bh_fdr_reject(family, BH_FDR_Q))
