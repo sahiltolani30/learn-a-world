@@ -135,6 +135,36 @@ def _resolve_checkpoint(ckpt_path: str, drive_dir: Optional[str] = None) -> str:
     return str(ckpt_path)
 
 
+def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> Optional[str]:
+    if not bank_path:
+        return None
+    p = Path(bank_path)
+    if p.exists():
+        return str(p)
+    candidates = [
+        REPO_ROOT / bank_path,
+        REPO_ROOT / "checkpoints" / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / bank_path,
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints") / p.name,
+        Path("/content/drive/MyDrive/learn-a-world") / p.name,
+        Path("/content/drive/MyDrive") / bank_path,
+        Path("/content/drive/MyDrive/checkpoints") / p.name,
+        Path("/content/checkpoints") / p.name,
+        Path("/content") / p.name,
+    ]
+    if drive_dir:
+        dp = Path(drive_dir)
+        candidates.extend([
+            dp / bank_path,
+            dp / "checkpoints" / p.name,
+            dp / p.name,
+        ])
+    for cand in candidates:
+        if cand.exists():
+            return str(cand)
+    return str(bank_path)
+
+
 def run_screening(
     checkpoint_path: str = "checkpoints/jepa_crafter_v3_phase2.pt",
     calibrator_path: str = "results/calibration/event_head_calibrator.json",
@@ -263,11 +293,12 @@ def run_screening(
             )
 
     if bank_path_loaded is None and causal_memory_bank_path:
-        bank_p = Path(causal_memory_bank_path)
-        if bank_p.exists():
+        resolved_bank = _resolve_bank(causal_memory_bank_path, drive_dir)
+        bank_p = Path(resolved_bank) if resolved_bank else None
+        if bank_p and bank_p.exists():
             bank_path_loaded = str(bank_p)
         else:
-            print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {bank_p}")
+            print(f"[Phase 2 Causal Memory] Warning: Bank path not found: {causal_memory_bank_path}")
 
     if bank_path_loaded is not None:
         from planning.causal_memory import RelationHypothesisBank
