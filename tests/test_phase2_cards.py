@@ -170,7 +170,8 @@ def test_enrichment_keeps_wood_kills_sapling_on_real_statistics():
         x[0] = 1.5
         x[5] = 1.2 if i < 6 else 0.0
         delta = [0.0] * 16
-        delta[0] = 1.0  # productive transition on dim 0
+        delta[0] = -1.5  # resource dim 0 consumed by craft
+        delta[6] = 1.0   # tool produced by craft
         store.entries.append(EpisodicEvidence(
             obs_latent=list(z_succ),
             grounded_state=x,

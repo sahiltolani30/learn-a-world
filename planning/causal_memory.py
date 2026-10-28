@@ -44,7 +44,6 @@ from eval.metrics import CRAFTER_ACHIEVEMENTS
 REPO_ROOT = Path(__file__).resolve().parent.parent
 NUM_ACTIONS = 17
 STATE_DIM = 16  # Canonical 16-D resource/vital state space
-INVENTORY_DIM = 12  # Inventory items: dims 0..11; vitals (health, food, drink, energy): dims 12..15
 NUM_ACHIEVEMENTS = len(CRAFTER_ACHIEVEMENTS)  # 22
 
 # 80% two-sided Wilson score interval (z of the standard normal at 90% quantile).
@@ -584,6 +583,17 @@ class RelationHypothesisBank:
 
     def _recompute_status(self, p: TransitionPrototype) -> None:
         p.status = "confirmed" if p.weighted_successes >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
+        if p.status == "confirmed":
+            # Pure causal consumption grounding: an action requires what it consumes from inventory (dims 0..11).
+            p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < 12]
+            p.precondition_state = [0.0] * STATE_DIM
+            for nd in p.needs:
+                d = int(nd[0])
+                if 0 <= d < STATE_DIM:
+                    p.precondition_state[d] = float(nd[1])
+        else:
+            p.needs = []
+            p.precondition_state = [0.0] * STATE_DIM
 
     # ------------------------------------------------------------------
     # Unlock decomposition helpers
@@ -657,15 +667,16 @@ class RelationHypothesisBank:
                     degraded = False
                 else:
                     fired, degraded = self._fallback_unlock_dims(e.reward)
-                inv_delta = e.state_delta[:INVENTORY_DIM] if len(e.state_delta) >= INVENTORY_DIM else e.state_delta
-                max_inv_delta = max((abs(d) for d in inv_delta), default=0.0)
+                # Event-free breakthrough criterion requires material change on inventory dims 0..11.
+                # Natural vital decay (hunger/thirst) does not make an action an event-free productive card.
+                max_delta = max((abs(d) for d in e.state_delta[:12]), default=0.0)
                 if fired:
                     successes.append((e, fired, degraded))
-                elif degraded or max_inv_delta >= PRODUCTIVE_DELTA:
+                elif degraded or max_delta >= PRODUCTIVE_DELTA:
                     # Degraded fallback successes carry no grounded event dim ->
-                    # grouped event-free (requires productive delta on inventory dims 0..11).
+                    # grouped event-free (N7: a guess is not an observation).
                     successes.append((e, [], True))
-                elif max_inv_delta < NEAR_MISS_DELTA and e.reward <= 0.0:
+                elif max_delta < NEAR_MISS_DELTA and e.reward <= 0.0:
                     near_misses.append(e)
                 # else: reward > 0 with no unlock and no productive delta ->
                 # unclassified; counted nowhere (same policy as v1 for idle steps).
@@ -785,9 +796,9 @@ class RelationHypothesisBank:
         status = "confirmed" if n_succ >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
         needs: List[List[float]] = []
         if status == "confirmed":
-            success_states = [m.grounded_state for m in cluster]
-            matched_nm_states = [nm_states[j] for j in matched_nm]
-            needs = self._enrich_needs(success_states, matched_nm_states)
+            # Pure causal consumption grounding: what was deducted from inventory (dims 0..11)
+            # is what this action needs to be executed (Conservation of Inventory).
+            needs = [[float(d), amt] for d, amt in consumes if 0 <= int(d) < 12]
 
         # Legacy precondition interface: sparse needs vector.
         precondition_state = [0.0] * STATE_DIM
@@ -853,9 +864,7 @@ class RelationHypothesisBank:
 
         tested: List[Tuple[int, float]] = []
         passed_gates: Dict[int, Tuple[float, float]] = {}  # dim -> (q_d, s_d - f_d)
-        # Fix F11: Candidate needs are strictly inventory items (dims 0..11).
-        # Dims 12..15 are player life bars (health, hunger, thirst, energy) — not crafting ingredients.
-        for d in range(INVENTORY_DIM):
+        for d in range(STATE_DIM):
             q_d = float(np.quantile(S[:, d], NEED_QUANTILE))
             if q_d < NEED_MIN_LEVEL:
                 continue
@@ -868,11 +877,6 @@ class RelationHypothesisBank:
             k_f = int(np.sum(F[:, d] >= q_d))
             s_d = k_s / n_s
             f_d = k_f / n_f
-            # Fix F11 (Failure-Absence Filter):
-            # True prerequisites must be absent/depleted in failure cases (f_d <= 0.50).
-            # Items present in >50% of failures (e.g. ubiquitous saplings) are not discriminating bottlenecks.
-            if f_d > 0.50:
-                continue
             lb_s = wilson_interval(k_s, n_s)[0]
             ub_f = wilson_interval(k_f, n_f)[1]
             if not (lb_s > ub_f):
@@ -883,10 +887,11 @@ class RelationHypothesisBank:
             tested.append((d, p_val))
             passed_gates[d] = (q_d, s_d - f_d)
 
-        # BH-FDR across the candidate inventory dims: untested dims enter family with p = 1.0.
+        # BH-FDR across the 16 per-card dims: dims never entering the test count
+        # as p = 1.0 in the family.
         family: List[Tuple[int, float]] = list(tested)
         tested_dims = {d for d, _ in tested}
-        for d in range(INVENTORY_DIM):
+        for d in range(STATE_DIM):
             if d not in tested_dims:
                 family.append((d, 1.0))
         kept = set(_bh_fdr_reject(family, BH_FDR_Q))
@@ -1223,11 +1228,25 @@ class RelationHypothesisBank:
         self._member_latents[proto_id] = [[float(v) for v in z]]
         return proto
 
-    def _confirm_card(self, proto: TransitionPrototype, z: Sequence[float],
-                      next_z: Optional[Sequence[float]]) -> None:
+    def _confirm_card(
+        self,
+        proto: TransitionPrototype,
+        z: Sequence[float],
+        next_z: Optional[Sequence[float]],
+        state_delta: Optional[Sequence[float]] = None,
+    ) -> None:
         proto.success_online += 1.0
         proto.success_count += 1.0
         self._update_keys_online(proto, z, next_z)
+        if state_delta is not None and any(abs(d) >= PRODUCES_THRESHOLD for d in state_delta[:12]):
+            n_prev = max(float(proto.success_count - 1.0), 0.0)
+            old_delta = np.asarray(proto.effect_delta, dtype=np.float64)
+            new_delta = (old_delta * n_prev + np.asarray(state_delta, dtype=np.float64)) / (n_prev + 1.0)
+            proto.effect_delta = [float(v) for v in new_delta]
+            proto.produces = [[float(d), float(new_delta[d])]
+                             for d in range(STATE_DIM) if new_delta[d] >= PRODUCES_THRESHOLD]
+            proto.consumes = [[float(d), float(abs(new_delta[d]))]
+                             for d in range(STATE_DIM) if new_delta[d] <= -PRODUCES_THRESHOLD]
         self._recompute_confidence(proto)
         self._recompute_status(proto)
 
@@ -1335,7 +1354,7 @@ class RelationHypothesisBank:
                     match = self._match_card(z, action, ed)
                     if match is not None:
                         # (2) CONFIRM
-                        self._confirm_card(match, z, next_z)
+                        self._confirm_card(match, z, next_z, state_delta)
                         confirmed += 1
                     elif ed in confident_events:
                         self._create_online_card(action, ed, z, next_z, state_delta,

@@ -342,3 +342,71 @@ def test_memory_lifecycle_save_and_reload(tmp_path):
     assert v1_loaded_store.entries[0].event_vec is None
     assert v1_loaded_store.entries[0].mask_before_vec is None
     assert v1_loaded_store.entries[0].source == "offline"
+
+
+def test_online_memory_consumption_grounding_needs():
+    """Verify online memory discovers needs from observed inventory deductions when confirmed."""
+    bank = RelationHypothesisBank()
+    z = [0.1] * 128
+    # Action 8 (craft table): consumes 2 wood (dim 0), sapling (dim 5) and health (dim 12) untouched
+    delta = [0.0] * 16
+    delta[0] = -2.0  # 2 wood consumed
+
+    # 1st observation: online card created as hypothesis
+    step1 = {
+        "obs_latent": z,
+        "grounded_state": [2.0] + [0.0] * 15,
+        "action": 8,
+        "reward": 1.0,
+        "done": False,
+        "event_vec": [0] * 7 + [1] + [0] * 14,  # achievement 7 unlocked
+        "mask_before_vec": [0] * 22,
+        "confident_events": [7],
+        "state_delta": delta,
+    }
+    stats1 = bank.learn_from_episode([step1], episode_id=1)
+    assert stats1["created"] == 1
+    card_id = "card_a8_e7_o0"
+    assert card_id in bank.prototypes
+    card = bank.prototypes[card_id]
+    assert card.status == "hypothesis"
+    assert card.needs == []  # hypothesis carries no active needs
+    assert card.consumes == [[0.0, 2.0]]
+
+    # 2nd and 3rd observations: confirm the card online
+    for ep in (2, 3):
+        step = {
+            "obs_latent": z,
+            "grounded_state": [2.0] + [0.0] * 15,
+            "action": 8,
+            "reward": 1.0,
+            "done": False,
+            "event_vec": [0] * 7 + [1] + [0] * 14,
+            "mask_before_vec": [0] * 22,
+            "confident_events": [7],
+            "state_delta": delta,
+        }
+        bank.learn_from_episode([step], episode_id=ep)
+
+    # 3 successes (offline 0, online 3 -> weighted 1.5 < 3.0). Add 3 more to reach 3.0 weighted successes:
+    for ep in (4, 5, 6):
+        step = {
+            "obs_latent": z,
+            "grounded_state": [2.0] + [0.0] * 15,
+            "action": 8,
+            "reward": 1.0,
+            "done": False,
+            "event_vec": [0] * 7 + [1] + [0] * 14,
+            "mask_before_vec": [0] * 22,
+            "confident_events": [7],
+            "state_delta": delta,
+        }
+        bank.learn_from_episode([step], episode_id=ep)
+
+    assert card.weighted_successes >= 3.0
+    assert card.status == "confirmed"
+    # Needs are now grounded directly in observed consumption (wood only, no vitals, no sapling)
+    assert card.needs == [[0.0, 2.0]]
+    assert card.precondition_state[0] == pytest.approx(2.0)
+    assert card.precondition_state[5] == 0.0
+    assert card.precondition_state[12] == 0.0
