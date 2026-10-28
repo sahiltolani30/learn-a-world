@@ -62,22 +62,24 @@ class OfflineConsolidationEngine:
                 if ach.startswith("place_"):
                     step_produces[f"{ach[len('place_'):]}_placed"] = 1
 
-                # Empirically check if transition occurred at a placed workstation
+                # Only assembly/manufacturing achievements (e.g. make_*, smelt_*) require workstation catalysts.
+                # Primitive collections (collect_*), vitals (drink, eat, wake), and workstation placements (place_*) never require catalysts.
                 catalyst_needed = None
-                if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
-                    for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
-                        if p_step < step.step_idx:
-                            dist = float(np.linalg.norm(step.displacement - p_pos))
-                            if dist <= 1.5:
-                                catalyst_needed = station_type
-                                break
-                elif (
-                    episodic_store.workstation_placed_step is not None
-                    and episodic_store.workstation_placed_step < step.step_idx
-                ):
-                    dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
-                    if dist <= 1.5:
-                        catalyst_needed = "table_placed"
+                if ach.startswith("make_") or ach.startswith("smelt_"):
+                    if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
+                        for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
+                            if station_type in ("table_placed", "furnace_placed") and p_step < step.step_idx:
+                                dist = float(np.linalg.norm(step.displacement - p_pos))
+                                if dist <= 1.5:
+                                    catalyst_needed = station_type
+                                    break
+                    elif (
+                        episodic_store.workstation_placed_step is not None
+                        and episodic_store.workstation_placed_step < step.step_idx
+                    ):
+                        dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
+                        if dist <= 1.5:
+                            catalyst_needed = "table_placed"
 
                 # If achievement is collecting a resource, ensure it's not marked as consumed
                 if ach.startswith("collect_"):
