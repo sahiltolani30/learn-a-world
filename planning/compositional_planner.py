@@ -262,13 +262,23 @@ class CompositionalCausalPlanner:
             chain_value, total_cost = self._chain_stats(chain, target)
             score = chain_value / (1.0 + self.chain_cost_penalty * total_cost) + self._ucb_bonus(target)
             if best is None or score > best["score"]:
-                k_tgt = torch.tensor(target.precondition_key, dtype=torch.float32, device=self.device)
-                sim_tgt = float(torch.dot(z_norm, k_tgt).item())
-                # READY gate: visual cue present, or the card's own successes had varied
-                # visuals (dispersion low -> the cue is empirically uninformative for it).
-                ready = sim_tgt >= self.sim_threshold or float(target.visual_dispersion) < 0.70
+                first = chain[0]
+                active_card = first["card"]
+                k_active = torch.tensor(active_card.precondition_key, dtype=torch.float32, device=self.device)
+                sim_active = float(torch.dot(z_norm, k_active).item())
+                # Active link ready gate:
+                # 1. Active step's cue is visible (sim >= sim_threshold), OR
+                # 2. Active step is visually invariant (dispersion < 0.70), OR
+                # 3. First step is an intermediate producer/enabler that initiates search/harvesting
+                ready = (
+                    sim_active >= self.sim_threshold
+                    or float(active_card.visual_dispersion) < 0.70
+                    or (first["card_id"] != target.prototype_id)
+                )
                 if not ready:
                     continue
+                k_tgt = torch.tensor(target.precondition_key, dtype=torch.float32, device=self.device)
+                sim_tgt = float(torch.dot(z_norm, k_tgt).item())
                 best = {
                     "score": score,
                     "status": "READY_TO_EXECUTE",
