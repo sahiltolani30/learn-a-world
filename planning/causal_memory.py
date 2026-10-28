@@ -160,16 +160,20 @@ def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return float(np.dot(va, vb) / (na * nb))
 
 
-def _mean_pairwise_cosine(vecs: Sequence[Sequence[float]]) -> float:
+def _mean_pairwise_cosine(vecs: Sequence[Sequence[float]], max_sample: int = 128) -> float:
     """Mean pairwise intra-cluster cosine; 1.0 for single-member clusters."""
     if len(vecs) <= 1:
         return 1.0
-    norms = [np.asarray(v, dtype=np.float64) for v in vecs]
-    sims = []
-    for i in range(len(norms)):
-        for j in range(i + 1, len(norms)):
-            sims.append(_cosine(norms[i], norms[j]))
-    return float(np.mean(sims)) if sims else 1.0
+    V = torch.tensor(vecs, dtype=torch.float32)
+    if len(V) > max_sample:
+        # Subsample for fast dispersion estimation on large clusters
+        idx = torch.linspace(0, len(V) - 1, steps=max_sample).long()
+        V = V[idx]
+    V = torch.nn.functional.normalize(V, p=2, dim=-1)
+    gram = torch.mm(V, V.t())
+    triu_indices = torch.triu_indices(len(V), len(V), offset=1)
+    sims = gram[triu_indices[0], triu_indices[1]]
+    return float(sims.mean().item()) if len(sims) > 0 else 1.0
 
 
 def _greedy_cosine_subclusters(latents: Sequence[Sequence[float]], threshold: float) -> List[List[int]]:
@@ -177,18 +181,27 @@ def _greedy_cosine_subclusters(latents: Sequence[Sequence[float]], threshold: fl
 
     Returns lists of indices into `latents`, in first-appearance order.
     """
-    norms = [np.asarray(v, dtype=np.float64) for v in latents]
+    if not latents:
+        return []
+    Z = torch.tensor(latents, dtype=torch.float32)
+    Z = torch.nn.functional.normalize(Z, p=2, dim=-1)
+    N = Z.shape[0]
     clusters: List[List[int]] = []
-    for idx in range(len(norms)):
-        placed = False
-        for cluster in clusters:
-            seed = norms[cluster[0]]
-            if _cosine(norms[idx], seed) >= threshold:
-                cluster.append(idx)
-                placed = True
-                break
-        if not placed:
-            clusters.append([idx])
+    seeds: List[torch.Tensor] = []
+    for i in range(N):
+        zi = Z[i]
+        if not seeds:
+            clusters.append([i])
+            seeds.append(zi)
+            continue
+        S = torch.stack(seeds, dim=0)  # [K, 128]
+        sims = torch.mv(S, zi)
+        max_val, max_idx = sims.max(dim=0)
+        if max_val.item() >= threshold:
+            clusters[max_idx.item()].append(i)
+        else:
+            clusters.append([i])
+            seeds.append(zi)
     return clusters
 
 
@@ -629,6 +642,7 @@ class RelationHypothesisBank:
         self._merge_unlock_ledger_from_evidence(entries)
 
         written = 0
+        print(f"-> Consolidating evidence into causal cards across {NUM_ACTIONS} actions...", flush=True)
         for act in range(NUM_ACTIONS):
             ev_list = [e for e in entries if e.action == act]
             if not ev_list:
@@ -669,7 +683,13 @@ class RelationHypothesisBank:
 
             near_miss_latents = [nm.obs_latent for nm in near_misses]
             nm_states = [nm.grounded_state for nm in near_misses]
+            if near_miss_latents:
+                nm_tensor = torch.as_tensor(near_miss_latents, dtype=torch.float32)
+                nm_tensor = torch.nn.functional.normalize(nm_tensor, p=2, dim=-1)
+            else:
+                nm_tensor = torch.empty((0, 128), dtype=torch.float32)
 
+            action_written = 0
             for (a, edim), members in groups.items():
                 latents = [m.obs_latent for m in members]
                 subclusters = _greedy_cosine_subclusters(latents, cos_sim_threshold)
@@ -687,11 +707,16 @@ class RelationHypothesisBank:
                         near_miss_latents=near_miss_latents,
                         nm_states=nm_states,
                         cos_sim_threshold=cos_sim_threshold,
+                        nm_tensor=nm_tensor,
                     )
                     self.prototypes[proto_id] = proto
                     self._member_latents[proto_id] = member_latents
                     written += 1
+                    action_written += 1
 
+            print(f"   [Action {act:2d}/17] {len(successes)} successes, {len(near_misses)} near-misses -> {action_written} card(s) created", flush=True)
+
+        print(f"-> Building causal graph edges...", flush=True)
         self.refresh_edges()
         return written
 
@@ -705,6 +730,7 @@ class RelationHypothesisBank:
         near_miss_latents: List[List[float]],
         nm_states: List[List[float]],
         cos_sim_threshold: float,
+        nm_tensor: Optional[torch.Tensor] = None,
     ) -> Tuple[TransitionPrototype, List[List[float]]]:
         """Finalizes one card from a sub-cluster of successes (+ matched near-misses)."""
         member_latents = [list(m.obs_latent) for m in cluster]
@@ -716,12 +742,26 @@ class RelationHypothesisBank:
         dispersion = _mean_pairwise_cosine(member_latents)
 
         # Matched near-misses: cos(z_nm, ANY MEMBER) >= threshold (member rule,
-        # not the bare centroid).
+        # not the bare centroid). Vectorized with PyTorch matrix multiplication.
         matched_nm: List[int] = []
-        for j, z_nm in enumerate(near_miss_latents):
-            sim = max((_cosine(z_nm, m) for m in member_latents), default=0.0)
-            if sim >= cos_sim_threshold:
-                matched_nm.append(j)
+        if nm_tensor is not None and len(nm_tensor) > 0 and len(member_latents) > 0:
+            mem_tensor = torch.as_tensor(member_latents, dtype=torch.float32)
+            mem_tensor = torch.nn.functional.normalize(mem_tensor, p=2, dim=-1)
+            M = nm_tensor.shape[0]
+            chunk_size = 4096
+            matched_indices: List[int] = []
+            for c_start in range(0, M, chunk_size):
+                c_end = min(c_start + chunk_size, M)
+                sims = torch.mm(nm_tensor[c_start:c_end], mem_tensor.t())
+                max_sims = sims.max(dim=1).values
+                hits = (max_sims >= cos_sim_threshold).nonzero().flatten() + c_start
+                matched_indices.extend(hits.tolist())
+            matched_nm = matched_indices
+        elif len(near_miss_latents) > 0 and len(member_latents) > 0:
+            for j, z_nm in enumerate(near_miss_latents):
+                sim = max((_cosine(z_nm, m) for m in member_latents), default=0.0)
+                if sim >= cos_sim_threshold:
+                    matched_nm.append(j)
 
         n_succ = float(len(cluster))
         n_fail = float(len(matched_nm))
@@ -926,30 +966,44 @@ class RelationHypothesisBank:
         for _ep, _t, _mask, unlock in flat_steps:
             events.update(unlock)
 
+        # Pre-index unlock occurrences per event and condition step counts
+        unlock_steps_by_event: Dict[int, List[Tuple[int, int, FrozenSet[int]]]] = {}
+        for ep, t, mask, unlock in flat_steps:
+            for u in unlock:
+                unlock_steps_by_event.setdefault(u, []).append((ep, t, mask))
+
+        cond_count_by_event: Dict[int, int] = {}
+        for _ep, _t, mask, _unlock in flat_steps:
+            for d in mask:
+                cond_count_by_event[d] = cond_count_by_event.get(d, 0) + 1
+
         candidates: List[Dict[str, Any]] = []
         for i in sorted(events):
-            cond_steps = [(ep, t, mask, unlock) for (ep, t, mask, unlock) in flat_steps if i in mask]
-            if not cond_steps:
+            cond_count = cond_count_by_event.get(i, 0)
+            if cond_count == 0:
                 continue
             for j in sorted(events):
                 if i == j:
                     continue
-                co_steps = [s for s in cond_steps if j in s[3]]
-                if not co_steps:
+                unlock_steps = unlock_steps_by_event.get(j, [])
+                if not unlock_steps:
                     continue
-                p_base = sum(1 for (_ep, _t, _mask, unlock) in flat_steps if j in unlock) / total_steps
+                p_base = len(unlock_steps) / total_steps
                 if p_base <= 0.0:
                     continue
-                p_cond = len(co_steps) / len(cond_steps)
+                co_steps = [(ep, t) for (ep, t, mask) in unlock_steps if i in mask]
+                co_count = len(co_steps)
+                if co_count == 0:
+                    continue
+                p_cond = co_count / cond_count
                 lift = p_cond / p_base
                 dts = []
                 first_maps = self.episode_first_unlock
-                for (ep, t, _mask, _unlock) in co_steps:
+                for (ep, t) in co_steps:
                     fi = first_maps.get(ep, {}).get(i)
                     if fi is not None:
                         dts.append(t - fi)
                 mean_dt = float(np.mean(dts)) if dts else 0.0
-                co_count = len(co_steps)
                 if lift >= ENABLING_MIN_LIFT and co_count >= ENABLING_MIN_SUPPORT and mean_dt > 0.0:
                     candidates.append({
                         "src_event": i,

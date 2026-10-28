@@ -217,6 +217,8 @@ def consolidate_phase2_memory(
                     # Commit full episode to evidence store
                     store.commit_episode()
                     episodes_ingested += 1
+                    if episodes_ingested % 50 == 0 or episodes_ingested == max_episodes:
+                        print(f"   [Ingesting] Episode {episodes_ingested}/{max_episodes} ({transitions_ingested} transitions)...", flush=True)
 
             except Exception as e:
                 continue
