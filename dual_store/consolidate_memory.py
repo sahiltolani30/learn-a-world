@@ -54,6 +54,9 @@ def consolidate_dual_store_memory(
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     drive_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if device == "cuda" and not torch.cuda.is_available():
+        print("-> [Notice] CUDA requested but not available; automatically falling back to CPU.")
+        device = "cpu"
     dev = torch.device(device)
     print("=" * 80)
     print("       DUAL-STORE: OFFLINE GROUNDED MEMORY CONSOLIDATION")
@@ -359,6 +362,7 @@ if __name__ == "__main__":
     parser.add_argument("--diagnostic_path", type=str, default="results/diagnostics/dual_store_memory_consolidation.json")
     parser.add_argument("--max_episodes", type=int, default=300)
     parser.add_argument("--min_cluster_size", type=int, default=2)
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--drive_dir", type=str, default=None)
     args = parser.parse_args()
 
@@ -371,5 +375,6 @@ if __name__ == "__main__":
         diagnostic_path=args.diagnostic_path,
         max_episodes=args.max_episodes,
         min_cluster_size=args.min_cluster_size,
+        device=args.device,
         drive_dir=args.drive_dir,
     )
