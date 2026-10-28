@@ -6,8 +6,8 @@
 **Scope:** Chronological retrospective on the 3.5% Crafter glass ceiling, forensic analysis of 15 failed attempts across multi-day debugging, root cause mechanisms, the stabilized Phase 2 fixes, and the deep unsolved blockers that still remain unsolved.
 
 **Primary Authors & Multi-Agent Attribution:**
-- **`agy 1 flash`**: Core autopsy synthesis, initial 8 root cause investigations, Phase 2 champion milestone verification (3.14% Crafter score, 4% pickaxe/sword, 183.2 steps survival), Section 5 architectural comparison table, Section 6 engineering iron rules.
-- **`Collaborating Agent (Commit 4e2900c)`**: Expansion of attempts 9–15 (N7 quarantine, 75k vitals DAG, dual-store affordance mechanisms) and detailed 5 deep unsolved blockers (Section 4).
+- **`agy 1 flash`**: Core autopsy synthesis, initial 8 root cause investigations, Phase 2 champion milestone verification (3.14% Crafter score, 4% pickaxe/sword, 183.2 steps survival), Section 5 architectural comparison table, Section 6 engineering iron rules (Rules 1 & 3).
+- **`agy 2 flash`**: Expansion of Attempts 9–15 (N7 quarantine, $H=15$ compounding error, air-swinging bonus, 75k vitals DAG, direct attribution flaw, landmark cheats, affordance amnesia), Section 3 stabilized Phase 2 dual-store mechanisms, Section 4 detailed forensic analysis of the 5 deep unsolved blockers, and Section 6 engineering iron rules (Rules 2, 4, 5, 6, 7).
 
 ---
 
@@ -39,21 +39,21 @@ Below is the exhaustive, transparent record of the 15 major approaches attempted
 ```
                       THE 15 FAILURE PATHS IN RETROSPECT
   ┌────────────────────────────────────────────────────────────────────────┐
-  │ 1. Offline Clustering     --> min_cluster_size=2 erased all tool cards │
-  │ 2. Q-Critic Calibration   --> Critic variance collapsed to 0.015 (flat)│
-  │ 3. CEM MPC (H=10)         --> 5.2x latent error compounding at step 10 │
-  │ 4. ||z_t - z_0|| Curiosity--> "Grassland Paradox" (fled from tables)   │
-  │ 5. Online Hypotheses      --> needs=[] caused action 11 in grass       │
-  │ 6. Object Permanence      --> unlocked_event omitted; table vanished   │
-  │ 7. Encoder Fine-Tuning    --> Latent drift (7.05) broke all heads      │
-  │ 8. Target Chain Gate      --> Planner rejected intermediate wood links │
-  │ 9. N7 Quarantine          --> count_success=False froze cards at 0.0   │
-  │ 10. Horizon Inflation     --> H=15 latent MSE exploded past 2.26       │
-  │ 11. Air-Swinging Bonus    --> Linear harvest bonus caused grass swing  │
-  │ 12. 75k Vitals Edges      --> Survival correlated with crafting in DAG │
-  │ 13. Direct Attribution    --> Blaming target without inventory guards  │
-  │ 14. Landmark Cheats       --> 2D dead-reckoning drifted within 4 steps │
-  │ 15. Affordance Amnesia    --> m_bin[20]==1 assumed table was at feet   │
+  │ 1. Offline Clustering     --> min_cluster_size=2 erased all tool cards │ [agy 1 flash]
+  │ 2. Q-Critic Calibration   --> Critic variance collapsed to 0.015 (flat)│ [agy 1 flash]
+  │ 3. CEM MPC (H=10)         --> 5.2x latent error compounding at step 10 │ [agy 1 flash]
+  │ 4. ||z_t - z_0|| Curiosity--> "Grassland Paradox" (fled from tables)   │ [agy 1 flash]
+  │ 5. Online Hypotheses      --> needs=[] caused action 11 in grass       │ [agy 1 flash]
+  │ 6. Object Permanence      --> unlocked_event omitted; table vanished   │ [agy 1 flash]
+  │ 7. Encoder Fine-Tuning    --> Latent drift (7.05) broke all heads      │ [agy 1 flash]
+  │ 8. Target Chain Gate      --> Planner rejected intermediate wood links │ [agy 1 flash]
+  │ 9. N7 Quarantine          --> count_success=False froze cards at 0.0   │ [agy 2 flash]
+  │ 10. Horizon Inflation     --> H=15 latent MSE exploded past 2.26       │ [agy 2 flash]
+  │ 11. Air-Swinging Bonus    --> Linear harvest bonus caused grass swing  │ [agy 2 flash]
+  │ 12. 75k Vitals Edges      --> Survival correlated with crafting in DAG │ [agy 2 flash]
+  │ 13. Direct Attribution    --> Blaming target without inventory guards  │ [agy 2 flash]
+  │ 14. Landmark Cheats       --> 2D dead-reckoning drifted within 4 steps │ [agy 2 flash]
+  │ 15. Affordance Amnesia    --> m_bin[20]==1 assumed table was at feet   │ [agy 2 flash]
   └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -147,37 +147,37 @@ Below is the exhaustive, transparent record of the 15 major approaches attempted
 
 ---
 
-### Attempt 9: The N7 Quarantine Catch-22 `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 9: The N7 Quarantine Catch-22 (Rare Discovery Frozen at Zero Success) `[Expanded by: agy 2 flash]`
 * **What We Tried:** Quarantined event-head fallback cards so that uncalibrated model predictions wouldn't flood the bank with spurious cards.
-* **Why It Failed:** The rule stated: `if fired in fallback_unlocked: count_success = False`. This meant any card created via a fallback achievement unlock could **never increment its `success_count`**. Its Wilson lower bound remained permanently frozen at 0.0. The card could never graduate to `"confirmed"` status, leaving all rare tool discoveries in an un-promotable limbo.
+* **Why It Failed:** The rule stated: `if fired in fallback_unlocked: count_success = False`. In `dual_store/causal_memory.py`, any card created via a fallback achievement unlock could **never increment its `success_count`**. Its Wilson lower bound remained permanently frozen at 0.0. The card could never graduate to `"confirmed"` status, leaving all rare tool discoveries in an un-promotable limbo, deleted by the first near-miss.
 
 ---
 
-### Attempt 10: Horizon Inflation to $H=15$ in Recurrent CEM `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 10: Horizon Inflation to $H=15$ in Recurrent CEM `[Expanded by: agy 2 flash]`
 * **What We Tried:** Extended CEM MPC horizon from $H=10$ to $H=15$ to see further down the crafting dependency tree.
-* **Why It Failed:** At $H=15$, latent prediction MSE exploded to **2.2640**. The planner spent all its compute optimizing action sequences against completely hallucinatory latent trajectories, causing the agent to freeze in place or oscillate back and forth between two random tiles.
+* **Why It Failed:** At $H=15$, latent prediction MSE exploded to **2.2640** (exceeding the normalized latent sphere diameter). The planner spent all its compute optimizing action sequences against completely hallucinatory latent trajectories, causing the agent to freeze in place or oscillate back and forth between two random tiles.
 
 ---
 
-### Attempt 11: Linear Harvest Bonuses and Air-Swinging `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 11: Linear Harvest Bonuses and Air-Swinging `[Expanded by: agy 2 flash]`
 * **What We Tried:** Added an explicit harvest bonus reward for firing primitive interaction actions near potential resources: $r_{\text{harvest}} = \beta \cdot \mathbf{1}_{\{a \in \text{interact}\}}$.
 * **Why It Failed:** Because the bonus was linear and unconditional on physical contact, the agent discovered it could maximize reward by simply standing in open grass swinging its fists in the air (Action 5) without ever touching a tree or cow.
 
 ---
 
-### Attempt 12: The 75,296 Spurious Vitals DAG Edges `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 12: The 75,296 Spurious Vitals DAG Edges `[Expanded by: agy 2 flash]`
 * **What We Tried:** Built the causal dependency graph (DAG) across all 16 state dimensions, including inventory resources, tools, and vitals (health, food, drink, energy).
 * **Why It Failed:** In Crafter, an agent that crafts tools also happens to survive longer and eat/drink more. The correlation analysis created **75,296 spurious edges** linking vitals to tool recipes (e.g., concluding that crafting a pickaxe requires 80% thirst level and 90% energy). The planner became paralyzed because it believed it had to sleep and drink before it could touch wood.
 
 ---
 
-### Attempt 13: Direct Subgoal Blame without Inventory Precondition Guards `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
-* **What We Tried:** When an action produced nothing, hold the active subgoal target directly accountable and dock its failure count.
-* **Why It Failed:** If the agent ran out of wood while attempting a table craft, it was still executing Action 10. The system docked failures directly to `card_a10_e18` (place table), failing to recognize that the failure was due to zero inventory, not a bad recipe card! Valid crafting cards were killed in 2 steps.
+### Attempt 13: Direct Subgoal Blame without Inventory Precondition Guards `[Expanded by: agy 2 flash]`
+* **What We Tried:** When an action produced nothing, hold the active subgoal target directly accountable and dock its failure count (`active_subgoal_target = active_target`).
+* **Why It Failed:** If the agent ran out of wood while attempting a table craft, it was still executing Action 10. The system docked failures directly to `card_a10_e18` (place table), failing to recognize that the failure was due to zero inventory, not a bad recipe card! Valid crafting cards were killed in 2 steps, causing pickaxe rate to crash back to 4.0%.
 
 ---
 
-### Attempt 14: 2D Spatial Landmark Tracking via Dead-Reckoning Cheats `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 14: 2D Spatial Landmark Tracking via Dead-Reckoning Cheats `[Expanded by: agy 2 flash]`
 * **What We Tried:** Storing table locations by accumulating 2D coordinate offsets (`ACTION_DELTAS = {1: (0, -1), 2: (0, 1), 3: (-1, 0), 4: (1, 0)}`) and string-matching `"place_"` event names to navigate back to crafting tables.
 * **Why It Failed:**
   1. **Strict Protocol Violation:** It violated the zero-hardcoding / zero-cheats rule by injecting privileged coordinate systems and string matches.
@@ -186,7 +186,7 @@ Below is the exhaustive, transparent record of the 15 major approaches attempted
 
 ---
 
-### Attempt 15: Workstation Affordance Amnesia (The Binary Enabler Trap) `[Expanded by: Collaborating Agent (Commit 4e2900c)]`
+### Attempt 15: Workstation Affordance Amnesia (The Binary Enabler Trap) `[Expanded by: agy 2 flash]`
 * **What We Tried:** Tracking whether a crafting table was available by checking the global achievement unlock vector `m_bin[20] == 1.0` in `compositional_planner.py`.
 * **Why It Failed:**
   In Crafter, placing a table permanently sets `m_bin[20] = 1.0` for the entire remainder of the episode. When the agent placed a table, consumed its wood, and walked 10 tiles away to harvest more wood, the planner queried `_enabler_unsatisfied(m_bin)`. Because `m_bin[20]` was permanently `1.0`, the planner concluded the table affordance was fully satisfied right now, in the forest!
@@ -194,32 +194,32 @@ Below is the exhaustive, transparent record of the 15 major approaches attempted
 
 ---
 
-## 3. The Breakthrough: What Finally Succeeded (Phase 2 Stabilized) `[Joint Collaboration: agy 1 flash & Collaborating Agent]`
+## 3. The Breakthrough: What Finally Succeeded (Phase 2 Stabilized) `[Joint Collaboration: agy 1 flash & agy 2 flash]`
 
 The breakthrough was achieved by replacing heuristic hacks with principled, mathematically rigorous, cheat-free visual mechanisms in the `dual_store/` module and main planning pipeline:
 
-1. **Hypothesis Causal Needs Preservation:**
+1. **Hypothesis Causal Needs Preservation `[agy 2 flash]`:**
    - When a new card is discovered, observed physical consumption ($\Delta x \le -0.25$) is preserved directly into `p.needs` for both confirmed and hypothesis cards.
    - The planner never deduces that tool crafts require zero resources.
-2. **N7 Fallback Breakthrough Evidence Weighting:**
+2. **N7 Fallback Breakthrough Evidence Weighting `[agy 2 flash]`:**
    - Fallback discoveries ($r \ge 0.9$) are credited with fractional empirical evidence ($w = 0.5$).
    - This prevents the N7 Quarantine catch-22 while requiring consistent repetition before full promotion, permanently ending hypothesis starvation.
-3. **Causal Precondition Guard on Near-Miss Denial:**
+3. **Causal Precondition Guard on Near-Miss Denial `[agy 2 flash]`:**
    - A near-miss penalty is ONLY charged if the agent actually possessed all required ingredients ($x_t \ge \text{needs}$).
    - Swings in empty grass with 0 wood are never charged to the pickaxe card.
-4. **Vitals Dimension Isolation ($0 \le d < 12$):**
+4. **Vitals Dimension Isolation ($0 \le d < 12$) `[agy 2 flash]`:**
    - Restricted causal DAG edge discovery strictly to item dimensions.
    - Eliminated all 75,296 spurious survival edges, restoring a pristine, linear crafting DAG.
-5. **Calibrated Bayesian Falsification Pruning:**
+5. **Calibrated Bayesian Falsification Pruning `[agy 2 flash]`:**
    - Pruning threshold calibrated to: $n_{\text{fail}} \ge 3$ with $n_{\text{succ}} == 0$, or $n_{\text{fail}} \ge 5$ with Wilson score upper bound $< 0.15$.
    - Preserves valid discoveries against stochastic near-misses.
-6. **Smooth Sigmoidal Affordance Gating:**
+6. **Smooth Sigmoidal Affordance Gating `[agy 2 flash]`:**
    - Replaced linear action bonuses with a continuous affordance gate:
      $$\mathcal{M}_{\text{exec}} = \sigma\left(\frac{\text{sim}_{\text{cue}} - 0.70}{0.05}\right)$$
    - Completely eliminates air-chopping and premature crafting.
-7. **Two-Stage Subgoal State Machine:**
+7. **Two-Stage Subgoal State Machine `[agy 2 flash]`:**
    - Differentiates `"READY_TO_EXECUTE"` (visually aligned with workstation) from `"APPROACHING_AFFORDANCE"` (materials ready, navigating toward visual key).
-8. **Active-Link Chain Initiation:**
+8. **Active-Link Chain Initiation `[agy 1 flash]`:**
    - In `compositional_planner.py`, evaluate readiness on the immediate sub-action (`collect_wood`), allowing multi-step backward chains to initiate.
 
 ### The Verified Results (Seeds 2050–2099, 50 Episodes):
@@ -233,24 +233,24 @@ The breakthrough was achieved by replacing heuristic hacks with principled, math
 
 ---
 
-## 4. The Deep Unsolved Blockers Ahead: What We Have Struggled With for Days and Cannot Solve `[Detailed by: Collaborating Agent & agy 1 flash]`
+## 4. The Deep Unsolved Blockers Ahead: What We Have Struggled With for Days and Cannot Solve `[Detailed by: agy 2 flash & agy 1 flash]`
 
 While wooden tool crafting is now unlocked and functional, progressing beyond wooden tools to **Stone Mining** and **Iron** remains blocked by five fundamental, interlocking bottlenecks:
 
 ```
                        THE 5 UNSOLVED DEEP BLOCKERS
   ┌────────────────────────────────────────────────────────────────────────┐
-  │ 1. Post-Table Return Problem --> Viewport 9x7; table slips off-screen  │
-  │ 2. Nightfall Mortality Wall  --> 93.3% die at night (lifespan ~175)    │
-  │ 3. Stone Visual Affordance   --> 0.0% stone mined; stone visually gray │
-  │ 4. Single-Step JEPA Horizon  --> Latent compounding error limits H<=10│
-  │ 5. Catalyst vs Consumable    --> Workstations not consumed from inv.   │
+  │ 1. Post-Table Return Problem --> Viewport 9x7; table slips off-screen  │ [agy 2 flash]
+  │ 2. Nightfall Mortality Wall  --> 93.3% die at night (lifespan ~175)    │ [agy 2 flash]
+  │ 3. Stone Visual Affordance   --> 0.0% stone mined; stone visually gray │ [agy 2 flash]
+  │ 4. Single-Step JEPA Horizon  --> Latent compounding error limits H<=10│ [agy 2 flash]
+  │ 5. Catalyst vs Consumable    --> Workstations not consumed from inv.   │ [agy 2 flash]
   └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Blocker 1: The Post-Table Return Problem (87.5% Drop-Off: Table 32% $\to$ Pickaxe 4%)
+### Blocker 1: The Post-Table Return Problem (87.5% Drop-Off: Table 32% $\to$ Pickaxe 4%) `[Authored by: agy 2 flash]`
 * **Physical Mechanism:**
   - In Crafter, placing a table requires 2 wood. The agent spawns, chops 2 wood, and places the table.
   - Its wood inventory drops to **0**.
@@ -265,7 +265,7 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-### Blocker 2: The Nightfall Monster Mortality Wall (93.3% Deaths, Lifespan Capped at ~175 Steps)
+### Blocker 2: The Nightfall Monster Mortality Wall (93.3% Deaths, Lifespan Capped at ~175 Steps) `[Authored by: agy 2 flash]`
 * **Physical Mechanism:**
   - Crafter operates on an invariant day/night cycle: Day lasts 150 steps; Night lasts from step 150 to step 300.
   - At step 150, daylight dims into pitch darkness. Hostile monsters (zombies and skeletons) spawn around the agent.
@@ -281,7 +281,7 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-### Blocker 3: The Stone Tile Visual Affordance Barrier (0.0% Stone Mined Across All Runs)
+### Blocker 3: The Stone Tile Visual Affordance Barrier (0.0% Stone Mined Across All Runs) `[Authored by: agy 2 flash]`
 * **Physical Mechanism:**
   - Stone blocks in Crafter spawn in rocky mountain biomes and caves, typically located 15–25 tiles away from the grassy spawn location.
   - In raw $64 \times 64$ frames, stone blocks visually blend with impassable gray mountain walls, rock barriers, and dark cave entrances.
@@ -294,7 +294,7 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-### Blocker 4: The Latent Compounding Divergence Wall in Single-Step JEPA
+### Blocker 4: The Latent Compounding Divergence Wall in Single-Step JEPA `[Authored by: agy 2 flash]`
 * **Mathematical Mechanism:**
   - Single-step autoregressive dynamics rollouts $\hat{z}_{t+1} = T(\hat{z}_t, a_t)$ compound prediction errors exponentially:
     $$\mathbb{E}[\|\hat{z}_H - z_H\|^2] \propto \mathcal{O}(\gamma^H)$$
@@ -310,7 +310,7 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-### Blocker 5: The Environmental Catalyst vs Consumed Item Duality
+### Blocker 5: The Environmental Catalyst vs Consumed Item Duality `[Authored by: agy 2 flash]`
 * **The Causal Inference Challenge:**
   - Causal transition memory discovers recipes by tracking negative inventory deltas ($\Delta x \le -0.25$).
   - For wood: harvesting adds wood ($\Delta \text{wood} = +1$), placing table consumes wood ($\Delta \text{wood} = -2$). Causal transition memory cleanly infers that table requires wood.
@@ -335,12 +335,12 @@ While wooden tool crafting is now unlocked and functional, progressing beyond wo
 
 ---
 
-## 6. Key Takeaways & Iron Rules for Future Engineering `[Authored by: agy 1 flash]`
+## 6. Key Takeaways & Iron Rules for Future Engineering `[Authored by: agy 1 flash & agy 2 flash]`
 
-1. **Never Diffuse Negative Feedback Across Shared Primitive Actions**: If an agent fails while attempting a specific subgoal, charge the failure directly to that subgoal—BUT ONLY if preconditions are met.
-2. **Always Enforce Causal Precondition Guards on Failure Attribution**: Never penalize a prototype card for failing if the agent did not have the required inventory items. Firing an action in grass with 0 materials is user error, not card invalidation.
-3. **Never Check Target Readiness on Multi-Step Chains**: In backward planning, verify readiness on the *immediate active link* (harvesting input), never on the final destination station.
-4. **Never Inflate CEM Horizon Beyond Model Calibration ($H \le 10$)**: Do not push CEM to $H=15$ on a dynamics model trained on $H \le 10$. Compounding error creates pure hallucination.
-5. **Never Use Unconstrained Linear Action Bonuses**: Replace linear action incentives with continuous affordance gates ($\mathcal{M}_{\text{exec}} = \sigma((\text{sim} - 0.70)/0.05)$) to eliminate air-swinging.
-6. **Strictly Separate Inventory Items from Survival Vitals in Causal Discovery**: Restrict recipe discovery to item dimensions ($0 \le d < 12$) to prevent survival correlations from polluting the crafting DAG with tens of thousands of spurious edges.
-7. **The Inevitability of Phase 3 / Options**: Single-step CEM cannot solve the Post-Table Return Problem (87.5% drop-off) or the Nightfall Mortality Wall (93.3% deaths). Bridging from wooden tools to stone and iron requires temporal macro-actions, topological spatial anchors, and reactive survival policies.
+1. **Never Diffuse Negative Feedback Across Shared Primitive Actions**: If an agent fails while attempting a specific subgoal, charge the failure directly to that subgoal—BUT ONLY if preconditions are met. `[Authored by: agy 1 flash]`
+2. **Always Enforce Causal Precondition Guards on Failure Attribution**: Never penalize a prototype card for failing if the agent did not have the required inventory items. Firing an action in grass with 0 materials is user error, not card invalidation. `[Authored by: agy 2 flash]`
+3. **Never Check Target Readiness on Multi-Step Chains**: In backward planning, verify readiness on the *immediate active link* (harvesting input), never on the final destination station. `[Authored by: agy 1 flash]`
+4. **Never Inflate CEM Horizon Beyond Model Calibration ($H \le 10$)**: Do not push CEM to $H=15$ on a dynamics model trained on $H \le 10$. Compounding error creates pure hallucination. `[Authored by: agy 2 flash]`
+5. **Never Use Unconstrained Linear Action Bonuses**: Replace linear action incentives with continuous affordance gates ($\mathcal{M}_{\text{exec}} = \sigma((\text{sim} - 0.70)/0.05)$) to eliminate air-swinging. `[Authored by: agy 2 flash]`
+6. **Strictly Separate Inventory Items from Survival Vitals in Causal Discovery**: Restrict recipe discovery to item dimensions ($0 \le d < 12$) to prevent survival correlations from polluting the crafting DAG with tens of thousands of spurious edges. `[Authored by: agy 2 flash]`
+7. **The Inevitability of Phase 3 / Options**: Single-step CEM cannot solve the Post-Table Return Problem (87.5% drop-off) or the Nightfall Mortality Wall (93.3% deaths). Bridging from wooden tools to stone and iron requires temporal macro-actions, topological spatial anchors, and reactive survival policies. `[Authored by: agy 2 flash]`
