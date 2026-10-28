@@ -58,6 +58,7 @@ from godfather_jepa.memory import (
 )
 from godfather_jepa.planning.causal_hypergraph import CausalHypergraph
 from godfather_jepa.planning.homeostatic_arbiter import HomeostaticArbiter
+from godfather_jepa.planning.latent_mpc_planner import LatentMPCPlanner
 from godfather_jepa.training.checkpoint_adapter import audit_and_adapt_checkpoint
 from godfather_jepa.training.latent_ac import compute_lambda_returns
 from godfather_jepa.training.replay_buffer import MilestoneReplayBuffer
@@ -94,6 +95,7 @@ class GodfatherJEPAPipeline:
         self.spatial_gru = SpatialConvGRU(channels=64).to(device)
         self.vector_belief = VectorBeliefCore(latent_dim=latent_dim).to(device)
         self.ensemble = EpistemicPredictorEnsemble(k_heads=5, latent_dim=latent_dim).to(device)
+        self.predictor = self.ensemble.heads[0]
         self.continuation_head = SurvivalContinuationHead(state_dim=latent_dim * 2).to(device)
         self.reward_head = DenseRewardHead(state_dim=latent_dim * 2).to(device)
         self.odometry_head = VisualOdometryHead(latent_dim=latent_dim).to(device)
@@ -137,6 +139,23 @@ class GodfatherJEPAPipeline:
         # 5. Buffer
         self.buffer = MilestoneReplayBuffer(capacity=2000, priority_ratio=0.10)
 
+        # 6. Latent MPC Trajectory Planner
+        self.mpc_planner = LatentMPCPlanner(
+            predictor=self.predictor,
+            reward_head=self.reward_head,
+            continuation_head=self.continuation_head,
+            critic=self.critic,
+            symlog_coder=self.symlog_coder,
+            spatial_gru=self.spatial_gru,
+            vector_belief=self.vector_belief,
+            causal_hypergraph=self.causal_hypergraph,
+            horizon=10,
+            num_candidates=64,
+            cem_iterations=2,
+            gamma=self.gamma,
+            device=device,
+        )
+
     def select_action(
         self,
         obs: np.ndarray,
@@ -172,6 +191,7 @@ class GodfatherJEPAPipeline:
         obs: np.ndarray,
         state: Optional[Dict[str, Any]] = None,
         deterministic: bool = False,
+        use_mpc: bool = True,
     ) -> Tuple[int, Dict[str, Any]]:
         """
         Stateful pixel-only action selection preserving:
@@ -238,27 +258,34 @@ class GodfatherJEPAPipeline:
             actor_action_t = self.actor.sample_action(composite, deterministic=deterministic)
             actor_action = int(actor_action_t.item())
 
-            # 4. Teleological target selection via CausalHypergraph
+            # 4. Teleological target selection & action determination
             target_goal = "make_wood_pickaxe" if inv.get("wood_pickaxe", 0) == 0 else "collect_stone"
-            subgoal, determined_action = self.causal_hypergraph.determine_subgoal(
-                target_goal=target_goal,
-                current_inventory=inv,
-                workstations_present=ws,
-            )
-
-            # Crafting subgoals require immediate assembly action
-            if subgoal in ("place_table", "make_wood_pickaxe", "make_wood_sword", "place_furnace"):
-                teleo_action = determined_action
+            if use_mpc:
+                teleo_action, mpc_debug = self.mpc_planner.plan(
+                    z_0=z,
+                    h_vector_0=h_vector,
+                    h_spatial_0=h_spatial,
+                    inventory=inv,
+                    workstations=ws,
+                    anchor_graph=anchor,
+                    target_goal=target_goal,
+                )
             else:
-                # Gathering subgoals (collect_wood, collect_stone) use actor navigation
-                # to locate and approach harvestable nodes, executing interaction (Action 5) when selected
-                teleo_action = actor_action if actor_action in (1, 2, 3, 4, 5) else determined_action
+                subgoal, determined_action = self.causal_hypergraph.determine_subgoal(
+                    target_goal=target_goal,
+                    current_inventory=inv,
+                    workstations_present=ws,
+                )
+                if subgoal in ("place_table", "make_wood_pickaxe", "make_wood_sword", "place_furnace"):
+                    teleo_action = determined_action
+                else:
+                    teleo_action = actor_action if actor_action in (1, 2, 3, 4, 5) else determined_action
 
-            # 5. Workstation navigation override if return needed
-            if "table_placed" in ws and inv.get("wood", 0) >= 1 and inv.get("wood_pickaxe", 0) == 0:
-                return_act = anchor.get_return_action("table")
-                if return_act is not None and return_act != 0:
-                    teleo_action = return_act
+                # Workstation navigation override if return needed
+                if "table_placed" in ws and inv.get("wood", 0) >= 1 and inv.get("wood_pickaxe", 0) == 0:
+                    return_act = anchor.get_return_action("table")
+                    if return_act is not None and return_act != 0:
+                        teleo_action = return_act
 
             # 6. Homeostatic arbitration (preemptive drinking reflex / danger)
             # Detect water adjacency from center-bottom visual patch (RGB blue channel dominance)
@@ -661,14 +688,14 @@ class GodfatherJEPAPipeline:
 
         return True
 
-    def evaluate(self, seeds: Optional[Sequence[int]] = None) -> Dict[str, Any]:
+    def evaluate(self, seeds: Optional[Sequence[int]] = None, use_mpc: bool = True) -> Dict[str, Any]:
         """
         Runs standardized benchmark evaluation with preserved recurrent state across steps.
         """
         runner = BenchmarkRunner(seeds=seeds)
 
         def stateful_policy(obs: np.ndarray, state: Optional[Dict[str, Any]] = None):
-            return self.select_action_stateful(obs, state=state, deterministic=True)
+            return self.select_action_stateful(obs, state=state, deterministic=True, use_mpc=use_mpc)
 
         return runner.run(stateful_policy)
 
@@ -676,6 +703,7 @@ class GodfatherJEPAPipeline:
 def main():
     parser = argparse.ArgumentParser(description="Godfather JEPA Training Runner")
     parser.add_argument("--episodes", type=int, default=50, help="Number of training episodes")
+    parser.add_argument("--updates-per-episode", type=int, default=5, help="Number of gradient update steps per episode")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
     parser.add_argument("--shard-dir", type=str, default=None, help="Directory containing sequence .npz shards to pre-populate buffer")
@@ -693,12 +721,13 @@ def main():
             loaded = pipeline.buffer.load_npz_shards([str(f) for f in shard_files], max_episodes=500)
             print(f"[Bootstrap] Successfully loaded {loaded} episodes into MilestoneReplayBuffer ({len(pipeline.buffer.milestone_indices)} milestones).")
 
-    print(f"=== Starting Godfather JEPA Training on {device} ===")
+    print(f"=== Starting Godfather JEPA Training on {device} (updates_per_episode={args.updates_per_episode}) ===")
     for ep in range(args.episodes):
         seed = generate_procedural_seed(rank=0, episode=ep, generation=0)
         res = pipeline.collect_episode(env_seed=seed, max_steps=250)
-        wm_stats = pipeline.train_world_model_step()
-        ac_stats = pipeline.train_actor_critic_step()
+        for _ in range(args.updates_per_episode):
+            wm_stats = pipeline.train_world_model_step()
+            ac_stats = pipeline.train_actor_critic_step()
 
         if (ep + 1) % 10 == 0:
             print(f"Episode {ep+1:03d} | Seed: {seed} | Steps: {res['steps']} | Reward: {res['reward']:.1f} | WM Loss: {wm_stats.get('wm_loss', 0.0):.4f}")
