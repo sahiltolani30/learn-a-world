@@ -107,7 +107,12 @@ class CompositionalCausalPlanner:
                 out.append((d, a))
         return out
 
-    def _enabler_unsatisfied(self, edge: RelationEdge, m_bin: np.ndarray) -> bool:
+    def _enabler_unsatisfied(
+        self,
+        edge: RelationEdge,
+        m_bin: np.ndarray,
+        z_norm: Optional[torch.Tensor] = None,
+    ) -> bool:
         """An enabling edge must be 'done' before its successor executes: the
         enabler card's event must already be locked in m_bin."""
         src = self.hypothesis_bank.prototypes.get(edge.src_id)
@@ -128,6 +133,7 @@ class CompositionalCausalPlanner:
         m_bin: np.ndarray,
         depth: int,
         visited: set,
+        z_norm: Optional[torch.Tensor] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """DFS: returns the ordered chain [{card, action, applications}] that makes
         `card` executable, or None if not groundable within the depth limit."""
@@ -141,12 +147,12 @@ class CompositionalCausalPlanner:
             self.hypothesis_bank.edges.get(card.prototype_id, []),
             key=lambda e: -float(e.lift),
         ):
-            if edge.kind != "enabling_lift" or not self._enabler_unsatisfied(edge, m_bin):
+            if edge.kind != "enabling_lift" or not self._enabler_unsatisfied(edge, m_bin, z_norm):
                 continue
             enabler = self.hypothesis_bank.prototypes.get(edge.src_id)
             if enabler is None:
                 continue
-            sub = self._resolve_chain(enabler, x_t, m_bin, depth + 1, visited)
+            sub = self._resolve_chain(enabler, x_t, m_bin, depth + 1, visited, z_norm)
             if sub is None:
                 return None  # enabler ungroundable -> the whole chain is
             prefix.extend(sub)
@@ -167,7 +173,7 @@ class CompositionalCausalPlanner:
             )
             chained = None
             for producer in producers:
-                sub = self._resolve_chain(producer, x_t, m_bin, depth + 1, visited)
+                sub = self._resolve_chain(producer, x_t, m_bin, depth + 1, visited, z_norm)
                 if sub is not None:
                     chained = sub
                     break
@@ -258,7 +264,7 @@ class CompositionalCausalPlanner:
 
         best: Optional[Dict[str, Any]] = None
         for target in eligible_targets[: self.top_k_targets]:
-            chain = self._resolve_chain(target, x_t, m_arr, 0, set())
+            chain = self._resolve_chain(target, x_t, m_arr, 0, set(), z_norm=z_norm)
             if chain is None:
                 continue
             chain_value, total_cost = self._chain_stats(chain, target)
@@ -269,22 +275,15 @@ class CompositionalCausalPlanner:
                 active_card = first["card"]
                 k_active = torch.tensor(active_card.precondition_key, dtype=torch.float32, device=self.device)
                 sim_active = float(torch.dot(z_norm, k_active).item())
-                # Active link ready gate:
-                # 1. Active step's cue is visible (sim >= sim_threshold), OR
-                # 2. Active step is visually invariant (dispersion < 0.70), OR
-                # 3. First step is an intermediate producer/enabler that initiates search/harvesting
-                ready = (
-                    sim_active >= self.sim_threshold
-                    or float(active_card.visual_dispersion) < 0.70
-                    or (first["card_id"] != target.prototype_id)
-                )
-                if not ready:
-                    continue
                 k_tgt = torch.tensor(target.precondition_key, dtype=torch.float32, device=self.device)
                 sim_tgt = float(torch.dot(z_norm, k_tgt).item())
+
+                is_intermediate = (first["card_id"] != target.prototype_id)
+                status = "HARVESTING_INPUT" if is_intermediate else ("READY_TO_EXECUTE" if sim_active >= self.sim_threshold else "APPROACHING_AFFORDANCE")
+
                 best = {
                     "score": score,
-                    "status": "READY_TO_EXECUTE",
+                    "status": status,
                     "prototype_id": target.prototype_id,
                     "recommended_action": int(target.action),
                     "visual_key": k_tgt,
@@ -304,8 +303,7 @@ class CompositionalCausalPlanner:
                 }
                 # If the first executable link is NOT the target, surface it as the
                 # harvesting step (legacy MPC keys).
-                if first["card_id"] != target.prototype_id:
-                    best["status"] = "HARVESTING_INPUT"
+                if is_intermediate:
                     best["recommended_action"] = int(active_card.action)
                     best["visual_key"] = k_active
                     best["visual_sim"] = sim_active

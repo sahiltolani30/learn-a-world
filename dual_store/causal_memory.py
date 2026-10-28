@@ -590,9 +590,10 @@ class RelationHypothesisBank:
     def _recompute_status(self, p: TransitionPrototype) -> None:
         p.status = "confirmed" if p.weighted_successes >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
         is_craft = (p.event_dim is not None) or any(0 <= int(d) < NUM_ITEMS for d, _ in p.produces)
-        if p.status == "confirmed" and is_craft:
+        if is_craft:
             # Pure causal consumption grounding: an action requires what it consumes from inventory (dims 0..11).
             # True crafts consume discrete material (amt >= DISCRETE_DEDUCTION_THRESHOLD) to produce an item or achieve a milestone.
+            # Preserved for both confirmed and hypothesis cards: an action should never be commanded without its observed inputs.
             p.needs = [[float(d), amt] for d, amt in p.consumes if 0 <= int(d) < NUM_ITEMS and amt >= DISCRETE_DEDUCTION_THRESHOLD]
             p.precondition_state = [0.0] * STATE_DIM
             for nd in p.needs:
@@ -966,14 +967,18 @@ class RelationHypothesisBank:
         out: Dict[int, float] = {}
         for entry in p.produces:
             if len(entry) >= 2:
-                out[int(entry[0])] = float(entry[1])
+                d = int(entry[0])
+                if 0 <= d < NUM_ITEMS:
+                    out[d] = float(entry[1])
         return out
 
     def _needed_dims(self, p: TransitionPrototype) -> Dict[int, float]:
         out: Dict[int, float] = {}
         for entry in p.needs:
             if len(entry) >= 2:
-                out[int(entry[0])] = float(entry[1])
+                d = int(entry[0])
+                if 0 <= d < NUM_ITEMS:
+                    out[d] = float(entry[1])
         return out
 
     def _strongest_event_card(self, event_dim: int) -> Optional[TransitionPrototype]:
@@ -1203,18 +1208,18 @@ class RelationHypothesisBank:
         z: Sequence[float],
         next_z: Optional[Sequence[float]],
         state_delta: Optional[Sequence[float]],
-        count_success: bool,
+        count_success: bool = True,
+        initial_weight: float = 1.0,
     ) -> TransitionPrototype:
         """Creates an online-born hypothesis card.
 
-        Event-grounded no-match creations record the observation
-        (success_online = 1.0). Fallback-pinned creations record NOTHING
-        (success_online = 0.0, reduced Laplace prior) — N7 quarantine.
+        Event-grounded creations record empirical observation with initial_weight
+        (confident: 1.0; fallback: 0.5).
         """
         n = self._online_card_counter.get((action, event_dim), 0)
         self._online_card_counter[(action, event_dim)] = n + 1
         proto_id = f"card_a{action}_e{event_dim}_o{n}"
-        s_online = 1.0 if count_success else 0.0
+        s_online = float(initial_weight) if count_success else 0.0
         delta = [float(v) for v in state_delta] if state_delta is not None else [0.0] * STATE_DIM
         achievement_delta = [0.0] * NUM_ACHIEVEMENTS
         achievement_delta[int(event_dim)] = 1.0
@@ -1232,7 +1237,7 @@ class RelationHypothesisBank:
             confidence=0.05,
             achievement_delta=achievement_delta,
             event_dim=int(event_dim),
-            needs=[],           # needs amounts are never derived online
+            needs=[],
             produces=[[float(d), delta[d]] for d in range(STATE_DIM) if delta[d] >= PRODUCES_THRESHOLD],
             consumes=[[float(d), abs(delta[d])] for d in range(STATE_DIM) if delta[d] <= -PRODUCES_THRESHOLD],
             unlock_prob=(s_online + 1.0) / (s_online + 2.0),
@@ -1258,14 +1263,16 @@ class RelationHypothesisBank:
         z: Sequence[float],
         next_z: Optional[Sequence[float]],
         state_delta: Optional[Sequence[float]] = None,
+        weight: float = 1.0,
     ) -> None:
-        proto.success_online += 1.0
-        proto.success_count += 1.0
+        w = float(weight)
+        proto.success_online += w
+        proto.success_count += w
         self._update_keys_online(proto, z, next_z)
         if state_delta is not None and any(abs(d) >= PRODUCES_THRESHOLD for d in state_delta[:12]):
-            n_prev = max(float(proto.success_count - 1.0), 0.0)
+            n_prev = max(float(proto.success_count - w), 0.0)
             old_delta = np.asarray(proto.effect_delta, dtype=np.float64)
-            new_delta = (old_delta * n_prev + np.asarray(state_delta, dtype=np.float64)) / (n_prev + 1.0)
+            new_delta = (old_delta * n_prev + np.asarray(state_delta, dtype=np.float64) * w) / max(n_prev + w, 1e-6)
             proto.effect_delta = [float(v) for v in new_delta]
             proto.produces = [[float(d), float(new_delta[d])]
                              for d in range(STATE_DIM) if new_delta[d] >= PRODUCES_THRESHOLD]
@@ -1367,13 +1374,15 @@ class RelationHypothesisBank:
             if fired:
                 for ed in fired:
                     if ed in fallback_unlocked:
-                        # (4) N7 quarantine: a fallback pin is a guess, not an
-                        # observation. Matching cards are never confirmed; only
-                        # no-match creation of a reduced-prior hypothesis card.
+                        # Fallback pin (reward >= 0.9 without confident event head):
+                        # Records empirical breakthrough with fractional evidence weight 0.5.
                         match = self._match_card(z, action, ed)
-                        if match is None and has_physical_consequence:
+                        if match is not None:
+                            self._confirm_card(match, z, next_z, state_delta, weight=0.5)
+                            confirmed += 1
+                        elif has_physical_consequence:
                             self._create_online_card(action, ed, z, next_z, state_delta,
-                                                     count_success=False)
+                                                     count_success=True, initial_weight=0.5)
                             created += 1
                         continue
                     match = self._match_card(z, action, ed)
@@ -1387,27 +1396,39 @@ class RelationHypothesisBank:
                         created += 1
                     # else: unconfirmed noisy unlock — counted nowhere.
             elif max_delta < NEAR_MISS_DELTA and reward <= 0.0:
-                # (3) Near-miss -> DENY the best visually matching card of this action.
+                # (3) Near-miss -> DENY the best visually matching card of this action,
+                # BUT ONLY IF the agent actually possessed the required preconditions (causal guard).
                 match = self._match_card(z, action, event_dim=None)
                 if match is not None:
-                    match.failure_online += 1.0
-                    match.failure_count += 1.0
-                    self._recompute_confidence(match)
-                    denied += 1
+                    preconditions_met = True
+                    if match.needs:
+                        for nd in match.needs:
+                            d = int(nd[0])
+                            req = float(nd[1])
+                            if 0 <= d < len(x) and x[d] < req - 0.1:
+                                preconditions_met = False
+                                break
+                    if preconditions_met:
+                        match.failure_online += 1.0
+                        match.failure_count += 1.0
+                        self._recompute_confidence(match)
+                        denied += 1
 
         # Bayesian Falsification Pruning of Sandbox Hypotheses:
         # Prunes unverified hypotheses that have been attempted and failed repeatedly:
-        # 1. 0 successes with >= 3 failures (conclusively failed conjecture).
-        # 2. Rejection threshold: Wilson upper bound < 0.20 with >= 3 failures.
-        # Rare discovery protection: cards with < 2 failures are NEVER pruned.
+        # 1. 0 successes with >= 5 failures.
+        # 2. Rejection threshold: Wilson upper bound < 0.15 with >= 5 failures.
+        # Rare discovery protection: cards with < 3 failures are NEVER pruned.
         to_prune = []
         for pid, card in self.prototypes.items():
             if card.status == "hypothesis" and getattr(card, "created_from", "") == "online":
                 n_succ = float(card.success_count)
                 n_fail = float(card.failure_count)
-                if n_fail >= 3.0:
+                if n_fail >= 3.0 and n_succ == 0.0:
+                    to_prune.append(pid)
+                elif n_fail >= 5.0:
                     wilson_ub = float(wilson_interval(n_succ, n_succ + n_fail)[1])
-                    if n_succ == 0.0 or wilson_ub < 0.20:
+                    if wilson_ub < 0.15:
                         to_prune.append(pid)
 
         for pid in to_prune:
@@ -1512,6 +1533,7 @@ class RelationHypothesisBank:
                 proto.schema_version = "phase2_card_v1"
             if not proto.achievement_delta:
                 proto.achievement_delta = [0.0] * NUM_ACHIEVEMENTS
+            self._recompute_status(proto)
             prototypes[key] = proto
         self.prototypes = prototypes
 
@@ -1547,5 +1569,5 @@ class RelationHypothesisBank:
         }
         self._online_card_counter = {}
 
-        if "edges" not in data:
+        if "edges" not in data or not self.edges:
             self.refresh_edges()
