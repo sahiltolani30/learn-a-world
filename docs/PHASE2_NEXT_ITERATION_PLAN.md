@@ -39,6 +39,20 @@ Also noted: most event cards have low Wilson LB (0.02–0.09) because near-miss 
 - Wave 2 (next session, fresh context): **F2** chain links as committed options, **F3** learned spatial memory (the reach build), **F1** maintenance head.
 - Methodology note: the 3 arms running now measure Phase A code and serve as the **control group** for the stone package; the package gets its own 3-arm cycle after landing.
 
+## 0c. Reconciliation with the master plan (JEPA_CAUSAL_CHAIN_PLAN.md, 2026-10-28)
+
+Cross-review verdict: the F1–F11 backlog is the **detailed execution of master-plan Phase 2C → Phase 3**, not a divergence. Mapping: F1 = master 2B ("a zero-reward action is not necessarily a failure") + 2C survival-risk ranking; **F2 = master Phase 3 (persistent learned options) in lightweight form**; F3 = master 2A/2C spatial access; F4/F5 = master 2C ("reusable requirements, persistent structures, spatial access"); F6 = 2C risk; F9 = Phase 5 conditional-probability reporting + anti-hallucination; consumption grounding (landed) = master 2B ("success conditions, consumption/production").
+
+Master-plan Phase 2 acceptance experiments — status:
+1. **Retention** (restart and improve at equal budget): the **Arm B vs Arm C comparison IS this experiment** (continual-learning vs locked no-update) — pending the clean arms.
+2. **Composition** (predict effects + budgets; distinguish resource vs proximity failures): partially demonstrated (smoke chain; Arm B stone unlocks); formal measurement needs F9 telemetry.
+3. **Revision** (contradictions lower confidence): implemented (denials + Wilson recompute) — needs online-diff telemetry to evidence.
+4. **Longer chains**: NOT yet — this is the stone package (F2/F3), the bridge into master Phase 3.
+
+The master plan's warnings are the bugs we independently hit (validates the plan): "neither a single success nor visual similarity establishes a minimum resource requirement" = the sapling bug; "a zero-reward action is not necessarily a failure" = the maintenance gap (F1); "do not select only the highest-return memory because it may be unreachable" = the old ranking bug. One recorded tension: master Phase 4 permits **labeled** teacher data; the user REJECTED teacher demonstrations (true-learning ruling) — training-time saved-state curriculum remains a later, user-gated option.
+
+**Implementation order (both plans converge):** ① finish Phase 2 validation (clean bank → arms B/C → retention/composition/revision telemetry via F9); ② **Phase 3 v0 = F2 options** + F7 flag + F9 metrics — the master plan explicitly says "do not wait for a large graph before checking whether the agent can execute its chosen subgoals"; ③ F3 spatial memory; ④ F1 maintenance head; then longer chains per the acceptance order.
+
 ## 1. Where the agent actually is (empirical, from recorded runs)
 
 - **93% of audited deaths are monsters; 73% at night.** Mean death step 177.7 (of 500-step diagnostic episodes); 0/15 episodes survived to the cap. Starvation/dehydration only 7%.
