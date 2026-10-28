@@ -115,6 +115,10 @@ class BenchmarkRunner:
                 "reward": ep_reward,
                 "unlocked": sorted(list(ep_unlocked)),
             })
+            print(
+                f"Eval Episode {ep_idx+1:02d}/{len(self.seeds):02d} | Seed: {seed} | Steps: {steps:3d} | Reward: {ep_reward:4.1f} | Unlocked: {', '.join(sorted(ep_unlocked)) if ep_unlocked else 'none'}",
+                flush=True,
+            )
 
         n_episodes = len(self.seeds)
         unlock_percentages = {
