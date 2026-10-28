@@ -117,7 +117,10 @@ def test_record_step_converts_tensors_to_lists():
     assert step["action"] == 5 and isinstance(step["action"], int)
     assert step["reward"] == 1.0
     assert step["done"] is True
-    assert step["event_vec"] == [3, 11]
+    expected_event_vec = [0] * NUM_EVENT_DIMS
+    expected_event_vec[3] = 1
+    expected_event_vec[11] = 1
+    assert step["event_vec"] == expected_event_vec
     assert step["mask_before_vec"] == [1] * 7 + [0] * (NUM_EVENT_DIMS - 7)
     assert step["confident_events"] == [3, 11]
     assert step["fallback_unlocked"] == [3]
@@ -174,7 +177,7 @@ def test_end_episode_calls_bank_and_clears():
     learned = args[0]
     assert len(learned) == 2
     assert learned[0]["action"] == 1
-    assert learned[1]["action"] == 2 and learned[1]["event_vec"] == [4]
+    assert learned[1]["action"] == 2 and learned[1]["event_vec"][4] == 1
     bank.refresh_edges.assert_called_once_with()
     assert len(recorder) == 0
 
@@ -216,3 +219,64 @@ def test_episode_records_carry_subgoal_trace_cap():
     assert collect_subgoal_trace(mixed, cap=20) == [
         {"step": 1, "status": "READY", "target": "card_a0_e5"}
     ]
+
+
+def test_playtime_recorder_real_bank_integration():
+    """Verify PlaytimeRecorder feeds a real RelationHypothesisBank and creates/confirms cards."""
+    from planning.causal_memory import RelationHypothesisBank
+
+    bank = RelationHypothesisBank()
+    recorder = PlaytimeRecorder()
+
+    # Episode 1: agent discovers achievement 15 (make_wood_pickaxe) via action 11
+    z_t = torch.ones(OBS_LATENT_DIM) * 0.5
+    x_hat = torch.zeros(GROUNDED_STATE_DIM)
+    x_hat[0] = 2.0  # wood
+    x_hat[2] = 1.0  # table
+
+    event_probs = torch.zeros(NUM_EVENT_DIMS)
+    event_probs[15] = 0.95
+    thresholds = torch.full((NUM_EVENT_DIMS,), 0.25)
+
+    recorder.record_step(
+        z_t=z_t,
+        x_hat=x_hat,
+        action=11,
+        reward=1.0,
+        done=False,
+        mask_before=torch.zeros(NUM_EVENT_DIMS),
+        newly_unlocked=[15],
+        event_probs=event_probs,
+        thresholds=thresholds,
+    )
+
+    stats1 = recorder.end_episode(bank)
+    assert stats1["created"] == 1
+    assert stats1["confirmed"] == 0
+
+    card_id = "card_a11_e15_o0"
+    assert card_id in bank.prototypes
+    card = bank.prototypes[card_id]
+    assert card.event_dim == 15
+    assert card.action == 11
+    assert card.created_from == "online"
+    assert card.success_online == 1.0
+
+    # Episode 2: agent executes action 11 again in a new episode with pickaxe unlocked
+    recorder.record_step(
+        z_t=z_t,
+        x_hat=x_hat,
+        action=11,
+        reward=1.0,
+        done=False,
+        mask_before=torch.zeros(NUM_EVENT_DIMS),
+        newly_unlocked=[15],
+        event_probs=event_probs,
+        thresholds=thresholds,
+    )
+
+    stats2 = recorder.end_episode(bank)
+    assert stats2["created"] == 0
+    assert stats2["confirmed"] == 1
+    assert card.success_online == 2.0
+

@@ -610,8 +610,16 @@ class RelationHypothesisBank:
     @staticmethod
     def _fired_event_dims(event_vec: Sequence[int], mask_before_vec: Sequence[int]) -> List[int]:
         """u_t = events * (1 - mask_before): first-time unlock dims for one step."""
-        n = min(len(event_vec), len(mask_before_vec), NUM_ACHIEVEMENTS)
-        return [d for d in range(n) if int(event_vec[d]) and not int(mask_before_vec[d])]
+        if len(event_vec) == NUM_ACHIEVEMENTS:
+            return [
+                d for d in range(NUM_ACHIEVEMENTS)
+                if int(event_vec[d]) and (d >= len(mask_before_vec) or not int(mask_before_vec[d]))
+            ]
+        # Defensive handling if caller passed sparse unlock indices
+        return [
+            int(d) for d in event_vec
+            if 0 <= int(d) < NUM_ACHIEVEMENTS and (int(d) >= len(mask_before_vec) or not int(mask_before_vec[int(d)]))
+        ]
 
     @staticmethod
     def _fallback_unlock_dims(reward: float) -> Tuple[List[int], bool]:

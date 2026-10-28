@@ -100,7 +100,11 @@ class PlaytimeRecorder:
         obs_latent = _to_plain_float_list(z_t, OBS_LATENT_DIM, "z_t")
         grounded_state = _to_plain_float_list(x_hat, GROUNDED_STATE_DIM, "x_hat")
         mask_before_vec = [int(v) for v in _to_plain_float_list(mask_before, NUM_EVENT_DIMS, "mask_before")]
-        event_vec = [int(e) for e in newly_unlocked]
+        event_vec = [0] * NUM_EVENT_DIMS
+        for e in newly_unlocked:
+            idx = int(e)
+            if 0 <= idx < NUM_EVENT_DIMS:
+                event_vec[idx] = 1
 
         probs_list: Optional[List[float]] = (
             _to_plain_float_list(event_probs, NUM_EVENT_DIMS, "event_probs") if event_probs is not None else None
@@ -110,10 +114,11 @@ class PlaytimeRecorder:
         )
 
         confident_events = [
-            e
-            for e in event_vec
+            int(e)
+            for e in newly_unlocked
             if probs_list is not None and thresholds_list is not None
-            and probs_list[e] > thresholds_list[e] + CONFIDENT_MARGIN
+            and 0 <= int(e) < NUM_EVENT_DIMS
+            and probs_list[int(e)] > thresholds_list[int(e)] + CONFIDENT_MARGIN
         ]
 
         fallback_list = [int(e) for e in fallback_unlocked] if fallback_unlocked is not None else []
