@@ -93,6 +93,8 @@ class BenchmarkRunner:
 
                 ep_reward += reward
                 steps += 1
+                if isinstance(state, dict):
+                    state["last_reward"] = float(reward)
 
                 # Record achievements unlocked during this step
                 step_achievements = info.get("achievements", {})

@@ -203,6 +203,14 @@ class GodfatherJEPAPipeline:
         vitals = state["internal_vitals"]
         step = state["step"]
 
+        # Update empirical mental inventory when positive reward is received on action 5 (Do)
+        last_rew = state.get("last_reward", 0.0)
+        if last_rew > 0.0 and prev_act == 5:
+            if inv.get("wood_pickaxe", 0) == 0:
+                inv["wood"] = inv.get("wood", 0) + 1
+            else:
+                inv["stone"] = inv.get("stone", 0) + 1
+
         self.encoder.eval()
         self.actor.eval()
         self.spatial_projector.eval()
@@ -232,11 +240,19 @@ class GodfatherJEPAPipeline:
 
             # 4. Teleological target selection via CausalHypergraph
             target_goal = "make_wood_pickaxe" if inv.get("wood_pickaxe", 0) == 0 else "collect_stone"
-            subgoal, teleo_action = self.causal_hypergraph.determine_subgoal(
+            subgoal, determined_action = self.causal_hypergraph.determine_subgoal(
                 target_goal=target_goal,
                 current_inventory=inv,
                 workstations_present=ws,
             )
+
+            # Crafting subgoals require immediate assembly action
+            if subgoal in ("place_table", "make_wood_pickaxe", "make_wood_sword", "place_furnace"):
+                teleo_action = determined_action
+            else:
+                # Gathering subgoals (collect_wood, collect_stone) use actor navigation
+                # to locate and approach harvestable nodes, executing interaction (Action 5) when selected
+                teleo_action = actor_action if actor_action in (1, 2, 3, 4, 5) else determined_action
 
             # 5. Workstation navigation override if return needed
             if "table_placed" in ws and inv.get("wood", 0) >= 1 and inv.get("wood_pickaxe", 0) == 0:
