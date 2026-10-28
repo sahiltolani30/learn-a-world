@@ -602,6 +602,49 @@ class GodfatherJEPAPipeline:
         self.semantic_bank.save(bank_path)
         print(f"[Checkpoint] Successfully saved Godfather JEPA model to {out_path} and memory bank to {bank_path}")
 
+    def load_checkpoint(self, ckpt_path: str) -> bool:
+        """
+        Loads full model state dict and associated memory bank from disk or Drive.
+        """
+        if not os.path.exists(ckpt_path):
+            print(f"[Checkpoint] Warning: File not found: {ckpt_path}")
+            return False
+
+        ckpt = torch.load(ckpt_path, map_location=self.device)
+        if "encoder" in ckpt:
+            self.encoder.load_state_dict(ckpt["encoder"])
+        if "target_encoder" in ckpt:
+            self.target_encoder.load_state_dict(ckpt["target_encoder"])
+        if "projector" in ckpt:
+            self.projector.load_state_dict(ckpt["projector"])
+        if "spatial_projector" in ckpt:
+            self.spatial_projector.load_state_dict(ckpt["spatial_projector"])
+        if "spatial_gru" in ckpt:
+            self.spatial_gru.load_state_dict(ckpt["spatial_gru"])
+        if "vector_belief" in ckpt:
+            self.vector_belief.load_state_dict(ckpt["vector_belief"])
+        if "ensemble" in ckpt:
+            self.ensemble.load_state_dict(ckpt["ensemble"])
+        if "continuation_head" in ckpt:
+            self.continuation_head.load_state_dict(ckpt["continuation_head"])
+        if "reward_head" in ckpt:
+            self.reward_head.load_state_dict(ckpt["reward_head"])
+        if "odometry_head" in ckpt:
+            self.odometry_head.load_state_dict(ckpt["odometry_head"])
+        if "critic" in ckpt:
+            self.critic.load_state_dict(ckpt["critic"])
+        if "actor" in ckpt:
+            self.actor.load_state_dict(ckpt["actor"])
+
+        bank_path = str(Path(ckpt_path).parent / "godfather_memory_bank.pt")
+        if os.path.exists(bank_path):
+            self.semantic_bank.load(bank_path)
+            print(f"[Checkpoint] Successfully loaded Godfather JEPA model from {ckpt_path} and memory bank from {bank_path}")
+        else:
+            print(f"[Checkpoint] Successfully loaded Godfather JEPA model from {ckpt_path}")
+
+        return True
+
     def evaluate(self, seeds: Optional[Sequence[int]] = None) -> Dict[str, Any]:
         """
         Runs standardized benchmark evaluation with preserved recurrent state across steps.
