@@ -652,7 +652,7 @@ if __name__ == "__main__":
         "--checkpoint_path",
         dest="checkpoint",
         type=str,
-        default="checkpoints/jepa_crafter_v3_step1_stone.pt",
+        default="checkpoints/jepa_crafter_v3_state_readout_v2.pt",
     )
     parser.add_argument(
         "--calibrator_path",
