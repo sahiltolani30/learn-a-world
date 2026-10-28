@@ -48,6 +48,25 @@ ABSENT: spatial memory (strict), route planning, maintenance value, day/night an
 | F9 | **Instrumentation: unlock-step logging** | Log (step, achievement) timestamps per episode in the screening loop; enables steps-to-milestone + wasted-tail metrics for every future run. | Missing instrument — measures whether later fixes actually accelerate progression | XS |
 | F10 | **Near-miss refinement for overloaded `do`** | Split near-miss denial by outcome signature (attack-miss: no unlock AND no material delta on the *object* channel vs failed collect) using only learned outcome statistics. | Stops missed swings from denying defeat cards (L6) | S |
 
+## 4a. Zero-hardcoding compliance audit of F1–F10 (binding on implementation)
+
+Rules: no engine facts in agent logic (no item/action/event semantics, no recipe amounts); no privileged info at playtime; everything learnable from data the agent legitimately holds (offline engine labels = sanctioned training-time supervision only). Index spaces, statistical hyperparameters, and magnitude scale-priors are allowed but must be registered.
+
+| Fix | Verdict | Notes |
+|---|---|---|
+| F1 maintenance value | **COMPLIANT with refinement** | Dims indexed, never named; trajectories are the agent's own. ⚠️ Gray zone: the sketched "low quantile of dim d = critical" embeds a *low-means-dangerous* prior on the 16-d state. **Refinement (mandatory):** anchor criticality on *learned* signals — the value v(d) at which the trained health/transition heads start predicting negative health deltas. Then "critical" is a causal fact the agent learned, not a distributional guess. |
+| F2 options | COMPLIANT | Commit/timeout uses learned `mean_duration` + a hyperparameter multiplier; matching is cosine to learned postcondition centroids. No semantics. |
+| F3 spatial slots | COMPLIANT | Displacement deltas regressed from observed latent changes (replaces the hardcoded movement table — a hardcode *removed*); slot writes gated by learned recurrence; retrieval by cosine. |
+| F4 enabler reactivation | COMPLIANT | "Satisfied" = own belief mask + cosine to learned context; re-entering the chain uses the card's learned COSTS. The word "table" never appears in logic. |
+| F5 value propagation | COMPLIANT | Pure graph arithmetic over learned trusts/lifts/values; cycle-safe. |
+| F6 threat cards | **COMPLIANT with registered scale-prior** | Keying on (action, large-negative health delta) uses a magnitude threshold on the *learned* health channel — same class as the existing 0.35/0.45 priors; no monster names. Threshold registered as tunable. |
+| F7 TTE weight | COMPLIANT | Head already trained on sanctioned offline labels; inference consumes latents only. Zero new logic. |
+| F8 uncertainty deficits | COMPLIANT | Uses the readout's own learned uncertainty output. |
+| F9 unlock-step logging | **COMPLIANT with implementation guard** | During the episode, log **belief-derived** unlocks only (they may feed decisions). Engine `info['achievements']` timestamps may be recorded solely in the post-episode analysis record — the same scoring-only class as today; must never be read by the memory/planner. |
+| F10 near-miss splitting | **COMPLIANT with mechanism pin** | The split MUST stay visual/statistical (cluster-conditional failure pools — missed attacks and failed collects live in different visual contexts, so per-cluster statistics separate them). A rule like "if it was an attack, don't count" would require knowing it was an attack = engine semantics = VIOLATION. |
+
+**Registered scale-priors introduced by this plan** (tunable, non-semantic, re-tune if state scale changes): F1 criticality margin (if quantile fallback retained), F6 damage threshold, F2 timeout multiplier, F5 lift-discount.
+
 ## 5. Decision table — what the Colab results greenlight
 
 | Observation in the 3-arm screening | Interpretation | Greenlight |
