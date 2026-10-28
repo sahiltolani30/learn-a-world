@@ -139,30 +139,39 @@ def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> 
     if not bank_path:
         return None
     p = Path(bank_path)
-    candidates = [
-        p,
-        REPO_ROOT / bank_path,
-        REPO_ROOT / "checkpoints" / p.name,
-        REPO_ROOT / "results" / "diagnostics" / p.name,
-        Path("/content/drive/MyDrive/learn-a-world") / bank_path,
-        Path("/content/drive/MyDrive/learn-a-world/checkpoints") / p.name,
-        Path("/content/drive/MyDrive/learn-a-world/results/diagnostics") / p.name,
-        Path("/content/drive/MyDrive/learn-a-world") / p.name,
-        Path("/content/drive/MyDrive") / bank_path,
-        Path("/content/drive/MyDrive/checkpoints") / p.name,
-        Path("/content/checkpoints") / p.name,
-        Path("/content") / p.name,
+    
+    # Priority list of search filenames: requested name first, then canonical bank names
+    search_names = [p.name]
+    if "consolidation" in p.name.lower() or "bank" not in p.name.lower():
+        search_names.extend([
+            "phase2_causal_memory_bank_v2.json",
+            "phase2_causal_memory_bank.json",
+        ])
+
+    candidate_roots = [
+        Path("."),
+        REPO_ROOT,
+        REPO_ROOT / "checkpoints",
+        REPO_ROOT / "results" / "diagnostics",
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints"),
+        Path("/content/drive/MyDrive/learn-a-world/results/diagnostics"),
+        Path("/content/drive/MyDrive/learn-a-world"),
+        Path("/content/drive/MyDrive/checkpoints"),
+        Path("/content/drive/MyDrive"),
+        Path("/content/checkpoints"),
+        Path("/content"),
     ]
     if drive_dir:
         dp = Path(drive_dir)
-        candidates.extend([
-            dp / bank_path,
-            dp / "checkpoints" / p.name,
-            dp / "results" / "diagnostics" / p.name,
-            dp / p.name,
-        ])
+        candidate_roots.extend([dp, dp / "checkpoints", dp / "results" / "diagnostics"])
+
+    candidates = [p]
+    for sname in search_names:
+        for root in candidate_roots:
+            candidates.append(root / sname)
+
     for cand in candidates:
-        if cand.exists():
+        if cand.exists() and cand.is_file():
             try:
                 with open(cand, "r") as f:
                     meta = json.load(f)
