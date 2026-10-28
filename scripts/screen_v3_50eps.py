@@ -644,7 +644,14 @@ if __name__ == "__main__":
     parser.add_argument("--transition_weight", type=float, default=0.5, help="Weight for model-predicted transition reward.")
     parser.add_argument("--transition_done_penalty", type=float, default=2.0, help="Penalty factor for predicted termination probability.")
     parser.add_argument("--transition_resource_weight", type=float, default=0.25, help="Weight for predicted positive resource increments.")
-    parser.add_argument("--causal_memory_bank", type=str, default=None, help="Path to Phase 2 learned RelationHypothesisBank JSON.")
+    parser.add_argument(
+        "--causal_memory_bank",
+        "--causal_memory_bank_path",
+        dest="causal_memory_bank",
+        type=str,
+        default=None,
+        help="Path to Phase 2 learned RelationHypothesisBank JSON.",
+    )
     parser.add_argument(
         "--online_learning",
         action="store_true",

@@ -201,7 +201,22 @@ def main():
     parser.add_argument("--bank_path", dest="flag_bank_path", type=str, default=None)
     args = parser.parse_args()
 
-    bank_target = args.flag_bank_path or args.bank_path or "results/diagnostics/phase2_memory_consolidation_4.json"
+    if not (args.flag_bank_path or args.bank_path):
+        candidates = [
+            "phase2_memory_consolidation_4.json",
+            "phase2_memory_consolidation (4).json",
+            "results/diagnostics/phase2_memory_consolidation_4.json",
+            "results/phase2_memory_consolidation_4.json",
+            "results/phase2_causal_memory_bank_online.json",
+            "results/phase2_online_bank.json",
+        ]
+        bank_target = "phase2_memory_consolidation_4.json"
+        for c in candidates:
+            if Path(c).exists():
+                bank_target = c
+                break
+    else:
+        bank_target = args.flag_bank_path or args.bank_path
 
     c1 = audit_codebase_anti_hardcoding()
     c2 = audit_memory_bank_anti_hardcoding(bank_target)
