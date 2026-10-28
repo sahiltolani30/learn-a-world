@@ -281,3 +281,50 @@ def test_mpc_silent_when_all_targets_unlocked():
     act, dbg = mpc_planner.plan(frame, belief)
     assert dbg["active_subgoal_status"] == ""
     assert dbg["memory_retrieved_action"] == -1.0
+
+
+def test_confirmed_causal_precedence_blocks_noisy_hypothesis_shortcut():
+    """Hypothesis cards cannot preempt or hijack confirmed recipes for the same event."""
+    bank = RelationHypothesisBank()
+    # 1. Confirmed legitimate recipe: Action 11 requires 1 wood
+    bank.prototypes["card_pickaxe_a11"] = make_card(
+        "card_pickaxe_a11", 11, event_dim=PICKAXE_EVENT, needs=[[WOOD_DIM, 1.0]], wilson_lb=0.65, status="confirmed"
+    )
+    # Legitimate wood producer so chain can resolve
+    bank.prototypes["card_tree"] = make_card(
+        "card_tree", 7, event_dim=None, produces=[[WOOD_DIM, 1.0]], wilson_lb=0.9, status="confirmed"
+    )
+    # 2. Spurious unverified hypothesis card: Action 5 with 0 needs and 0 attempts (max UCB)
+    bank.prototypes["card_pickaxe_a5_noisy"] = make_card(
+        "card_pickaxe_a5_noisy", 5, event_dim=PICKAXE_EVENT, needs=[], wilson_lb=0.0, status="hypothesis", attempts=1.0
+    )
+    bank.evidence_count = 100
+    planner = CompositionalCausalPlanner(bank, sim_threshold=0.3)
+
+    # Agent with 0 wood, pickaxe locked in m_bin:
+    # Must backward-chain on the confirmed recipe (action 11 -> needs wood -> harvest tree with action 7),
+    # and MUST NOT pick the noisy hypothesis card (action 5, 0 needs) as a "free lunch" shortcut!
+    subgoal = planner.plan_subgoal([1.0] + [0.0] * 127, np.zeros(16), m_bin=np.zeros(NUM_ACHIEVEMENTS))
+    assert subgoal is not None
+    assert subgoal["prototype_id"] == "card_pickaxe_a11"
+    assert subgoal["status"] == "HARVESTING_INPUT"
+    assert subgoal["recommended_action"] == 7  # harvesting wood for the confirmed pickaxe recipe!
+
+
+def test_novel_frontier_hypothesis_is_explored():
+    """Unexplored frontier achievements with no confirmed cards are actively explored via UCB."""
+    bank = RelationHypothesisBank()
+    STONE_EVENT = 5
+    # Frontier hypothesis: action 5 for stone mining (no confirmed card exists for stone)
+    bank.prototypes["card_stone_hypo"] = make_card(
+        "card_stone_hypo", 5, event_dim=STONE_EVENT, needs=[], wilson_lb=0.0, status="hypothesis", attempts=1.0
+    )
+    bank.evidence_count = 50
+    planner = CompositionalCausalPlanner(bank, sim_threshold=0.3)
+
+    subgoal = planner.plan_subgoal([1.0] + [0.0] * 127, np.zeros(16), m_bin=np.zeros(NUM_ACHIEVEMENTS))
+    assert subgoal is not None
+    assert subgoal["prototype_id"] == "card_stone_hypo"
+    assert subgoal["recommended_action"] == 5
+    assert subgoal["status"] == "READY_TO_EXECUTE"
+

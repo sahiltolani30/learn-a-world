@@ -157,7 +157,7 @@ def run_screening(
     frontier_threshold: float = 0.25,
     common_threshold: float = 0.50,
     vital_weight: float = 0.5,
-    death_risk_factor: float = 0.0,
+    death_risk_factor: float = 0.5,
     harvest_bonus: float = 0.15,
     action_persistence: float = 0.5,
     use_transition_model: bool = False,
@@ -622,7 +622,7 @@ if __name__ == "__main__":
     parser.add_argument("--frontier_threshold", type=float, default=0.25, help="Activation threshold for rare frontier achievements.")
     parser.add_argument("--common_threshold", type=float, default=0.50, help="Activation threshold for common survival achievements.")
     parser.add_argument("--vital_weight", type=float, default=0.5, help="Scaling factor for vital health damage/healing.")
-    parser.add_argument("--death_risk_factor", type=float, default=0.0, help="Continuation decay rate for lethal damage in imagination.")
+    parser.add_argument("--death_risk_factor", type=float, default=0.5, help="Continuation decay rate for lethal damage in imagination.")
     parser.add_argument("--harvest_bonus", type=float, default=0.15, help="Utility bonus for repeat harvesting of essential inputs.")
     parser.add_argument("--action_persistence", type=float, default=0.5, help="Directional action persistence probability in MPC.")
     parser.add_argument(

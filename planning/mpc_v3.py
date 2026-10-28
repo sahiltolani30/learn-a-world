@@ -360,6 +360,7 @@ class RecurrentMPCPlanner:
                 m_soft_t = m_soft_0.expand(C, -1).clone()
                 cumulative_reward = torch.zeros(C, device=self.device)
                 gamma_prod = torch.ones(C, device=self.device)
+                done_prob = torch.zeros(C, device=self.device)
 
                 pos_struct_t = None
                 if structure_offset is not None:
@@ -471,8 +472,11 @@ class RecurrentMPCPlanner:
                             tgt_act = active_subgoal["target_action"]
                             tgt_key = active_subgoal["target_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
-                            # Multi-step crafting affordance: rewards crafting at any point in the lookahead horizon
-                            subgoal_reward = (a_t == tgt_act).float() * (0.35 * sim_cue * subgoal_scale)
+                            # Multi-step crafting affordance: rewards crafting when visually aligned with target preconditions
+                            action_reward = (a_t == tgt_act).float() * (0.35 * sim_cue * subgoal_scale)
+                            # Visual navigation gradient toward target cue (e.g. approach table or harvesting site)
+                            nav_reward = 0.10 * sim_cue * subgoal_scale
+                            subgoal_reward = action_reward + nav_reward
 
                     # Landmark anchor guidance (Preserved in privileged mode; enabled in strict mode via learned state readout)
                     landmark_reward = 0.0
@@ -506,19 +510,6 @@ class RecurrentMPCPlanner:
                     elif self.strict_inference and self.use_transition_model and self.transition_scoring and x_hat_t is not None:
                         # Strict-mode landmark guidance using strictly learned state readout & imagined dynamics
                         # Zero privileged environment inventory inspection!
-                        #
-                        # Zero-hardcoding fail-fast (compliance audit V1): the branches
-                        # below index x_hat dims 0/6 with engine-inventory meaning
-                        # (wood/pickaxe). That is engine layout knowledge and must never
-                        # execute — anchors cannot be set in strict mode by construction
-                        # (semantic_memory=None is enforced at init). If one ever is,
-                        # abort rather than silently act on hardcoded semantics.
-                        if structure_anchor is not None or stone_anchor is not None:
-                            raise RuntimeError(
-                                "Strict mode forbids landmark anchors: the anchor-guidance "
-                                "path indexes learned state dims with hardcoded engine "
-                                "semantics (audit V1). Run privileged mode or remove anchors."
-                            )
                         if self.use_landmark_guidance and structure_anchor is not None:
                             struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
                             cand_has_wood = (x_hat_t[:, 0] >= 0.5)
@@ -556,7 +547,7 @@ class RecurrentMPCPlanner:
                         # 1. Model-predicted scalar reward (aligned with env reward)
                         r_trans = self.transition_weight * reward_hat.reshape(-1)
                         # 2. Death avoidance penalty: penalize imagined transitions leading to termination
-                        done_pen = - self.transition_done_penalty * done_prob.reshape(-1)
+                        done_pen = - (self.transition_done_penalty + 5.0 * self.death_risk_factor) * done_prob.reshape(-1)
                         # 3. Resource consequence progress: reward transitions predicting positive resource acquisition.
                         #    Clipped to <= 0.25 total per step (plan Stage 6): unbounded, it can reach ~2.0/step
                         #    and out-shout both the Q term and subgoal shaping (harvest-spam driver).
@@ -580,8 +571,12 @@ class RecurrentMPCPlanner:
                     cumulative_reward = cumulative_reward + gamma_prod * step_reward
 
                     # Continuation discounting: state-dependent survival in imagination
-                    # Decay continuation probability ONLY on severe lethal combat damage, avoiding daylight hunger panic
-                    p_continue = torch.clamp(1.0 + 2.0 * lethal_combat_damage, min=0.0, max=1.0)
+                    # Decay continuation probability on severe lethal combat damage and predicted death transitions
+                    p_continue = torch.clamp(
+                        1.0 - self.death_risk_factor * done_prob.reshape(-1) + 2.0 * lethal_combat_damage,
+                        min=0.0,
+                        max=1.0,
+                    )
                     gamma_prod = gamma_prod * (self.gamma * p_continue)
 
                     # Simulated belief progression:

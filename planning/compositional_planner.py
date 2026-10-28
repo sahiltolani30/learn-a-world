@@ -156,7 +156,13 @@ class CompositionalCausalPlanner:
                 for p in self.hypothesis_bank.producers_for_dim(dim)
                 if p.prototype_id != card.prototype_id and p.action != card.action
             ]
-            producers.sort(key=lambda p: -(self._trust(p) * min(self._producer_amount(p, dim), 1.0)))
+            producers.sort(
+                key=lambda p: (
+                    p.status == "confirmed",
+                    self._trust(p) * min(self._producer_amount(p, dim), 1.0),
+                ),
+                reverse=True,
+            )
             chained = None
             for producer in producers:
                 sub = self._resolve_chain(producer, x_t, m_bin, depth + 1, visited)
@@ -230,10 +236,26 @@ class CompositionalCausalPlanner:
         if not targets:
             return None
 
-        targets.sort(key=lambda p: -(self._trust(p) + self._ucb_bonus(p)))
+        # Confirmed Causal Precedence:
+        # If an event dimension already has at least one confirmed recipe in the bank,
+        # unverified hypothesis cards for that event dimension cannot hijack or preempt the confirmed recipe.
+        # Hypothesis cards are only eligible for frontier events where NO confirmed recipe exists yet.
+        confirmed_events = {
+            int(p.event_dim)
+            for p in bank.prototypes.values()
+            if p.event_dim is not None and p.status == "confirmed"
+        }
+        eligible_targets = [
+            p for p in targets
+            if (int(p.event_dim) not in confirmed_events or p.status == "confirmed")
+        ]
+        if not eligible_targets:
+            return None
+
+        eligible_targets.sort(key=lambda p: -(self._trust(p) + self._ucb_bonus(p)))
 
         best: Optional[Dict[str, Any]] = None
-        for target in targets[: self.top_k_targets]:
+        for target in eligible_targets[: self.top_k_targets]:
             chain = self._resolve_chain(target, x_t, m_arr, 0, set())
             if chain is None:
                 continue
