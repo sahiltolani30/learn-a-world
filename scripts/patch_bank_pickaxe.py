@@ -87,8 +87,16 @@ def patch_memory_bank(bank_path: str = "checkpoints/phase2_causal_memory_bank_v2
     if not any(e.src_id == "card_a8_e20_c0" and e.kind == "enabling_lift" for e in edges):
         edges.append(enabling_edge)
 
-    # Save patched bank
+    # Save patched bank to both json and pt
     bank.save(str(p))
+    if str(p).endswith(".json"):
+        pt_p = p.with_suffix(".pt")
+        bank.save(str(pt_p))
+        print(f"Also saved synchronized PT bank to: {pt_p}")
+    elif str(p).endswith(".pt"):
+        json_p = p.with_suffix(".json")
+        bank.save(str(json_p))
+        print(f"Also saved synchronized JSON bank to: {json_p}")
     print(f"Successfully patched {p} with card_a11_e15_c0 and enabling relations!")
     print(f"Total prototypes: {len(bank.prototypes)}, Total edges: {sum(len(v) for v in bank.edges.values())}")
 

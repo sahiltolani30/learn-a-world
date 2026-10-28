@@ -725,7 +725,10 @@ class RelationHypothesisBank:
                 subclusters = _greedy_cosine_subclusters(latents, cos_sim_threshold)
                 for k, cluster_idx in enumerate(subclusters):
                     cluster = [members[i] for i in cluster_idx]
-                    if len(cluster) < min_cluster_size:
+                    # Retain rare achievement breakthroughs (edim is not None) even if len(cluster) == 1.
+                    # Unlabeled productive deltas (edim is None) still require min_cluster_size to reject noise.
+                    effective_min_size = 1 if edim is not None else min_cluster_size
+                    if len(cluster) < effective_min_size:
                         continue
                     proto_id = f"card_a{a}_e{edim if edim is not None else 'none'}_c{k}"
                     proto, member_latents = self._build_card_from_cluster(
@@ -813,7 +816,7 @@ class RelationHypothesisBank:
         status = "confirmed" if n_succ >= CONFIRM_WEIGHTED_SUCCESSES else "hypothesis"
         needs: List[List[float]] = []
         is_craft = (event_dim is not None) or any(0 <= int(d) < NUM_ITEMS for d, _ in produces)
-        if status == "confirmed" and is_craft:
+        if is_craft:
             # Pure causal consumption grounding: what was deducted from inventory (dims 0..11)
             # is what this action needs to be executed (Conservation of Inventory).
             # True crafts consume discrete material (amt >= DISCRETE_DEDUCTION_THRESHOLD) to produce an item or achieve a milestone.
@@ -1504,18 +1507,24 @@ class RelationHypothesisBank:
         ).hexdigest()
         self.bank_sha256 = payload["bank_sha256"]
         tmp = p.with_suffix(p.suffix + ".tmp")
-        with open(tmp, "w") as f:
-            json.dump(payload, f)
+        if str(p).endswith(".pt"):
+            torch.save(payload, str(tmp))
+        else:
+            with open(tmp, "w") as f:
+                json.dump(payload, f)
         os.replace(tmp, p)
 
     def load(self, filepath: Union[str, Path]) -> None:
-        """Loads a bank from disk. Tolerant of v1 files (missing card fields ->
+        """Loads a bank from disk (.json or .pt). Tolerant of v1 files (missing card fields ->
         dataclass defaults; missing edges -> refresh_edges())."""
         p = Path(filepath)
         if not p.exists():
             raise FileNotFoundError(f"Relation hypothesis bank not found: {p}")
-        with open(p, "r") as f:
-            data = json.load(f)
+        if str(p).endswith(".pt"):
+            data = torch.load(str(p), map_location="cpu", weights_only=False)
+        else:
+            with open(p, "r") as f:
+                data = json.load(f)
 
         proto_fields = {f.name for f in dataclass_fields(TransitionPrototype)}
         prototypes: Dict[str, TransitionPrototype] = {}

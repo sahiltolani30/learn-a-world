@@ -144,6 +144,8 @@ def _resolve_bank(bank_path: Optional[str], drive_dir: Optional[str] = None) -> 
     search_names = [p.name]
     if "consolidation" in p.name.lower() or "bank" not in p.name.lower():
         search_names.extend([
+            "dual_store_causal_memory_bank.json",
+            "dual_store_memory_bank.pt",
             "phase2_causal_memory_bank_v2.json",
             "phase2_causal_memory_bank.json",
         ])
@@ -715,8 +717,8 @@ if __name__ == "__main__":
         "--causal_memory_bank_path",
         dest="causal_memory_bank",
         type=str,
-        default=None,
-        help="Path to Phase 2 learned RelationHypothesisBank JSON.",
+        default="checkpoints/dual_store_causal_memory_bank.json",
+        help="Path to Dual-Store learned RelationHypothesisBank JSON or PT checkpoint.",
     )
     parser.add_argument(
         "--online_learning",
@@ -727,7 +729,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--online_bank_path",
         type=str,
-        default="results/phase2_online_bank.json",
+        default="results/dual_store_memory_bank_online.json",
         help="Path of the persistent online relation bank (atomically rewritten each episode under --online_learning; loaded when --resume_bank is set).",
     )
     parser.add_argument(
