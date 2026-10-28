@@ -1320,7 +1320,6 @@ class RelationHypothesisBank:
             mask_vec = [int(v) for v in (step.get("mask_before_vec") or [0] * NUM_ACHIEVEMENTS)]
             confident_events = set(int(v) for v in (step.get("confident_events") or []))
             fallback_unlocked = set(int(v) for v in (step.get("fallback_unlocked") or []))
-            active_target_id = step.get("active_subgoal_target")
 
             if step.get("state_delta") is not None:
                 state_delta = [float(v) for v in step["state_delta"]]
@@ -1389,14 +1388,8 @@ class RelationHypothesisBank:
                         created += 1
                     # else: unconfirmed noisy unlock — counted nowhere.
             elif max_delta < NEAR_MISS_DELTA and reward <= 0.0:
-                # (3) Near-miss -> DENY.
-                # Direct Subgoal Attribution: If the planner actively selected a card to execute,
-                # and that action produced nothing, hold that active hypothesis directly accountable!
-                target_card = self.prototypes.get(active_target_id) if active_target_id else None
-                if target_card is not None and target_card.action == action:
-                    match = target_card
-                else:
-                    match = self._match_card(z, action, event_dim=None)
+                # (3) Near-miss -> DENY the best visually matching card of this action.
+                match = self._match_card(z, action, event_dim=None)
                 if match is not None:
                     match.failure_online += 1.0
                     match.failure_count += 1.0
