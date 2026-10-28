@@ -371,6 +371,7 @@ def run_synchronized_trace(
 
     # Save JSON
     out_json_path = Path(output_json or f"results/diagnostic_traces/trace_seed_{seed}.json")
+    out_json_path.parent.mkdir(parents=True, exist_ok=True)
     def json_default(obj):
         if isinstance(obj, (np.integer, np.int64, np.int32)):
             return int(obj)
@@ -386,6 +387,7 @@ def run_synchronized_trace(
 
     # Save Markdown Report
     out_md_path = Path(output_md or f"results/diagnostic_traces/trace_seed_{seed}.md")
+    out_md_path.parent.mkdir(parents=True, exist_ok=True)
     md_content = generate_markdown_report(autopsy)
     with open(out_md_path, "w") as f:
         f.write(md_content)
