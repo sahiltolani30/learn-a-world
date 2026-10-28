@@ -14,6 +14,25 @@
 - Smoke (5 eps, bank+online): **3.87%**, 9/22 achievements, place_table 80%, and the designed chain fired live in one episode: collect_wood → place_table → make_wood_sword → defeat_zombie (7 unlocks, reward 6.1). ~20 hypotheses tested per episode, stable. Caveat: n=5, high variance — the arms decide.
 - **Next: apply vitals exclusion → re-consolidate (~84s) → re-audit (A–D must pass) → re-read cards → launch 3-arm screening.**
 
+**2026-10-28 — MEMORY READ (real 932-card bank): what the agent learned right vs wrong.**
+CORRECT: the notebook's core lessons match reality — wood-producer cards (act5+collect_wood: produces wood ~0.97, no needs), sapling cards (produces sapling ~0.9), 83 event-grounded cards across 8 achievements including **8 defeat_zombie cards, 15 eat_cow cards, 13 collect_wood, 1 place_table, 1 collect_drink**; 3 trusted wood producers; acyclic graph.
+THREE MISTAKES (top priority, in order):
+1. **Vitals preconditions on 750 cards** ("needs health ≥ 4.0") — root cause: with absolute vitals, successes happen while healthy and near-misses while dying, so health/energy are *genuinely enriched* at successes — the enrichment test detects the competence confounder, not causation. Fix: the already-decided exclusion (needs ⊆ dims 0–11).
+2. **NEW — universal-item false positives: 144 cards demand saplings** (incl. a place_table event-free card: needs sapling ≥ 0.597; even movement cards demand saplings). Root cause: sapling is present ~92% of the time (the agent farms it obsessively); relative-only enrichment (Wilson separation + gap ≥ 0.20) passes when the context-shifted failure pool happens to hold slightly fewer. **Fix F11 (new, top priority with #1): absolute failure-absence criterion — a dim is a need only if it is ABSENT in a substantial fraction of failures: f_d ≤ 0.5.** Wood passes (absent in ~82% of failures); sapling dies (present in ~80% of failures — undiscriminating). Registered hyperparameter, item-agnostic.
+3. **Edge explosion: 89,624 edges** (mostly vitals-producer × vitals-needer pairs, plus junk event-free movement/noop cards whose readout noise produced spurious deltas). Fixes: #1 removes vitals needs (edges collapse); **extend the event-free breakthrough criterion to require the productive delta on inventory dims 0–11** (kills movement/noop junk cards at the source).
+Also noted: most event cards have low Wilson LB (0.02–0.09) because near-miss pools are huge — ranking works on relative order (smoke proved it), but expect compressed trust values; and only ONE event-grounded place_table card exists (second placements within an episode are event-free) — acceptable, but the sapling fix must cover event-free cards too (F11 does).
+
+## 0b. User ruling + the STONE PACKAGE (2026-10-28)
+
+**User ruling (binding):** scripted teacher demonstrations for the deep tiers are **REJECTED** — they violate the true-learning rule, even at training time. The deep-tier discovery paths are limited to: (a) capability-triggered re-probing of previously-silent contexts, (b) analogical hypothesis cards, both zero-hardcode. The "richer corpus" deferred item is struck from the plan.
+
+**Mission: STONE.** Evidence: pickaxe→stone conversion 0/12 — the agent had pickaxes and never reached stone (navigation + survival), while the engine guarantees first-try success once there. The blocking chain is: **survive → walk → commit.**
+
+**Stone package (implementation waves):**
+- Wave 1 (small, landing now): **F4** enabler reactivation (stone_pickaxe needs a table — rebuild when absent), **F5** value propagation (stone chain becomes attractive), **F8** uncertainty-aware deficits (no flapping), **F9** unlock-step logging (measure the conversion rate), **F7** = screening config: run the next cycle with `--tte_weight > 0` (no code).
+- Wave 2 (next session, fresh context): **F2** chain links as committed options, **F3** learned spatial memory (the reach build), **F1** maintenance head.
+- Methodology note: the 3 arms running now measure Phase A code and serve as the **control group** for the stone package; the package gets its own 3-arm cycle after landing.
+
 ## 1. Where the agent actually is (empirical, from recorded runs)
 
 - **93% of audited deaths are monsters; 73% at night.** Mean death step 177.7 (of 500-step diagnostic episodes); 0/15 episodes survived to the cap. Starvation/dehydration only 7%.
