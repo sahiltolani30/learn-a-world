@@ -1,0 +1,121 @@
+"""
+Tier 1: Fast Online Episodic Working Memory (Hippocampus) for Godfather JEPA.
+
+Operates live during gameplay:
+1. Records raw single-trial transition tuples (z_t, a_t, r_t, Delta x_t, z_{t+1}).
+2. Tracks real-time spatial odometry displacement to placed workstations:
+       d_table = sum_{k=t_0}^t Delta p_k
+3. Maintains active multi-phase subgoal state machine:
+       GATHERING_INPUTS -> PLACING_WORKSTATION -> IMMEDIATE_ASSEMBLY
+4. Read-Only Protection: Never mutates or deletes permanent semantic cards during play,
+   preventing the fast-falsification trap that destroyed cards in earlier attempts.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+import numpy as np
+
+
+@dataclass
+class TransitionStep:
+    """
+    Single step recorded in working memory.
+    """
+    step_idx: int
+    z_t: np.ndarray
+    action: int
+    reward: float
+    done: bool
+    z_next: np.ndarray
+    item_deltas: Dict[str, int] = field(default_factory=dict)
+    unlocked_achievement: Optional[str] = None
+    displacement: np.ndarray = field(default_factory=lambda: np.zeros(2, dtype=np.float32))
+
+
+class OnlineEpisodicStore:
+    """
+    Fast online working memory instantiated per-episode.
+    """
+
+    def __init__(self, target_goal: str = "make_wood_pickaxe"):
+        self.target_goal = target_goal
+        self.steps: List[TransitionStep] = []
+        self.workstation_placed_step: Optional[int] = None
+        self.workstation_pos: np.ndarray = np.zeros(2, dtype=np.float32)
+        self.current_displacement: np.ndarray = np.zeros(2, dtype=np.float32)
+        self.current_inventory: Dict[str, int] = {}
+        self.milestones_unlocked: List[str] = []
+
+        # Subgoal State Machine
+        self.subgoal_state: str = "GATHERING_INPUTS"
+
+    def record_step(
+        self,
+        step_idx: int,
+        z_t: np.ndarray,
+        action: int,
+        reward: float,
+        done: bool,
+        z_next: np.ndarray,
+        item_deltas: Optional[Dict[str, int]] = None,
+        unlocked_achievement: Optional[str] = None,
+        delta_p: Optional[np.ndarray] = None,
+    ) -> None:
+        """
+        Records an interaction step into episodic working memory.
+        """
+        if delta_p is not None:
+            self.current_displacement += delta_p
+
+        # Update inventory tracking
+        if item_deltas:
+            for item, delta in item_deltas.items():
+                self.current_inventory[item] = max(0, self.current_inventory.get(item, 0) + delta)
+
+        if unlocked_achievement:
+            self.milestones_unlocked.append(unlocked_achievement)
+            if unlocked_achievement == "place_table":
+                self.workstation_placed_step = step_idx
+                self.workstation_pos = self.current_displacement.copy()
+                self.subgoal_state = "IMMEDIATE_ASSEMBLY"
+
+        trans = TransitionStep(
+            step_idx=step_idx,
+            z_t=z_t,
+            action=action,
+            reward=reward,
+            done=done,
+            z_next=z_next,
+            item_deltas=item_deltas or {},
+            unlocked_achievement=unlocked_achievement,
+            displacement=self.current_displacement.copy(),
+        )
+        self.steps.append(trans)
+
+    def is_adjacent_to_workstation(self, threshold: float = 1.5) -> bool:
+        """
+        Verifies physical spatial proximity to placed table.
+        Prevents workstation affordance amnesia.
+        """
+        if self.workstation_placed_step is None:
+            return False
+        dist = float(np.linalg.norm(self.current_displacement - self.workstation_pos))
+        return dist <= threshold
+
+    def get_return_vector(self) -> Optional[np.ndarray]:
+        """
+        Returns displacement vector pointing back to placed workstation.
+        """
+        if self.workstation_placed_step is None:
+            return None
+        return self.workstation_pos - self.current_displacement
+
+    def clear(self) -> None:
+        self.steps.clear()
+        self.workstation_placed_step = None
+        self.workstation_pos = np.zeros(2, dtype=np.float32)
+        self.current_displacement = np.zeros(2, dtype=np.float32)
+        self.current_inventory.clear()
+        self.milestones_unlocked.clear()
+        self.subgoal_state = "GATHERING_INPUTS"
