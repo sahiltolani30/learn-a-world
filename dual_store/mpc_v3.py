@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from dual_store.jepa_v3 import JEPAv3
+from models.jepa_v3 import JEPAv3
 from planning.agent_v3 import AgentBeliefV3
 from eval.metrics import CRAFTER_ACHIEVEMENTS
 
@@ -210,6 +210,11 @@ class RecurrentMPCPlanner:
                     # chain_value is marginal (drops to ~0 once the target's achievement
                     # is locked in m_bin) — it replaces the old static mean_return weight.
                     chain_value = float(subgoal_info.get("chain_value", subgoal_info.get("expected_return", 0.5)))
+                    current_card_id = (
+                        subgoal_info.get("producer_prototype_id")
+                        if subgoal_info.get("status") == "HARVESTING_INPUT" and subgoal_info.get("producer_prototype_id")
+                        else subgoal_info.get("prototype_id", "phase2_subgoal")
+                    )
                     active_subgoal = {
                         "status": subgoal_info["status"],
                         "producer_action": subgoal_info.get("producer_action", subgoal_info["recommended_action"]),
@@ -217,15 +222,74 @@ class RecurrentMPCPlanner:
                         "chain_value": chain_value,
                         "target_action": subgoal_info["recommended_action"],
                         "target_key": subgoal_info.get("visual_key", z_0),
-                        "target_name": subgoal_info.get("prototype_id", "phase2_subgoal"),
+                        "target_name": current_card_id,
                         "chain": subgoal_info.get("chain", []),
                     }
                     if subgoal_info.get("visual_sim", 0.0) >= 0.35:
                         retrieved_action = subgoal_info["recommended_action"]
                         match_sim = float(subgoal_info.get("visual_sim", 0.5))
+                    if subgoal_info.get("visual_sim", 0.0) >= 0.70 and hasattr(belief, "working_memory"):
+                        if not belief.working_memory.has_anchor("structure"):
+                            belief.working_memory.set_anchor("structure", z_0.flatten().cpu())
+
+            # Landmark anchor guidance (Working Memory: keep agent oriented near placed structure until breakthrough)
+            structure_anchor = None
+            structure_offset = None
+            if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("structure"):
+                anc = belief.working_memory.get_anchor("structure")
+                if anc is not None:
+                    structure_anchor = anc.to(self.device).flatten().unsqueeze(0)
+                if hasattr(belief.working_memory, "get_anchor_offset"):
+                    structure_offset = belief.working_memory.get_anchor_offset("structure")
+
+            # Passive visual landmark spotting for stone deposits (Bug 3 Fix)
+            if (
+                hasattr(belief, "working_memory")
+                and not belief.working_memory.has_anchor("stone")
+                and self.semantic_memory is not None
+                and hasattr(self.semantic_memory, "get_prototype_key")
+            ):
+                stone_proto = self.semantic_memory.get_prototype_key("collect_stone")
+                if stone_proto is not None:
+                    sim_stone = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), stone_proto.to(self.device).flatten().unsqueeze(0)).item())
+                    if sim_stone >= 0.65:
+                        belief.working_memory.set_anchor("stone", z_0.flatten().cpu())
+
+            # Stone landmark anchor guidance (Working Memory: return to spotted rock once pickaxe is crafted)
+            stone_anchor = None
+            stone_offset = None
+            if hasattr(belief, "working_memory") and belief.working_memory.has_anchor("stone"):
+                anc_s = belief.working_memory.get_anchor("stone")
+                if anc_s is not None:
+                    stone_anchor = anc_s.to(self.device).flatten().unsqueeze(0)
+                if hasattr(belief.working_memory, "get_anchor_offset"):
+                    stone_offset = belief.working_memory.get_anchor_offset("stone")
+
+            # Backpack inventory checks for landmark gating (0: wood, 6: wood_pickaxe)
+            has_wood = False
+            has_pickaxe = False
+            if not self.strict_inference and inv_context is not None:
+                if torch.is_tensor(inv_context):
+                    inv_cpu = inv_context.detach().cpu().flatten()
+                else:
+                    inv_cpu = torch.from_numpy(np.array(inv_context, dtype=np.float32).flatten())
+                if len(inv_cpu) >= 1:
+                    has_wood = bool(inv_cpu[0] >= 1.0)
+                if len(inv_cpu) >= 7:
+                    has_pickaxe = bool(inv_cpu[6] >= 1.0)
+
+            # Action displacement mapping for dead-reckoning:
+            # 1: Left (-1, 0), 2: Right (1, 0), 3: Up (0, -1), 4: Down (0, 1)
+            action_deltas_tensor = torch.zeros((self.num_actions, 2), dtype=torch.float32, device=self.device)
+            action_deltas_tensor[1] = torch.tensor([-1.0, 0.0], device=self.device)
+            action_deltas_tensor[2] = torch.tensor([1.0, 0.0], device=self.device)
+            action_deltas_tensor[3] = torch.tensor([0.0, -1.0], device=self.device)
+            action_deltas_tensor[4] = torch.tensor([0.0, 1.0], device=self.device)
+
             # Determine action injection: direct affordance or backward subgoal intention.
             # Injection gated on chain value for the causal-memory path: a weak
             # (marginal-value ~0) subgoal must not commit candidates (plan Stage 6).
+            # The semantic-memory path (privileged mode) has no chain value — unaffected.
             inject_action = None
             subgoal_injectable = (
                 active_subgoal is None or float(active_subgoal.get("chain_value", 0.0)) >= 0.3
@@ -236,12 +300,15 @@ class RecurrentMPCPlanner:
                 if active_subgoal["status"] == "HARVESTING_INPUT":
                     prod_key = active_subgoal["producer_key"].to(self.device)
                     cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), prod_key.flatten().unsqueeze(0)).item())
-                    if cue_sim >= 0.70:
+                    if cue_sim >= 0.35:
                         inject_action = active_subgoal["producer_action"]
-                elif active_subgoal["status"] in ("READY_TO_EXECUTE", "APPROACHING_AFFORDANCE"):
+                elif active_subgoal["status"] == "READY_TO_EXECUTE":
                     tgt_key = active_subgoal["target_key"].to(self.device)
                     cue_sim = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), tgt_key.flatten().unsqueeze(0)).item())
-                    if cue_sim >= 0.70:
+                    struct_sim_curr = 0.0
+                    if self.use_landmark_guidance and structure_anchor is not None:
+                        struct_sim_curr = float(F.cosine_similarity(z_0.flatten().unsqueeze(0), structure_anchor.flatten().unsqueeze(0)).item())
+                    if cue_sim >= 0.35 or struct_sim_curr >= 0.50:
                         inject_action = active_subgoal["target_action"]
 
             # Initialize categorical CEM action distribution [H, 17]
@@ -303,6 +370,14 @@ class RecurrentMPCPlanner:
                 gamma_prod = torch.ones(C, device=self.device)
                 done_prob = torch.zeros(C, device=self.device)
 
+                pos_struct_t = None
+                if structure_offset is not None:
+                    pos_struct_t = torch.tensor(structure_offset, dtype=torch.float32, device=self.device).unsqueeze(0).expand(C, -1).clone()
+
+                pos_stone_t = None
+                if stone_offset is not None:
+                    pos_stone_t = torch.tensor(stone_offset, dtype=torch.float32, device=self.device).unsqueeze(0).expand(C, -1).clone()
+
                 # Transition-aware state tracking per imagined candidate branch
                 x_hat_0 = None
                 x_hat_t = None
@@ -314,6 +389,11 @@ class RecurrentMPCPlanner:
 
                 for t in range(self.horizon):
                     a_t = actions_seq[:, t]
+                    delta_move = action_deltas_tensor[a_t]
+                    if pos_struct_t is not None:
+                        pos_struct_t = pos_struct_t + delta_move
+                    if pos_stone_t is not None:
+                        pos_stone_t = pos_stone_t + delta_move
 
                     # Transition head imagined consequence prediction (Shadow mode: per-candidate state tracking)
                     if self.use_transition_model and hasattr(self.model, "predict_transition"):
@@ -408,22 +488,83 @@ class RecurrentMPCPlanner:
                             prod_act = active_subgoal["producer_action"]
                             prod_key = active_subgoal["producer_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, prod_key, dim=-1), min=0.0)
-                            # Sigmoidal affordance gate: only reward execution when close enough to target
-                            exec_gate = torch.sigmoid((sim_cue - 0.70) / 0.05)
-                            action_reward = (a_t == prod_act).float() * (0.35 * exec_gate * subgoal_scale)
+                            # Pull agent towards producer visual cues while executing producer action
+                            action_reward = (a_t == prod_act).float() * (0.25 * sim_cue * subgoal_scale)
                             # Visual navigation gradient toward harvest cues, gated by value
-                            nav_reward = 0.15 * sim_cue * subgoal_scale
+                            nav_reward = 0.05 * sim_cue * subgoal_scale
                             subgoal_reward = action_reward + nav_reward
-                        elif active_subgoal["status"] in ("READY_TO_EXECUTE", "APPROACHING_AFFORDANCE"):
+                        elif active_subgoal["status"] == "READY_TO_EXECUTE":
                             tgt_act = active_subgoal["target_action"]
                             tgt_key = active_subgoal["target_key"].to(self.device).flatten().unsqueeze(0)
                             sim_cue = torch.clamp(F.cosine_similarity(z_t, tgt_key, dim=-1), min=0.0)
                             # Multi-step crafting affordance: rewards crafting when visually aligned with target preconditions
-                            exec_gate = torch.sigmoid((sim_cue - 0.70) / 0.05)
-                            action_reward = (a_t == tgt_act).float() * (0.35 * exec_gate * subgoal_scale)
-                            # Visual navigation gradient toward target cue (e.g. approach table or workstation)
-                            nav_reward = 0.15 * sim_cue * subgoal_scale
+                            action_reward = (a_t == tgt_act).float() * (0.35 * sim_cue * subgoal_scale)
+                            # Visual navigation gradient toward target cue (e.g. approach table or harvesting site)
+                            nav_reward = 0.10 * sim_cue * subgoal_scale
                             subgoal_reward = action_reward + nav_reward
+
+                    # Landmark anchor guidance (Preserved in privileged mode; enabled in strict mode via learned state readout)
+                    landmark_reward = 0.0
+                    if not self.strict_inference:
+                        if self.use_landmark_guidance and structure_anchor is not None:
+                            struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
+                            if has_wood:
+                                # We have wood (>= 1)! Pull HARD back to the table to craft pickaxe/sword
+                                # Visual alignment pull when table is on-screen
+                                vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
+                                # Dead-reckoning spatial pull when table is off-screen
+                                offset_pull = 0.0
+                                if pos_struct_t is not None:
+                                    dist_to_table = torch.norm(pos_struct_t, dim=-1)
+                                    offset_pull = -0.10 * dist_to_table
+                                landmark_reward = vis_pull + offset_pull
+                            else:
+                                # We have 0 wood! Do NOT glue agent to the table with +1.5 reward!
+                                # Push slightly away so the agent explores to harvest trees
+                                landmark_reward = -0.05 * torch.clamp(struct_sim - 0.85, min=0.0)
+
+                        # Stone landmark pull (Bug 3 Fix: Return to spotted rock once pickaxe is in hand)
+                        if self.use_landmark_guidance and stone_anchor is not None and has_pickaxe:
+                            stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
+                            vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_stone_t is not None:
+                                dist_to_stone = torch.norm(pos_stone_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_stone
+                            landmark_reward = landmark_reward + vis_pull + offset_pull
+                    elif self.strict_inference and self.use_transition_model and self.transition_scoring and x_hat_t is not None:
+                        # Strict-mode landmark guidance using strictly learned state readout & imagined dynamics
+                        # Zero privileged environment inventory inspection!
+                        if self.use_landmark_guidance and structure_anchor is not None:
+                            struct_sim = F.cosine_similarity(z_t, structure_anchor, dim=-1)
+                            cand_has_wood = (x_hat_t[:, 0] >= 0.5)
+                            vis_pull = 0.30 * torch.clamp(struct_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_struct_t is not None:
+                                dist_to_table = torch.norm(pos_struct_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_table
+                            wood_landmark = torch.where(
+                                cand_has_wood,
+                                vis_pull + offset_pull,
+                                -0.05 * torch.clamp(struct_sim - 0.85, min=0.0),
+                            )
+                            landmark_reward = landmark_reward + wood_landmark
+
+                        # Stone landmark pull conditioned on strictly learned pickaxe prediction
+                        if self.use_landmark_guidance and stone_anchor is not None:
+                            cand_has_pickaxe = (x_hat_t[:, 6] >= 0.5)
+                            stone_sim = F.cosine_similarity(z_t, stone_anchor, dim=-1)
+                            vis_pull = 0.30 * torch.clamp(stone_sim, min=0.0)
+                            offset_pull = 0.0
+                            if pos_stone_t is not None:
+                                dist_to_stone = torch.norm(pos_stone_t, dim=-1)
+                                offset_pull = -0.10 * dist_to_stone
+                            stone_landmark = torch.where(
+                                cand_has_pickaxe,
+                                vis_pull + offset_pull,
+                                torch.zeros_like(vis_pull),
+                            )
+                            landmark_reward = landmark_reward + stone_landmark
 
                     # Transition head active consequence scoring (Ablation C / Gate 10)
                     consequence_reward = 0.0
@@ -449,6 +590,7 @@ class RecurrentMPCPlanner:
                         + vital_reward
                         + affordance_reward
                         + subgoal_reward
+                        + landmark_reward
                         + consequence_reward
                     )
                     cumulative_reward = cumulative_reward + gamma_prod * step_reward
@@ -536,6 +678,10 @@ class RecurrentMPCPlanner:
                     "memory_best_q": float(q_memory_all.max().item()) if q_memory_all is not None else 0.0,
                     "active_subgoal_status": str(active_subgoal.get("status", "") if active_subgoal else ""),
                     "active_subgoal_target": str(active_subgoal.get("target_name", "") if active_subgoal else ""),
+                    "structure_offset_x": float(structure_offset[0]) if structure_offset is not None else 0.0,
+                    "structure_offset_y": float(structure_offset[1]) if structure_offset is not None else 0.0,
+                    "stone_offset_x": float(stone_offset[0]) if stone_offset is not None else 0.0,
+                    "stone_offset_y": float(stone_offset[1]) if stone_offset is not None else 0.0,
                 }
                 if self.use_transition_model:
                     best_debug.update({
