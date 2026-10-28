@@ -66,6 +66,18 @@ def export_online_memory_review(
 ) -> None:
     p = Path(bank_path)
     if not p.exists():
+        candidates = [
+            REPO_ROOT / bank_path,
+            Path("/content/learn-a-world") / bank_path,
+            Path("/content/drive/MyDrive/learn-a-world") / bank_path,
+            Path("/content/drive/MyDrive/learn-a-world/results") / Path(bank_path).name,
+            Path("/content/drive/MyDrive/learn-a-world/checkpoints") / Path(bank_path).name,
+        ]
+        for c in candidates:
+            if c.exists() and c.is_file():
+                p = c
+                break
+    if not p.exists():
         print(f"❌ Error: Bank file not found: {bank_path}")
         sys.exit(1)
 
@@ -224,12 +236,14 @@ def export_online_memory_review(
 
 def main():
     parser = argparse.ArgumentParser(description="Export & Review Online Memory Bank.")
-    parser.add_argument("bank_path", type=str, nargs="?", default="/content/drive/MyDrive/learn-a-world/checkpoints/phase2_causal_memory_bank_online.json")
+    parser.add_argument("bank_path", type=str, nargs="?", default="results/dual_store_memory_bank_online.json")
+    parser.add_argument("--bank", dest="bank_flag", type=str, default=None, help="Explicit bank path")
     parser.add_argument("--output_md", type=str, default="results/online_memory_review.md")
     parser.add_argument("--output_json", type=str, default="results/online_memory_dump.json")
     args = parser.parse_args()
 
-    export_online_memory_review(args.bank_path, args.output_md, args.output_json)
+    target_path = args.bank_flag if args.bank_flag else args.bank_path
+    export_online_memory_review(target_path, args.output_md, args.output_json)
 
 
 if __name__ == "__main__":
