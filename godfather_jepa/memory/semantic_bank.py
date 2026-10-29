@@ -97,11 +97,9 @@ class SemanticConsolidatedBank:
     def load(self, filepath: Optional[str] = None) -> bool:
         """
         Loads semantic memory bank from disk or Google Drive.
-        Supports both PyTorch (.pt) and JSON formats, and seamlessly falls back
-        to or merges with the git-tracked canonical bank.
+        Supports both PyTorch (.pt) and JSON formats.
         """
         target_path = filepath or self.persistence_path or "checkpoints/godfather_memory_bank.pt"
-        canonical_path = str(Path(__file__).resolve().parent / "consolidated_bank.json")
 
         loaded = False
         data: Dict[str, Any] = {}
@@ -130,22 +128,6 @@ class SemanticConsolidatedBank:
                     loaded = True
                 except Exception:
                     pass
-
-        # 3. Seamlessly merge or fall back to git-tracked canonical bank
-        if os.path.exists(canonical_path):
-            try:
-                with open(canonical_path, "r") as f:
-                    canonical_data = json.load(f)
-                if not data:
-                    data = canonical_data
-                    loaded = True
-                else:
-                    # Merge any missing cards from canonical bank
-                    for c_name, c_dict in canonical_data.items():
-                        if c_name not in data and isinstance(c_dict, dict):
-                            data[c_name] = c_dict
-            except Exception:
-                pass
 
         if not loaded or not data:
             return False

@@ -817,13 +817,11 @@ def main():
     pipeline = GodfatherJEPAPipeline(device=device, checkpoint_init=args.checkpoint)
 
     # Automatically resolve and load pre-consolidated memory bank
-    canonical_bank_json = str(REPO_ROOT / "godfather_jepa" / "memory" / "consolidated_bank.json")
     bank_candidates = [
         args.memory_bank,
         str(out_dir / "godfather_memory_bank.pt"),
         "/content/drive/MyDrive/learn-a-world/checkpoints/godfather_memory_bank.pt",
         "checkpoints/godfather_memory_bank.pt",
-        canonical_bank_json,
     ]
     resolved_bank = None
     for b in bank_candidates:

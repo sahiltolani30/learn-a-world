@@ -241,22 +241,7 @@ def main():
     )
     parser.add_argument("--resume", action="store_true", help="Resume from existing bank file if it exists")
     parser.add_argument("--inspect", action="store_true", help="Inspect and display existing memory bank cards and exit")
-    parser.add_argument("--sync-canonical", action="store_true", help="Synchronize canonical verified memory bank into target bank file and exit")
-    parser.add_argument("--link-tools", action="store_true", help="Alias for --sync-canonical")
     args = parser.parse_args()
-
-    if args.link_tools or args.sync_canonical:
-        canonical_path = str(Path(__file__).resolve().parent / "consolidated_bank.json")
-        if os.path.exists(canonical_path):
-            bank = SemanticConsolidatedBank(persistence_path=args.out_bank)
-            bank.load(canonical_path)
-            bank.save(args.out_bank)
-            print(f"[Sync] Successfully synchronized {len(bank.cards)} canonical empirical cards to {args.out_bank}!")
-            for name, card in sorted(bank.cards.items()):
-                print(f"  - Card '{name}': Action {card.action}, Catalyst: {card.catalyst_needed}, Predecessors: {card.predecessors}")
-        else:
-            print(f"[Sync] Error: Canonical bank {canonical_path} not found.")
-        return
 
     if args.inspect:
         if os.path.exists(args.out_bank):
