@@ -241,7 +241,39 @@ def main():
     )
     parser.add_argument("--resume", action="store_true", help="Resume from existing bank file if it exists")
     parser.add_argument("--inspect", action="store_true", help="Inspect and display existing memory bank cards and exit")
+    parser.add_argument("--link-tools", action="store_true", help="Fast offline link of tool catalysts (pickaxe, sword) into existing bank and exit")
     args = parser.parse_args()
+
+    if args.link_tools:
+        if os.path.exists(args.out_bank):
+            bank = SemanticConsolidatedBank(persistence_path=args.out_bank)
+            bank.load(args.out_bank)
+            print(f"[Link-Tools] Loaded memory bank from {args.out_bank} ({len(bank.cards)} cards)")
+            modified = False
+            for mining_card in ("collect_stone", "collect_coal"):
+                if mining_card in bank.cards:
+                    card = bank.cards[mining_card]
+                    if card.catalyst_needed != "wood_pickaxe":
+                        card.catalyst_needed = "wood_pickaxe"
+                        modified = True
+                    if "make_wood_pickaxe" in bank.cards and "make_wood_pickaxe" not in card.predecessors:
+                        card.predecessors = ["make_wood_pickaxe"]
+                        modified = True
+            if "make_wood_sword" in bank.cards:
+                sword_card = bank.cards["make_wood_sword"]
+                if sword_card.catalyst_needed != "table_placed":
+                    sword_card.catalyst_needed = "table_placed"
+                    modified = True
+                if "place_table" in bank.cards and "place_table" not in sword_card.predecessors:
+                    sword_card.predecessors.append("place_table")
+                    modified = True
+            bank.save(args.out_bank)
+            print(f"[Link-Tools] Successfully updated and persisted tool catalyst linkages to {args.out_bank}!")
+            for name, card in sorted(bank.cards.items()):
+                print(f"  - Card '{name}': Action {card.action}, Catalyst: {card.catalyst_needed}, Predecessors: {card.predecessors}")
+        else:
+            print(f"[Link-Tools] Error: Target file {args.out_bank} does not exist.")
+        return
 
     if args.inspect:
         if os.path.exists(args.out_bank):

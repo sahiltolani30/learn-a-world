@@ -25,6 +25,7 @@ from godfather_jepa.models.reward_head import DenseRewardHead
 from godfather_jepa.models.survival import SurvivalContinuationHead
 from godfather_jepa.models.symlog_critic import SymlogCategoricalCritic, SymlogTwoHotCoder
 from godfather_jepa.models.belief import SpatialConvGRU, VectorBeliefCore
+from godfather_jepa.models.ensemble import EpistemicPredictorEnsemble
 from godfather_jepa.models.odometry import TopologicalAnchorGraph
 from godfather_jepa.planning.causal_hypergraph import CausalHypergraph
 
@@ -44,6 +45,7 @@ class LatentMPCPlanner:
         spatial_gru: SpatialConvGRU,
         vector_belief: VectorBeliefCore,
         causal_hypergraph: CausalHypergraph,
+        ensemble: Optional[EpistemicPredictorEnsemble] = None,
         horizon: int = 10,
         num_candidates: int = 64,
         cem_iterations: int = 2,
@@ -54,6 +56,7 @@ class LatentMPCPlanner:
         device: Optional[torch.device] = None,
     ):
         self.predictor = predictor
+        self.ensemble = ensemble
         self.reward_head = reward_head
         self.continuation_head = continuation_head
         self.critic = critic
@@ -140,13 +143,18 @@ class LatentMPCPlanner:
         N = self.num_candidates
         N_elite = max(2, int(N * self.elite_ratio))
 
-        # Proposal distribution seeded with policy action if available
-        action_probs = torch.full((H, self.num_actions), 1.0 / self.num_actions, device=self.device)
+        # Proposal distribution: for spatial navigation and gathering, focus on
+        # physically valid motor actions (1..5: movement and interaction) in the wilderness
+        action_probs = torch.zeros((H, self.num_actions), device=self.device)
+        action_probs[:, 1:6] = 1.0 / 5.0
+        action_probs += 0.01  # exploration noise across all actions
+        action_probs /= action_probs.sum(dim=-1, keepdim=True)
+
         if policy_action is not None and 0 <= policy_action < self.num_actions:
             action_probs[0, policy_action] += 0.3
             action_probs[0] /= action_probs[0].sum()
 
-        best_action = 0
+        best_action = policy_action if (policy_action is not None and 1 <= policy_action <= 5) else 5
         best_score = -float("inf")
 
         with torch.no_grad():
@@ -174,12 +182,18 @@ class LatentMPCPlanner:
                     pred_r = self.reward_head(composite, act_t)
                     pred_c = self.continuation_head(composite)
 
-                    # Penalty for dying: if continuation drops, heavily penalize
-                    step_penalty = self.death_penalty * (1.0 - pred_c)
+                    # Epistemic curiosity bonus from predictor ensemble disagreement
+                    if self.ensemble is not None:
+                        ens_preds = self.ensemble(z_k, h_k, act_t)
+                        disagreement = self.ensemble.disagreement(ens_preds)
+                        pred_r = pred_r + 0.1 * disagreement
+
+                    # Penalty for dying: triggers when continuation drops below healthy threshold (0.4)
+                    step_penalty = self.death_penalty * torch.clamp(0.4 - pred_c, min=0.0)
                     effective_reward = pred_r - step_penalty
 
                     cumulative_rewards += discount_factors * effective_reward
-                    discount_factors = discount_factors * (self.gamma * pred_c)
+                    discount_factors = discount_factors * (self.gamma * torch.clamp(pred_c, min=0.4, max=1.0))
 
                     # Unroll forward dynamics
                     z_next = self.predictor(z_k, h_k, act_t)

@@ -198,11 +198,26 @@ class GodfatherJEPAPipeline:
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=learning_rate)
 
         # 4. Checkpoint warm-start adaptation if supplied
-        if checkpoint_init and os.path.exists(checkpoint_init):
+        resolved_ckpt = None
+        ckpt_candidates = [
+            checkpoint_init,
+            "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_state_readout_v2.pt",
+            "/content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_phase2.pt",
+            "checkpoints/jepa_crafter_v3_phase2.pt",
+            "checkpoints/jepa_crafter.pt",
+        ]
+        for c in ckpt_candidates:
+            if c and os.path.exists(c):
+                resolved_ckpt = c
+                break
+
+        if resolved_ckpt:
             success, report = audit_and_adapt_checkpoint(
-                checkpoint_init, self.encoder, target_actor=self.actor, device=device
+                resolved_ckpt, self.encoder, target_actor=self.actor, device=device
             )
-            print(f"[Adapter] Audit verdict: {report.verdict}")
+            print(f"[Adapter] Successfully adapted checkpoint from {resolved_ckpt}. Verdict: {report.verdict}")
+        else:
+            print(f"[Adapter] WARNING: No pre-trained backbone checkpoint found. Model initialized with random weights.")
 
         # 5. Buffer
         self.buffer = MilestoneReplayBuffer(capacity=2000, priority_ratio=0.10)
@@ -210,6 +225,7 @@ class GodfatherJEPAPipeline:
         # 6. Latent MPC Trajectory Planner
         self.mpc_planner = LatentMPCPlanner(
             predictor=self.predictor,
+            ensemble=self.ensemble,
             reward_head=self.reward_head,
             continuation_head=self.continuation_head,
             critic=self.critic,
@@ -778,12 +794,14 @@ class GodfatherJEPAPipeline:
 
 def main():
     parser = argparse.ArgumentParser(description="Godfather JEPA Training Runner")
-    parser.add_argument("--episodes", type=int, default=40, help="Number of training episodes")
+    parser.add_argument("--episodes", type=int, default=100, help="Number of training episodes")
     parser.add_argument("--updates-per-episode", type=int, default=50, help="Number of gradient update steps per episode")
     parser.add_argument("--save-every", type=int, default=10, help="Periodic auto-save frequency in episodes")
+    parser.add_argument("--eval-every", type=int, default=50, help="Periodic evaluation on locked benchmark seeds every N episodes")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in out-dir if available")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
+    parser.add_argument("--memory-bank", type=str, default=None, help="Path to pre-consolidated godfather_memory_bank.pt")
     parser.add_argument("--shard-dir", type=str, default=None, help="Directory containing sequence .npz shards to pre-populate buffer")
     parser.add_argument("--out-dir", type=str, default="godfather_runs/", help="Output directory for checkpoints and eval results")
     args = parser.parse_args()
@@ -793,6 +811,30 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     pipeline = GodfatherJEPAPipeline(device=device, checkpoint_init=args.checkpoint)
+
+    # Automatically resolve and load pre-consolidated memory bank
+    bank_candidates = [
+        args.memory_bank,
+        str(out_dir / "godfather_memory_bank.pt"),
+        "/content/drive/MyDrive/learn-a-world/checkpoints/godfather_memory_bank.pt",
+        "checkpoints/godfather_memory_bank.pt",
+    ]
+    resolved_bank = None
+    for b in bank_candidates:
+        if b and os.path.exists(b):
+            resolved_bank = b
+            break
+
+    if resolved_bank:
+        loaded = pipeline.semantic_bank.load(resolved_bank)
+        if loaded:
+            print(f"[Memory Bank] Successfully loaded {len(pipeline.semantic_bank.cards)} active cards from {resolved_bank}")
+            for c_name, c_card in sorted(pipeline.semantic_bank.cards.items()):
+                print(f"  - Card '{c_name}': Act {c_card.action}, Cat: {c_card.catalyst_needed}, Preds: {c_card.predecessors}")
+        else:
+            print(f"[Memory Bank] Warning: Could not parse {resolved_bank}")
+    else:
+        print("[Memory Bank] Starting with empty memory bank (tabula rasa).")
 
     # Optional resume from previous checkpoint if available
     latest_ckpt = out_dir / "godfather_jepa_latest.pt"
@@ -810,6 +852,7 @@ def main():
 
     print(f"=== Starting Godfather JEPA Training on {device} (updates_per_episode={args.updates_per_episode}) ===")
     import gc
+    import json
 
     for ep in range(args.episodes):
         seed = generate_procedural_seed(rank=0, episode=ep, generation=0)
@@ -824,6 +867,21 @@ def main():
             flush=True,
         )
 
+        # Periodic locked-seed benchmark evaluation
+        if args.eval_every > 0 and ((ep + 1) % args.eval_every == 0 or (ep + 1) == args.episodes):
+            print(f"\n--- Running Benchmark Evaluation (Episode {ep+1:03d}) on Seeds 2050..2059 ---", flush=True)
+            eval_res = pipeline.evaluate(seeds=list(range(2050, 2060)))
+            print(
+                f"[Eval] Episode {ep+1:03d} | Crafter Score: {eval_res['crafter_score']:.2f}% | Mean Survival: {eval_res['mean_survival_length']:.1f} steps\n",
+                flush=True,
+            )
+            eval_log_path = out_dir / "eval_progress.jsonl"
+            try:
+                with open(eval_log_path, "a") as f:
+                    f.write(json.dumps({"episode": ep + 1, "crafter_score": eval_res["crafter_score"], "mean_survival": eval_res["mean_survival_length"]}) + "\n")
+            except Exception:
+                pass
+
         # Periodic auto-save to Google Drive so progress is NEVER lost on disconnect
         if (ep + 1) % args.save_every == 0 or (ep + 1) == args.episodes:
             ckpt_latest = str(out_dir / "godfather_jepa_latest.pt")
@@ -837,10 +895,10 @@ def main():
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    print("\n=== Running Locked-Seed Benchmark (2050..2059) ===")
-    bench_results = pipeline.evaluate(seeds=list(range(2050, 2060)))
-    print(f"Benchmark Crafter Score: {bench_results['crafter_score']:.2f}%")
-    print(f"Mean Survival Length: {bench_results['mean_survival_length']:.1f} steps")
+    print("\n=== Final Benchmark Evaluation (Seeds 2050..2099) ===")
+    bench_results = pipeline.evaluate(seeds=list(range(2050, 2100)))
+    print(f"Final Benchmark Crafter Score: {bench_results['crafter_score']:.2f}%")
+    print(f"Final Mean Survival Length: {bench_results['mean_survival_length']:.1f} steps")
 
 
 if __name__ == "__main__":

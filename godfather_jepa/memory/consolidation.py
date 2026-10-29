@@ -89,7 +89,7 @@ class OfflineConsolidationEngine:
 
                 # Pearlian Causal Contrast for Catalyst Induction:
                 # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone,
-                # tracking the step index when each workstation was placed for temporal precedence.
+                # as well as portable tool catalysts held in inventory (e.g. pickaxes, swords).
                 nearby_stations: Dict[str, int] = {}
                 if not is_fixture:
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
@@ -99,6 +99,11 @@ class OfflineConsolidationEngine:
                                 if dist <= 2.2:
                                     canonical_station = get_fixture_alias(station_type)
                                     nearby_stations[canonical_station] = p_step
+
+                    # Portable tools in inventory (e.g. wood_pickaxe for mining stone/coal)
+                    for item_name, count in inv.items():
+                        if count > 0 and ("pickaxe" in item_name or "sword" in item_name):
+                            nearby_stations[item_name] = step.step_idx
 
                 # Accumulate co-occurrence counts and temporal lag (steps elapsed since placement)
                 if ach not in self.catalyst_counts:

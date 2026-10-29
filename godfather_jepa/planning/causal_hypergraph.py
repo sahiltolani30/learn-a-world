@@ -234,8 +234,9 @@ class CausalHypergraph:
                 continue
 
             # 3. Zone of Proximal Development (ZPD) filter:
-            # A candidate must not require a catalyst whose own prerequisite catalyst is also unmet.
-            # This prevents premature targeting of deep downstream nodes before their prerequisites exist.
+            # A candidate must not require a catalyst or predecessor tool whose own prerequisite catalyst is unmet.
+            # E.g. place_stone requires collect_stone (needs pickaxe, which needs table). If table/pickaxe unmet, reject!
+            zpd_unreachable = False
             if card.catalyst_needed:
                 catalyst_satisfied = (
                     card.catalyst_needed in ws
@@ -251,7 +252,29 @@ class CausalHypergraph:
                                 or current_inventory.get(pred_card.catalyst_needed, 0) > 0
                             )
                             if not pred_cat_satisfied:
-                                continue
+                                zpd_unreachable = True
+
+            if not zpd_unreachable:
+                for pred in card.predecessors:
+                    if pred in self.cards:
+                        p_card = self.cards[pred]
+                        if p_card.catalyst_needed:
+                            p_cat_satisfied = (
+                                p_card.catalyst_needed in ws
+                                or current_inventory.get(p_card.catalyst_needed, 0) > 0
+                            )
+                            if not p_cat_satisfied:
+                                p_producer = self.find_producer(p_card.catalyst_needed)
+                                if p_producer and p_producer in self.cards:
+                                    pp_card = self.cards[p_producer]
+                                    if pp_card.catalyst_needed and (
+                                        pp_card.catalyst_needed not in ws
+                                        and current_inventory.get(pp_card.catalyst_needed, 0) == 0
+                                    ):
+                                        zpd_unreachable = True
+                                        break
+            if zpd_unreachable:
+                continue
 
             # 4. Calculate upstream budget and resource deficit from current inventory
             budget = self.calculate_upstream_budget(
@@ -306,22 +329,29 @@ class CausalHypergraph:
         visited.add(target_goal)
         card = self.cards[target_goal]
 
+        cat_needed = card.catalyst_needed
+        if not cat_needed:
+            if "make_" in card.name or card.action in (11, 12, 13, 14, 15, 16):
+                cat_needed = "table_placed"
+            elif card.name in ("collect_stone", "collect_coal"):
+                cat_needed = "wood_pickaxe"
+
         # 1. Check if catalyst is satisfied (either in workstations_present or in current_inventory)
-        if card.catalyst_needed:
+        if cat_needed:
             catalyst_satisfied = (
-                card.catalyst_needed in workstations_present
-                or current_inventory.get(card.catalyst_needed, 0) > 0
+                cat_needed in workstations_present
+                or current_inventory.get(cat_needed, 0) > 0
             )
             if not catalyst_satisfied:
                 # Need to satisfy catalyst first. Locate producer card.
                 producer = None
                 for pred in card.predecessors:
                     pred_card = self.cards.get(pred)
-                    if pred_card and pred_card.produces.get(card.catalyst_needed, 0) > 0:
+                    if pred_card and pred_card.produces.get(cat_needed, 0) > 0:
                         producer = pred
                         break
                 if producer is None:
-                    producer = self.find_producer(card.catalyst_needed)
+                    producer = self.find_producer(cat_needed)
 
                 if producer:
                     # Check upstream budget for target_goal taking present workstations into account

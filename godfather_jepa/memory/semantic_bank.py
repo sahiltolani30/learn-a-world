@@ -74,6 +74,18 @@ class SemanticConsolidatedBank:
             for card_name, card in self.cards.items()
         }
 
+        # Safeguard: if target file already exists, merge existing cards so we never clobber richer knowledge
+        if os.path.exists(target_path):
+            try:
+                existing_data = torch.load(target_path, map_location="cpu")
+                if isinstance(existing_data, dict):
+                    cards_dict = existing_data.get("cards", existing_data)
+                    for c_name, c_dict in cards_dict.items():
+                        if c_name not in data and isinstance(c_dict, dict):
+                            data[c_name] = c_dict
+            except Exception:
+                pass
+
         # 1. PyTorch serialized checkpoint
         torch.save(data, target_path)
 
