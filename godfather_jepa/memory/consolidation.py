@@ -32,6 +32,7 @@ class OfflineConsolidationEngine:
     def __init__(self, semantic_bank: Optional[SemanticConsolidatedBank] = None):
         self.bank = semantic_bank or SemanticConsolidatedBank()
         self.catalyst_counts: Dict[str, Dict[str, int]] = {}
+        self.catalyst_lags: Dict[str, Dict[str, float]] = {}
 
     def consolidate_episode(self, episodic_store: OnlineEpisodicStore) -> Dict[str, Any]:
         """
@@ -74,28 +75,32 @@ class OfflineConsolidationEngine:
                         step_produces = {ach: 1}
 
                 # Pearlian Causal Contrast for Catalyst Induction:
-                # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone.
-                nearby_stations: Set[str] = set()
+                # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone,
+                # tracking the step index when each workstation was placed for temporal precedence.
+                nearby_stations: Dict[str, int] = {}
                 if not ach.startswith("place_"):
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
                             if p_step < step.step_idx and station_type.endswith("_placed"):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 2.2:
-                                    nearby_stations.add(station_type)
+                                    nearby_stations[station_type] = p_step
                     elif (
                         episodic_store.workstation_placed_step is not None
                         and episodic_store.workstation_placed_step < step.step_idx
                     ):
                         dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
                         if dist <= 2.2:
-                            nearby_stations.add("table_placed")
+                            nearby_stations["table_placed"] = episodic_store.workstation_placed_step
 
-                # Accumulate co-occurrence counts
+                # Accumulate co-occurrence counts and temporal lag (steps elapsed since placement)
                 if ach not in self.catalyst_counts:
                     self.catalyst_counts[ach] = {}
-                for s in nearby_stations:
+                    self.catalyst_lags[ach] = {}
+                for s, p_step in nearby_stations.items():
                     self.catalyst_counts[ach][s] = self.catalyst_counts[ach].get(s, 0) + 1
+                    lag = float(step.step_idx - p_step)
+                    self.catalyst_lags[ach][s] = self.catalyst_lags[ach].get(s, 0.0) + lag
 
                 # Never consume what this step produces
                 for prod in step_produces:
@@ -110,17 +115,36 @@ class OfflineConsolidationEngine:
                         card.produces[k] = max(card.produces.get(k, 0), v)
                     for prod in card.produces:
                         card.consumes.pop(prod, None)
-                    # Causal binding: catalyst must be present in majority (>= 50%) of successes
+
+                    # Causal binding: catalyst must be present in majority (>= 50%) of successes.
+                    # Best candidate selected by maximum empirical frequency; ties broken by minimal temporal lag.
                     card_catalyst = None
                     if ach in self.catalyst_counts:
-                        for s, count in self.catalyst_counts[ach].items():
-                            if count / card.success_count >= 0.5:
-                                card_catalyst = s
-                                break
+                        candidates = [
+                            s for s, count in self.catalyst_counts[ach].items()
+                            if (count / card.success_count) >= 0.5
+                        ]
+                        if candidates:
+                            candidates.sort(
+                                key=lambda s: (
+                                    self.catalyst_counts[ach][s],
+                                    -self.catalyst_lags[ach].get(s, 0.0) / (self.catalyst_counts[ach][s] + 1e-5),
+                                ),
+                                reverse=True,
+                            )
+                            card_catalyst = candidates[0]
                     card.catalyst_needed = card_catalyst
                     updated_cards.append(ach)
                 else:
-                    card_catalyst = next(iter(nearby_stations)) if len(nearby_stations) == 1 else None
+                    if nearby_stations:
+                        sorted_stations = sorted(
+                            nearby_stations.keys(),
+                            key=lambda s: step.step_idx - nearby_stations[s],
+                        )
+                        card_catalyst = sorted_stations[0]
+                    else:
+                        card_catalyst = None
+
                     new_card = CausalCard(
                         action=step.action,
                         name=ach,
