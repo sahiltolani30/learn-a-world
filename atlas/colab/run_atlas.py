@@ -125,13 +125,27 @@ def resolve_paths(args) -> dict:
     }
 
 
-def sync_results_to_repo(results_dir: Path):
-    """Copies screening JSON results back to the local repo results/ folder."""
+def sync_results_to_repo(results_dir: Path, drive_root: Optional[Path] = None, runs_dir: Optional[Path] = None):
+    """Copies screening JSON results and checkpoints back to local repo and main Drive directories."""
     repo_results = REPO_ROOT / "results"
     repo_results.mkdir(parents=True, exist_ok=True)
     if results_dir.exists() and results_dir != repo_results:
         for f in results_dir.glob("atlas_screen_*.json"):
             shutil.copy2(f, repo_results / f.name)
+
+    # Mirror to main Drive results/ and checkpoints/ matching previous agents (Godfather JEPA, Phase 3)
+    if drive_root is not None and drive_root.exists():
+        main_results = drive_root / "results"
+        main_results.mkdir(parents=True, exist_ok=True)
+        if results_dir.exists():
+            for f in results_dir.glob("atlas_screen_*.json"):
+                shutil.copy2(f, main_results / f.name)
+        if runs_dir is not None and runs_dir.exists():
+            main_ckpts = drive_root / "checkpoints"
+            main_ckpts.mkdir(parents=True, exist_ok=True)
+            state_file = runs_dir / "state.pt"
+            if state_file.exists():
+                shutil.copy2(state_file, main_ckpts / "atlas_state.pt")
 
 
 def run_bootstrap_phase(loop: SelfLearnLoop, paths: dict, iters: int):
@@ -273,7 +287,7 @@ def main():
         print("=" * 70)
 
         loop.run_iterations(num_iters=args.iters, minutes_budget=args.minutes)
-        sync_results_to_repo(paths["results_dir"])
+        sync_results_to_repo(paths["results_dir"], drive_root=paths.get("drive_root"), runs_dir=paths.get("runs_dir"))
 
     elif args.phase == "screen":
         print("=" * 70)
@@ -290,7 +304,7 @@ def main():
             tag=args.tag,
             out_dir=paths["results_dir"],
         )
-        sync_results_to_repo(paths["results_dir"])
+        sync_results_to_repo(paths["results_dir"], drive_root=paths.get("drive_root"), runs_dir=paths.get("runs_dir"))
 
     print("\n[ATLAS] Phase finished successfully.")
 
