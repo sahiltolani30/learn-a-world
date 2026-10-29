@@ -394,6 +394,11 @@ class GodfatherJEPAPipeline:
             if teleo_action == 8 and prev_act == 8 and "table_placed" not in ws and "place_table" not in completed:
                 teleo_action = actor_action if (1 <= actor_action <= 4) else ((step % 4) + 1)
 
+            # If action 5 was executed on the previous step and nothing was collected (empty tile),
+            # do not swing into thin air on repeat—take a motor movement step (1..4) to approach resources
+            if teleo_action == 5 and prev_act == 5 and state.get("last_reward", 0.0) == 0.0:
+                teleo_action = actor_action if (1 <= actor_action <= 4) else ((step % 4) + 1)
+
             # 5. Visual darkness signal from world view
             visual_darkness = compute_visual_darkness(obs)
 
@@ -520,6 +525,7 @@ class GodfatherJEPAPipeline:
                 if "workstations" in state:
                     for ws_name in online_store.placed_workstations:
                         state["workstations"].add(ws_name)
+                state["last_reward"] = float(reward)
 
             obs_list.append(obs_next)
             act_list.append(act)

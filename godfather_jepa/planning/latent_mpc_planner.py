@@ -152,16 +152,14 @@ class LatentMPCPlanner:
         N = self.num_candidates
         N_elite = max(2, int(N * self.elite_ratio))
 
-        # Proposal distribution: for spatial navigation and gathering, focus on
-        # physically valid motor actions (1..5: movement and interaction) in the wilderness
+        # Proposal distribution: for spatial navigation and gathering, focus strictly on
+        # physically valid motor actions (1..4: movement, 5: interaction) in the wilderness
         action_probs = torch.zeros((H, self.num_actions), device=self.device)
-        action_probs[:, 1:6] = 1.0 / 5.0
-        action_probs += 0.01  # exploration noise across all actions
-        action_probs /= action_probs.sum(dim=-1, keepdim=True)
+        action_probs[:, 1:6] = 0.2
 
-        if policy_action is not None and 0 <= policy_action < self.num_actions:
+        if policy_action is not None and 1 <= policy_action <= 5:
             action_probs[0, policy_action] += 0.3
-            action_probs[0] /= action_probs[0].sum()
+            action_probs[0, 1:6] /= action_probs[0, 1:6].sum()
 
         best_action = policy_action if (policy_action is not None and 1 <= policy_action <= 5) else 5
         best_score = -float("inf")
@@ -227,11 +225,12 @@ class LatentMPCPlanner:
                     best_score = top_scores[0].item()
                     best_action = int(elite_trajectories[0, 0].item())
 
-                # Update CEM distribution for next iteration: smooth interpolation
+                # Update CEM distribution strictly over motor actions 1..5
                 new_probs = torch.zeros_like(action_probs)
                 for t in range(H):
                     counts = torch.bincount(elite_trajectories[:, t], minlength=self.num_actions).float()
-                    new_probs[t] = (counts + 0.1) / (counts.sum() + 0.1 * self.num_actions)
+                    m_counts = counts[1:6]
+                    new_probs[t, 1:6] = (m_counts + 0.05) / (m_counts.sum() + 0.25)
 
                 action_probs = 0.5 * action_probs + 0.5 * new_probs
 
