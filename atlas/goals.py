@@ -49,6 +49,8 @@ class GoalEntry:
 
     def __post_init__(self):
         self.key = np.asarray(self.key, dtype=np.float32).reshape(-1)
+        norm = float(np.linalg.norm(self.key))
+        self.key = self.key / max(norm, 1e-8)
         self.context = np.asarray(self.context, dtype=np.float32).reshape(-1)
         self.action_profile = np.asarray(self.action_profile, dtype=np.float32).reshape(NUM_ACTIONS, NUM_ACHIEVEMENTS)
         self.event_dims = [int(x) for x in self.event_dims]
@@ -58,22 +60,33 @@ class GoalEntry:
 class PredecessorLift:
     """Mines temporal prerequisite lift P(d in window before e | e) / P(d)."""
 
-    def __init__(self):
+    def __init__(self, cfg: Optional[GoalsConfig] = None):
+        self.cfg = cfg or GoalsConfig()
         self.lift: np.ndarray = np.ones((NUM_ACHIEVEMENTS, NUM_ACHIEVEMENTS), dtype=np.float32)
         self.ci_low: np.ndarray = np.zeros((NUM_ACHIEVEMENTS, NUM_ACHIEVEMENTS), dtype=np.float32)
+
+    def assert_consistent(self) -> None:
+        """Verifies that ci_low <= lift * 1.01 + 1e-6 elementwise."""
+        inconsistent = self.ci_low > self.lift * 1.01 + 1e-6
+        if np.any(inconsistent):
+            max_viol = float(np.max(self.ci_low - self.lift * 1.01))
+            raise RuntimeError(f"PredecessorLift inconsistent: ci_low > lift (max violation {max_viol}) — this is a bug, fix it")
 
     def mine(
         self,
         episodes_events: Sequence[np.ndarray],
         window: int = 30,
+        cfg: Optional[GoalsConfig] = None,
     ) -> None:
         """Computes empirical lift and Wilson CI lower bounds across episodes.
 
         Args:
             episodes_events: list of boolean event arrays, each shape [T, 22].
             window: temporal window in steps.
+            cfg: optional GoalsConfig overriding default.
         """
         if not episodes_events:
+            self.assert_consistent()
             return
 
         total_steps = 0
@@ -104,37 +117,49 @@ class PredecessorLift:
                             pair_counts[d, e] += 1
 
         if total_steps == 0:
+            self.assert_consistent()
             return
 
-        base_p_d = np.maximum(total_d_counts / total_steps, 1e-4)
-
+        active_cfg = cfg or self.cfg
+        lift_cap = active_cfg.lift_cap
+        cfg_lift_min_base_count = active_cfg.lift_min_base_count
+        cfg_lift_min_pair_support = active_cfg.lift_min_pair_support
         z_crit = 1.96  # 95% Wilson score
+
         for e in range(NUM_ACHIEVEMENTS):
             n_e = target_counts[e]
-            if n_e < 1:
-                self.lift[:, e] = 1.0
-                self.ci_low[:, e] = 0.0
-                continue
-
             for d in range(NUM_ACHIEVEMENTS):
                 if d == e:
                     self.lift[d, e] = 1.0
                     self.ci_low[d, e] = 0.0
                     continue
 
+                count_d = total_d_counts[d]
                 k = pair_counts[d, e]
-                p_cond = k / n_e
-                self.lift[d, e] = float(np.clip(p_cond / base_p_d[d], 0.0, 50.0))
+                p_d = count_d / total_steps
 
-                # Wilson score interval lower bound
-                denom = 1.0 + (z_crit ** 2) / n_e
-                center = (p_cond + (z_crit ** 2) / (2.0 * n_e)) / denom
-                margin = (
-                    z_crit
-                    * np.sqrt((p_cond * (1.0 - p_cond) + (z_crit ** 2) / (4.0 * n_e)) / n_e)
-                    / denom
-                )
-                self.ci_low[d, e] = float(max(0.0, (center - margin) / base_p_d[d]))
+                if count_d < cfg_lift_min_base_count or k < cfg_lift_min_pair_support or n_e < 1:
+                    self.lift[d, e] = 1.0
+                    self.ci_low[d, e] = 0.0
+                else:
+                    if p_d <= 0.0:
+                        self.lift[d, e] = 1.0
+                        self.ci_low[d, e] = 0.0
+                        continue
+                    p_cond = k / n_e
+                    self.lift[d, e] = float(min(lift_cap, p_cond / p_d))
+                    denom = 1.0 + (z_crit ** 2) / n_e
+                    center = (p_cond + (z_crit ** 2) / (2.0 * n_e)) / denom
+                    margin = (
+                        z_crit
+                        * np.sqrt(p_cond * (1.0 - p_cond) / n_e + (z_crit ** 2) / (4.0 * (n_e ** 2)))
+                        / denom
+                    )
+                    self.ci_low[d, e] = float(min(self.lift[d, e], max(0.0, (center - margin) / p_d)))
+                    if self.ci_low[d, e] > self.lift[d, e] * 1.01 + 1e-6:
+                        raise RuntimeError("PredecessorLift inconsistent: ci_low > lift — this is a bug, fix it")
+
+        self.assert_consistent()
 
     def save(self, path: Union[str, Path]) -> None:
         p = Path(path)
@@ -156,30 +181,69 @@ class GoalBank:
     def __init__(self, cfg: Optional[GoalsConfig] = None):
         self.cfg = cfg or GoalsConfig()
         self.entries: List[GoalEntry] = []
+        self.rejected_same_kind: int = 0
+        self._dim_counts: Dict[int, int] = {i: 0 for i in range(NUM_ACHIEVEMENTS)}
 
-    def add(self, entry: GoalEntry) -> GoalEntry:
-        """Adds a new goal entry. Merges into existing if cosine > 0.97."""
-        entry_key = _unit_vector(entry.key)
+    def _rebuild_dim_counts(self) -> None:
+        self._dim_counts = {i: 0 for i in range(NUM_ACHIEVEMENTS)}
+        for g in self.entries:
+            if g.kind == "event":
+                for d in g.event_dims:
+                    self._dim_counts[d] = self._dim_counts.get(d, 0) + 1
 
+    def add(self, entry: GoalEntry, current_iter: Optional[int] = None) -> Optional[GoalEntry]:
+        """Adds a new goal entry with deduplication, per-dim caps, and frontier quotas."""
+        entry.key = _unit_vector(entry.key)
+
+        # Reject if any existing goal of the SAME kind has cosine > same_kind_dedupe (0.90)
         for existing in self.entries:
-            sim = float(np.dot(entry_key, _unit_vector(existing.key)))
-            if sim > 0.97:
-                # Merge stats
-                existing.n_try += entry.n_try
-                existing.n_succ += entry.n_succ
-                existing.last_used_iter = max(existing.last_used_iter, entry.last_used_iter)
-                for dim in entry.event_dims:
-                    if dim not in existing.event_dims:
-                        existing.event_dims.append(dim)
-                existing.action_profile = np.maximum(existing.action_profile, entry.action_profile)
-                return existing
+            if existing.kind == entry.kind:
+                sim = float(np.dot(entry.key, existing.key))
+                if sim > self.cfg.same_kind_dedupe:
+                    self.rejected_same_kind += 1
+                    return None
 
-        if len(self.entries) >= self.cfg.max_goals:
-            # Evict least used / lowest success entry
-            self.entries.sort(key=lambda x: (x.n_succ / max(1, x.n_try), x.born_iter))
-            self.entries.pop(0)
+        # Count per-dim usage over "event" goals
+        if entry.kind == "event":
+            for d in entry.event_dims:
+                if self._dim_counts.get(d, 0) + 1 > self.cfg.max_goals_per_dim:
+                    return None
+
+        # Enforce frontier quota: if kind == "event" and current frontier share < 0.20 and bank size > 50,
+        # reject event goals until frontier share restored (frontier goals always accepted).
+        bank_size = len(self.entries)
+        if entry.kind == "event" and bank_size > 50:
+            frontier_count = sum(1 for g in self.entries if g.kind == "frontier")
+            if (frontier_count / bank_size) < self.cfg.frontier_min_share:
+                return None
+
+        # Eviction when full: evict entry with lowest evidence = (n_succ / max(1, n_try)) * (1 / (1 + 0.1 * age))
+        # among "event"/"vital" kinds; NEVER evict frontier goals below the 20% quota.
+        cur_iter = current_iter if current_iter is not None else entry.born_iter
+        if bank_size >= self.cfg.max_goals:
+            candidates = [g for g in self.entries if g.kind in ("event", "vital")]
+            if candidates:
+                def evidence_fn(g: GoalEntry) -> float:
+                    age = max(0, cur_iter - g.born_iter)
+                    return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
+
+                evict_target = min(candidates, key=evidence_fn)
+                self.entries.remove(evict_target)
+                if evict_target.kind == "event":
+                    for d in evict_target.event_dims:
+                        self._dim_counts[d] = max(0, self._dim_counts.get(d, 0) - 1)
+            else:
+                def evidence_fn(g: GoalEntry) -> float:
+                    age = max(0, cur_iter - g.born_iter)
+                    return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
+                evict_target = min(self.entries, key=evidence_fn)
+                self.entries.remove(evict_target)
 
         self.entries.append(entry)
+        if entry.kind == "event":
+            for d in entry.event_dims:
+                self._dim_counts[d] = self._dim_counts.get(d, 0) + 1
+
         return entry
 
     def mark_used(self, key: np.ndarray, success: bool, current_iter: int = 0) -> None:
@@ -232,10 +296,13 @@ class GoalBank:
                 best_flat_idx = int(np.argmax(locked_profiles))
                 best_locked_dim = locked_dims[best_flat_idx % len(locked_dims)]
 
-                # Predecessor prior lift factor
+                # Predecessor prior lift factor (V2: uses ci_low, only edges > 1.2)
                 if lift is not None:
-                    lift_sum = float(sum(lift.lift[d, best_locked_dim] for d in locked_dims if d != best_locked_dim))
-                    predecessor_factor = 1.0 + 0.25 * min(lift_sum, 4.0)
+                    pred_bonus = 0.25 * min(
+                        sum(float(lift.ci_low[d, best_locked_dim]) for d in locked_dims if lift.ci_low[d, best_locked_dim] > 1.2),
+                        4.0,
+                    )
+                    predecessor_factor = 1.0 + pred_bonus
                 else:
                     predecessor_factor = 1.0
                 score_unlock = self.cfg.w_unlock * max_unlock * predecessor_factor
@@ -323,3 +390,4 @@ class GoalBank:
                 last_used_iter=m["last_used_iter"],
             )
             self.entries.append(entry)
+        self._rebuild_dim_counts()

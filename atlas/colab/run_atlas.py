@@ -2,8 +2,6 @@
 
 Storage Contract:
 - Main Google Drive directory: /content/drive/MyDrive/learn-a-world (shared dataset & baselines)
-- Input data read from: /content/drive/MyDrive/learn-a-world/data/sequences/*.npz
-- Backbone checkpoint read from: /content/drive/MyDrive/learn-a-world/checkpoints/jepa_crafter_v3_state_readout_v2.pt
 - Dedicated ATLAS subfolder: /content/drive/MyDrive/learn-a-world/atlas/
     ├── shards/       (live collected shards & cached .latents.npz)
     ├── runs/<id>/    (atomic state.pt, train_log.jsonl, goal_bank, lift, topomap)
@@ -11,7 +9,6 @@ Storage Contract:
     └── results/      (protocol screening JSON reports)
 
 Phases:
-  bootstrap: offline pass over Drive sequence shards to initialize heads, GoalBank & PredecessorLift
   selflearn: iterative collect -> train -> mine loop with wall-clock budget and state checkpointing
   screen: locked 50-episode strict screening (seeds 2050-2099)
 """
@@ -65,8 +62,8 @@ def parse_args():
         "--phase",
         type=str,
         required=True,
-        choices=["bootstrap", "selflearn", "screen"],
-        help="Execution phase (bootstrap | selflearn | screen)",
+        choices=["selflearn", "screen"],
+        help="Execution phase (selflearn | screen)",
     )
     parser.add_argument(
         "--drive-dir",
@@ -82,8 +79,8 @@ def parse_args():
     )
     parser.add_argument("--iters", type=int, default=1, help="Number of iterations")
     parser.add_argument("--minutes", type=float, default=None, help="Wall-clock time budget in minutes")
-    parser.add_argument("--run-id", type=str, default="atlas_v1", help="Unique run identifier")
-    parser.add_argument("--tag", type=str, default="atlas_v1", help="Screening tag")
+    parser.add_argument("--run-id", type=str, default="atlas_v2_scratch", help="Unique run identifier")
+    parser.add_argument("--tag", type=str, default="atlas_v2", help="Screening tag")
     parser.add_argument("--checkpoint", type=str, default=None, help="Explicit backbone checkpoint path")
     parser.add_argument("--device", type=str, default="auto", help="Compute device (cuda | mps | cpu | auto)")
     parser.add_argument("--smoke", action="store_true", help="Quick smoke verification pass")
@@ -97,12 +94,10 @@ def resolve_paths(args) -> dict:
     if drive_root is not None and drive_root.exists():
         print(f"[Drive] Detected main Drive directory: {drive_root}")
         atlas_dir = Path(args.atlas_dir) if args.atlas_dir else (drive_root / "atlas")
-        bootstrap_seq_dir = drive_root / "data" / "sequences"
         drive_ckpt = drive_root / "checkpoints" / "jepa_crafter_v3_state_readout_v2.pt"
     else:
         print("[Drive] Google Drive not mounted; falling back to local workspace.")
         atlas_dir = REPO_ROOT / "data" / "atlas"
-        bootstrap_seq_dir = REPO_ROOT / "data" / "sequences"
         drive_ckpt = REPO_ROOT / "checkpoints" / "jepa_crafter_v3_phase2.pt"
 
     shards_dir = atlas_dir / "shards"
@@ -120,7 +115,6 @@ def resolve_paths(args) -> dict:
         "runs_dir": runs_dir,
         "results_dir": results_dir,
         "checkpoints_dir": checkpoints_dir,
-        "bootstrap_seq_dir": bootstrap_seq_dir,
         "drive_ckpt": drive_ckpt,
     }
 
@@ -152,99 +146,8 @@ def sync_results_to_repo(results_dir: Path, drive_root: Optional[Path] = None, r
                 shutil.copy2(journal_file, repo_results / "game_journal.jsonl")
 
 
-def run_bootstrap_phase(loop: SelfLearnLoop, paths: dict, iters: int):
-    """Offline bootstrap on Drive sequence shards (e.g. data/sequences/*.npz)."""
-    print("=" * 70)
-    print("=== [ATLAS] Starting BOOTSTRAP Phase ===")
-    print(f"Reading sequence shards from: {paths['bootstrap_seq_dir']}")
-    print(f"Caching latents to: {paths['shards_dir']}")
-    print("=" * 70)
-
-    shard_files: List[Path] = []
-    if paths["bootstrap_seq_dir"].exists():
-        shard_files.extend(sorted(paths["bootstrap_seq_dir"].glob("*.npz")))
-
-    # Fallback to local repo sequences if drive empty
-    local_seq = REPO_ROOT / "data" / "sequences"
-    if not shard_files and local_seq.exists():
-        shard_files.extend(sorted(local_seq.glob("*.npz")))
-
-    if not shard_files:
-        print("[Bootstrap] No sequence shards found. Skipping bootstrap.")
-        loop.save_state(0)
-        return
-
-    # Filter out latents sidecars
-    shard_files = [f for f in shard_files if not f.name.endswith(".latents.npz")]
-    print(f"[Bootstrap] Found {len(shard_files)} bootstrap shards.")
-
-    num_shards_to_use = min(len(shard_files), max(1, iters))
-    selected_shards = shard_files[:num_shards_to_use]
-
-    all_episodes = []
-    for idx, s_path in enumerate(selected_shards):
-        print(f"[Bootstrap {idx+1}/{len(selected_shards)}] Caching latents for {s_path.name}...")
-        lat_path = loop.trainer.cache_latents(s_path, cache_dir=paths["shards_dir"])
-
-        # Load metadata/actions/targets without loading pixel observations
-        shard_data = ShardLoader.load_shard(s_path, load_obs=False)
-        with np.load(lat_path) as lat_data:
-            z_full = np.array(lat_data["z"])
-            h_full = np.array(lat_data["h"])
-            res_full = np.array(lat_data["target_residuals"])
-
-        ep_lengths = shard_data["episode_lengths"]
-
-        start = 0
-        for ep_len in ep_lengths:
-            end = start + ep_len
-            all_episodes.append({
-                "z": z_full[start:end].copy(),
-                "h": h_full[start:end].copy(),
-                "target_residuals": res_full[start:end].copy(),
-                "actions": shard_data["actions"][start:end].copy(),
-                "rewards": shard_data["rewards"][start:end].copy(),
-                "dones": shard_data["dones"][start:end].copy(),
-                "events": shard_data["events"][start:end].copy(),
-                "mask_before": shard_data["mask_before"][start:end].copy(),
-                "inventory": shard_data["inventory"][start:end].copy(),
-            })
-            start = end
-
-        del z_full, h_full, res_full, shard_data
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        try:
-            import resource
-            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            if sys.platform != "darwin":
-                rss /= 1024  # Linux: ru_maxrss is in KB
-            else:
-                rss /= (1024 * 1024)  # macOS: bytes
-            print(f"  -> Ingested cleanly (RAM max RSS: {rss:.1f} MB)")
-        except Exception:
-            pass
-
-    print(f"[Bootstrap] Ingested {len(all_episodes)} episodes. Training initial heads...")
-    val_count = max(1, int(0.1 * len(all_episodes)))
-    train_eps = all_episodes[:-val_count]
-    val_eps = all_episodes[-val_count:]
-
-    loop.trainer.train_epoch(train_eps, val_eps, iter_idx=0)
-
-    print("[Bootstrap] Mining GoalBank and PredecessorLift from bootstrap trajectories...")
-    mine_goals_and_lift(loop.agent, all_episodes, iter_idx=0)
-
-    loop.save_state(0)
-    print(
-        f"[Bootstrap Complete] GoalBank populated with {len(loop.agent.goals.entries)} goals. "
-        f"State saved to {loop.state_file}"
-    )
-
-
 def main():
+    print("[ATLAS V2] Training from scratch. Prior weight: 0.0. Bootstrap: NONE.")
     args = parse_args()
     paths = resolve_paths(args)
 
@@ -268,6 +171,12 @@ def main():
     backbone = FrozenBackbone(config=cfg)
     agent = AtlasAgent(backbone=backbone, cfg=cfg)
 
+    target_state = paths["runs_dir"] / "state.pt"
+    if target_state.exists():
+        assert "archive" not in str(paths["runs_dir"]).lower(), (
+            f"Target run dir {paths['runs_dir']} is under an archive path; cannot resume from archive."
+        )
+
     loop = SelfLearnLoop(
         agent=agent,
         run_id=args.run_id,
@@ -277,10 +186,7 @@ def main():
         cfg=cfg,
     )
 
-    if args.phase == "bootstrap":
-        run_bootstrap_phase(loop, paths, iters=args.iters)
-
-    elif args.phase == "selflearn":
+    if args.phase == "selflearn":
         print("=" * 70)
         print(f"=== [ATLAS] Starting SELFLEARN Phase ({args.iters} iterations) ===")
         print(f"Saving shards to: {paths['shards_dir']}")

@@ -74,12 +74,14 @@ class EpisodeCollector:
         out_dir: Optional[Union[str, Path]] = None,
         cfg: Optional[CollectConfig] = None,
         journal_path: Optional[Union[str, Path]] = None,
+        health: Optional[Any] = None,
     ):
         self.agent = agent
         self.cfg = cfg or CollectConfig()
         self.out_dir = Path(out_dir or self.cfg.out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.journal_path = Path(journal_path) if journal_path is not None else None
+        self.health = health
         if self.journal_path is not None:
             self.journal_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +90,10 @@ class EpisodeCollector:
         frac = min(1.0, float(iter_idx) / max(1, self.cfg.epsilon_decay_iters))
         eps = (1.0 - frac) * self.cfg.epsilon_start + frac * self.cfg.epsilon_end
         beta = (1.0 - frac) * self.cfg.beta_start + frac * self.cfg.beta_end
+
+        if self.health is not None and getattr(self.health, "epsilon_boost_active", False):
+            boost_mult = getattr(self.health.cfg, "epsilon_boost", 2.0)
+            eps = min(1.0, eps * boost_mult)
 
         self.agent.epsilon = float(eps)
         self.agent.beta_t = float(beta)
@@ -110,6 +116,7 @@ class EpisodeCollector:
         mask_before_list: List[np.ndarray] = []
         inventory_list: List[np.ndarray] = []
         telemetry_list: List[Dict[str, Any]] = []
+        positions_list: List[List[float]] = []
 
         reward_prev = 0.0
         step = 0
@@ -121,6 +128,20 @@ class EpisodeCollector:
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             discount = float(info.get("discount", 0.0 if terminated else 1.0))
+
+            # Audit diagnostic: capture player_pos (never fed to agent.act)
+            pos = info.get("player_pos")
+            if pos is not None:
+                positions_list.append([float(pos[0]), float(pos[1])])
+
+            if self.health is not None:
+                self.health.observe_action(action)
+                self.health.notify_step()
+                if getattr(self.health, "epsilon_boost_active", False):
+                    boost_mult = getattr(self.health.cfg, "epsilon_boost", 2.0)
+                    base_frac = min(1.0, float(iter_idx) / max(1, self.cfg.epsilon_decay_iters))
+                    base_eps = (1.0 - base_frac) * self.cfg.epsilon_start + base_frac * self.cfg.epsilon_end
+                    self.agent.epsilon = min(1.0, base_eps * boost_mult)
 
             # Ground truth targets extracted from env info (SCORING/TRAINING ONLY)
             curr_ach_vec = _extract_achievements_vector(info.get("achievements", {}))
@@ -166,6 +187,17 @@ class EpisodeCollector:
             if terminated or truncated:
                 break
 
+        moved_steps = 0
+        for i in range(1, len(positions_list)):
+            if positions_list[i] != positions_list[i - 1]:
+                moved_steps += 1
+        moved_fraction = float(moved_steps / max(1, len(positions_list)))
+
+        action_hist: Dict[str, int] = {}
+        for a in action_list:
+            a_name = CRAFTER_ACTION_NAMES[a] if a < len(CRAFTER_ACTION_NAMES) else str(a)
+            action_hist[a_name] = action_hist.get(a_name, 0) + 1
+
         # Log to game journal if configured
         if self.journal_path is not None:
             all_unlocked = [CRAFTER_ACHIEVEMENTS[idx] for idx in range(NUM_ACHIEVEMENTS) if curr_ach_vec[idx] > 0]
@@ -185,6 +217,10 @@ class EpisodeCollector:
                 "num_achievements": len(all_unlocked),
                 "mode_counts": mode_counts,
                 "overrides_count": sum(1 for t_item in telemetry_list if t_item["override"]),
+                "positions": positions_list,
+                "moved_steps": moved_steps,
+                "moved_fraction": moved_fraction,
+                "action_histogram": action_hist,
                 "steps": telemetry_list,
             }
             try:
@@ -203,6 +239,10 @@ class EpisodeCollector:
             "events": np.stack(events_list, axis=0),
             "mask_before": np.stack(mask_before_list, axis=0),
             "inventory": np.stack(inventory_list, axis=0),
+            "positions": positions_list,
+            "moved_steps": moved_steps,
+            "moved_fraction": moved_fraction,
+            "action_histogram": action_hist,
             "episode_length": step,
             "seed": seed,
             "telemetry": telemetry_list,

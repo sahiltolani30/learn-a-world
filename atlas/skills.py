@@ -242,16 +242,151 @@ def build_her_batch(
     return out
 
 
+def build_validation_reach_pairs(
+    val_eps: Sequence[Dict[str, Union[np.ndarray, torch.Tensor]]],
+    horizons: Sequence[int] = (5, 10, 20),
+    max_samples: int = 4096,
+    device: Optional[torch.device | str] = None,
+) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    """Builds validation reachability pairs for easy and hard (50/50 mixed) AUROC evaluation.
+
+    Returns:
+        (easy_dict, hard_dict) each with 's_reach', 'g_reach', 'reach_labels'.
+    """
+    if not val_eps:
+        empty = {
+            "s_reach": torch.zeros((0, STATE_DIM), dtype=torch.float32, device=device),
+            "g_reach": torch.zeros((0, LATENT_DIM), dtype=torch.float32, device=device),
+            "reach_labels": torch.zeros((0,), dtype=torch.float32, device=device),
+        }
+        return empty, empty
+
+    parsed_eps = []
+    for ep in val_eps:
+        z = ep["z"]
+        h = ep["h"]
+        if isinstance(z, torch.Tensor):
+            z = z.detach().cpu().numpy()
+        if isinstance(h, torch.Tensor):
+            h = h.detach().cpu().numpy()
+        T = len(z)
+        if T >= 2:
+            s = np.concatenate([z, h], axis=-1)
+            parsed_eps.append({"z": z, "s": s, "T": T})
+
+    if not parsed_eps:
+        empty = {
+            "s_reach": torch.zeros((0, STATE_DIM), dtype=torch.float32, device=device),
+            "g_reach": torch.zeros((0, LATENT_DIM), dtype=torch.float32, device=device),
+            "reach_labels": torch.zeros((0,), dtype=torch.float32, device=device),
+        }
+        return empty, empty
+
+    num_eps = len(parsed_eps)
+    max_h = max(horizons)
+    far_threshold = 2 * max_h
+
+    s_pos: List[np.ndarray] = []
+    g_pos: List[np.ndarray] = []
+    s_neg_easy: List[np.ndarray] = []
+    g_neg_easy: List[np.ndarray] = []
+    s_neg_hard: List[np.ndarray] = []
+    g_neg_hard: List[np.ndarray] = []
+
+    samples_collected = 0
+    for ep_idx, ep in enumerate(parsed_eps):
+        T = ep["T"]
+        valid_ks = [k for k in horizons if k < T]
+        if not valid_ks:
+            continue
+        # Sample positive points
+        n_picks = max(1, min(20, max_samples // max(1, num_eps)))
+        for _ in range(n_picks):
+            k = int(np.random.choice(valid_ks))
+            t = int(np.random.randint(0, T - k))
+            s_t = ep["s"][t]
+            g_t = ep["z"][t + k]
+
+            s_pos.append(s_t)
+            g_pos.append(g_t)
+
+            # Easy negative: cross-episode goal
+            other_idx = (ep_idx + int(np.random.randint(1, max(2, num_eps)))) % num_eps
+            other_ep = parsed_eps[other_idx]
+            u_easy = int(np.random.randint(0, other_ep["T"]))
+            s_neg_easy.append(s_t)
+            g_neg_easy.append(other_ep["z"][u_easy])
+
+            # Hard negative: within-episode far goal (u > t + 2*max(horizons))
+            if t + far_threshold < T:
+                u_hard = int(np.random.randint(t + far_threshold, T))
+                neg_g_hard = ep["z"][u_hard]
+            else:
+                neg_g_hard = other_ep["z"][u_easy]
+            s_neg_hard.append(s_t)
+            g_neg_hard.append(neg_g_hard)
+
+            samples_collected += 1
+            if samples_collected >= max_samples:
+                break
+        if samples_collected >= max_samples:
+            break
+
+    if not s_pos:
+        empty = {
+            "s_reach": torch.zeros((0, STATE_DIM), dtype=torch.float32, device=device),
+            "g_reach": torch.zeros((0, LATENT_DIM), dtype=torch.float32, device=device),
+            "reach_labels": torch.zeros((0,), dtype=torch.float32, device=device),
+        }
+        return empty, empty
+
+    # Easy batch: all positives + all easy negatives
+    s_easy = s_pos + s_neg_easy
+    g_easy = g_pos + g_neg_easy
+    lbl_easy = [1.0] * len(s_pos) + [0.0] * len(s_neg_easy)
+
+    # Hard batch: all positives + 50/50 mix of easy and hard negatives
+    n_neg = len(s_pos)
+    mixed_neg_s = []
+    mixed_neg_g = []
+    for i in range(n_neg):
+        if i % 2 == 0:
+            mixed_neg_s.append(s_neg_easy[i])
+            mixed_neg_g.append(g_neg_easy[i])
+        else:
+            mixed_neg_s.append(s_neg_hard[i])
+            mixed_neg_g.append(g_neg_hard[i])
+
+    s_hard = s_pos + mixed_neg_s
+    g_hard = g_pos + mixed_neg_g
+    lbl_hard = [1.0] * len(s_pos) + [0.0] * len(mixed_neg_s)
+
+    easy_dict = {
+        "s_reach": torch.from_numpy(np.stack(s_easy, axis=0)).float().to(device),
+        "g_reach": torch.from_numpy(np.stack(g_easy, axis=0)).float().to(device),
+        "reach_labels": torch.from_numpy(np.array(lbl_easy, dtype=np.float32)).to(device),
+    }
+    hard_dict = {
+        "s_reach": torch.from_numpy(np.stack(s_hard, axis=0)).float().to(device),
+        "g_reach": torch.from_numpy(np.stack(g_hard, axis=0)).float().to(device),
+        "reach_labels": torch.from_numpy(np.array(lbl_hard, dtype=np.float32)).to(device),
+    }
+    return easy_dict, hard_dict
+
+
 def compute_her_loss(
     option_net: OptionNet,
     reach_net: ReachabilityNet,
     her_batch_data: Dict[str, torch.Tensor],
     ce_weight: float = 1.0,
     bce_weight: float = 0.5,
+    label_smoothing: Optional[float] = None,
+    weight_clip: Optional[float] = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """Joint policy imitation + reachability discrimination loss.
 
-    Loss = ce_weight * CE(policy_logits, actions_pos) + bce_weight * BCE(reach_logits, reach_labels)
+    Uses frequency-balanced, label-smoothed cross entropy for OptionNet.
+    Loss = ce_weight * CE_balanced(policy_logits, actions_pos) + bce_weight * BCE(reach_logits, reach_labels)
     """
     s_pos = her_batch_data["s_pos"]
     g_pos = her_batch_data["g_pos"]
@@ -265,8 +400,18 @@ def compute_her_loss(
         zero = torch.tensor(0.0, device=s_pos.device, requires_grad=True)
         return zero, {"ce_loss": 0.0, "bce_loss": 0.0, "total_loss": 0.0}
 
+    cfg_smoothing = getattr(option_net.cfg, "label_smoothing", 0.05) if label_smoothing is None else label_smoothing
+    cfg_clip = getattr(option_net.cfg, "weight_clip", 50.0) if weight_clip is None else weight_clip
+
     policy_logits = option_net.logits(s_pos, g_pos)
-    ce_loss = F.cross_entropy(policy_logits, a_pos)
+    counts = torch.bincount(a_pos, minlength=NUM_ACTIONS).clamp_min(1)
+    w = (1.0 / counts[a_pos].float())            # per-sample weight = inverse action frequency
+    w = w * (len(a_pos) / w.sum())               # normalize mean weight to 1.0
+    w = w.clamp(max=cfg_clip)                    # 50.0, from SkillsConfig
+    per_sample_ce = F.cross_entropy(
+        policy_logits, a_pos, weight=None, label_smoothing=cfg_smoothing, reduction="none"
+    )
+    ce_loss = (per_sample_ce * w).mean()
 
     reach_logits = reach_net.raw_logits(s_reach, g_reach)
     bce_loss = F.binary_cross_entropy_with_logits(reach_logits, labels_reach)

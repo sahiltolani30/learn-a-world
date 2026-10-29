@@ -80,18 +80,20 @@ def screen_agent(
 
     num_eps = len(seed_list)
 
-    # Screening configuration: frozen agent, zero exploration
+    # Screening configuration: frozen agent, zero exploration, frozen memory
     old_eps = agent.epsilon
     old_beta = agent.beta_t
+    old_frozen = agent.frozen_memory
     agent.epsilon = 0.0
     agent.beta_t = 0.0
+    agent.frozen_memory = True
 
     achievement_records: List[Dict[str, int]] = []
     survivals: List[int] = []
     rewards: List[float] = []
 
     total_steps = 0
-    mode_counts = {"PROBE": 0, "NAVIGATE": 0, "FALLBACK": 0}
+    mode_counts = {"PROBE": 0, "NAVIGATE": 0, "FALLBACK": 0, "WANDER": 0}
     override_count = 0
 
     print(f"[Screen] Starting screening over {num_eps} episodes (seeds {seed_list[0]}..{seed_list[-1]})...")
@@ -133,9 +135,10 @@ def screen_agent(
         rewards.append(ep_reward)
         achievement_records.append(dict(last_info.get("achievements", {})))
 
-    # Restore exploration schedules
+    # Restore exploration schedules and memory freeze state
     agent.epsilon = old_eps
     agent.beta_t = old_beta
+    agent.frozen_memory = old_frozen
 
     # Official scoring
     crafter_metrics = compute_crafter_score(achievement_records)
@@ -152,11 +155,19 @@ def screen_agent(
         "override_rate": float(override_count / denom),
     }
 
+    prior_weight = float(getattr(agent.cfg.backbone, "prior_weight", 0.0))
+    if prior_weight != 0.0:
+        raise ValueError(f"Screening refused: prior_weight={prior_weight} != 0.0 violates pure scratch training invariant")
+
     # Strict provenance record
     report = {
         "protocol_id": "strict_visual_atlas_clean_v1",
         "git_commit": _get_git_commit(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "bootstrap": "none",
+        "prior_weight": prior_weight,
+        "train_from_scratch": True,
+        "run_line": "atlas_v2",
         "backbone": {
             "path": agent.backbone.checkpoint_path,
             "sha256": str(agent.backbone.provenance.get("checkpoint_sha256", "")),
@@ -181,6 +192,19 @@ def screen_agent(
         "per_mode_telemetry": per_mode_telemetry,
     }
 
+    # Validate provenance invariants before saving
+    for req_field, expected_val in [
+        ("bootstrap", "none"),
+        ("train_from_scratch", True),
+        ("run_line", "atlas_v2"),
+        ("prior_weight", 0.0),
+    ]:
+        if report.get(req_field) != expected_val:
+            raise ValueError(
+                f"Screening report missing or invalid provenance field '{req_field}': "
+                f"got {report.get(req_field)}, expected {expected_val}"
+            )
+
     out_path = results_dir / f"atlas_screen_{tag}.json"
     with open(out_path, "w") as f:
         json.dump(report, f, indent=2)
@@ -191,3 +215,38 @@ def screen_agent(
         f"Saved to: {out_path}"
     )
     return report
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="ATLAS Visual Evaluation Screener")
+    parser.add_argument("--tag", type=str, default="atlas_v2", help="Screening tag")
+    parser.add_argument("--seeds", type=int, nargs="+", default=None, help="Evaluation seed list or pair")
+    parser.add_argument("--num-episodes", type=int, default=None, help="Number of episodes to evaluate")
+    parser.add_argument("--max-steps", type=int, default=1000, help="Max steps per episode")
+    parser.add_argument("--out-dir", type=str, default=None, help="Output directory for reports")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to backbone checkpoint")
+    parser.add_argument("--device", type=str, default="auto", help="Compute device")
+    args = parser.parse_args()
+
+    cfg = AtlasConfig()
+    if args.checkpoint:
+        os.environ["ATLAS_CHECKPOINT"] = args.checkpoint
+    if args.device != "auto":
+        cfg.backbone.device = args.device
+
+    backbone = FrozenBackbone(config=cfg)
+    agent = AtlasAgent(backbone=backbone, cfg=cfg)
+
+    screen_agent(
+        agent=agent,
+        seeds=args.seeds,
+        num_episodes=args.num_episodes,
+        max_steps=args.max_steps,
+        tag=args.tag,
+        out_dir=args.out_dir,
+    )
+
+
+if __name__ == "__main__":
+    main()

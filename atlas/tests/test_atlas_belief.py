@@ -16,7 +16,7 @@ def test_belief_threshold_update():
     newly = belief.update(probs, reward=0.0)
     assert newly == [3]
     assert belief.m_bin[3] == 1.0
-    assert belief.m_soft[3] == 0.40
+    assert np.isclose(belief.m_soft[3], 0.40)
     assert belief.m_bin[0] == 0.0
 
     # Repeat: should not re-unlock dimension 3

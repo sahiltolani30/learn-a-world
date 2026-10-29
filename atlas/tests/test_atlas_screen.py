@@ -52,3 +52,30 @@ def test_screen_provenance_json_schema():
         telemetry = data["per_mode_telemetry"]
         for key in ["probe_fraction", "nav_fraction", "fallback_fraction", "override_rate"]:
             assert key in telemetry, f"Missing telemetry metric: {key}"
+
+        # ATLAS V2 provenance fields
+        assert data["bootstrap"] == "none"
+        assert data["prior_weight"] == 0.0
+        assert data["train_from_scratch"] is True
+        assert data["run_line"] == "atlas_v2"
+
+
+def test_screen_refuses_nonzero_prior_weight():
+    """Screening with prior_weight != 0.0 raises ValueError refusing to write."""
+    import pytest
+
+    cfg = AtlasConfig()
+    cfg.backbone.prior_weight = 1.0
+    fb = FrozenBackbone(config=cfg, device="cpu")
+    agent = AtlasAgent(backbone=fb, cfg=cfg)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with pytest.raises(ValueError, match="prior_weight=1.0"):
+            screen_agent(
+                agent=agent,
+                seeds=[2050],
+                num_episodes=1,
+                max_steps=5,
+                tag="test_reject",
+                out_dir=tmp_dir,
+            )

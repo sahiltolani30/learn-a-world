@@ -80,6 +80,7 @@ class BackboneConfig:
     checkpoint: str = field(default_factory=_default_checkpoint)
     device: str = "auto"  # auto -> mps if available else cpu
     frozen: bool = True
+    prior_weight: float = 0.0  # NEW: 0.0 = old behavior-brain has ZERO influence
 
 
 @dataclass
@@ -102,10 +103,15 @@ class SkillsConfig:
     goal_emb_dim: int = 128
     hidden_dim: int = 256
     her_horizons: Tuple[int, ...] = (5, 10, 20)
-    arrival_cosine: float = 0.93
+    arrival_cosine: float = 0.85  # CHANGED from 0.93 (0.93 was unreachable; cos plateaus ~0.92)
     max_option_steps: int = 25
     stagnation_patience: int = 8
     lr: float = 3e-4
+    # NEW fields:
+    wander_steps: int = 10  # forced curiosity walk after option failure
+    label_smoothing: float = 0.05  # policy CE label smoothing
+    max_action_share: float = 0.25  # not used for subsampling; kept for reference/tests
+    weight_clip: float = 50.0  # max per-sample imitation weight
 
 
 @dataclass
@@ -144,6 +150,14 @@ class GoalsConfig:
     predecessor_window: int = 30    # steps for "d precedes e" mining
     probe_steps: int = 6            # PROBE-mode duration after arrival
     probe_entropy: float = 0.25     # exploration mix inside PROBE mode
+    # PLUS:
+    max_goals_per_dim: int = 15      # cap per achievement-dimension among "event" goals
+    same_kind_dedupe: float = 0.90   # cos threshold to reject near-duplicate same-kind goals
+    frontier_min_share: float = 0.20 # bank must keep >= 20% frontier goals
+    lift_cap: float = 10.0
+    lift_min_base_count: int = 20    # min firings of d to mine edge (d,e)
+    lift_min_pair_support: int = 3   # min co-occurrence count k
+    lift_ci_threshold: float = 1.2   # ci_low must exceed this to influence scoring
 
 
 @dataclass
@@ -151,10 +165,10 @@ class CollectConfig:
     out_dir: str = str(REPO_ROOT / "data" / "atlas")
     max_steps: int = 1000
     epsilon_start: float = 0.30
-    epsilon_end: float = 0.05
-    epsilon_decay_iters: int = 40   # self-learn iterations
+    epsilon_end: float = 0.10        # CHANGED from 0.05 (floor stays high)
+    epsilon_decay_iters: int = 100   # CHANGED from 40
     beta_start: float = 1.0         # intrinsic reward scale
-    beta_end: float = 0.15
+    beta_end: float = 0.30           # CHANGED from 0.15
     episodes_per_iter: int = 8
 
 
@@ -175,6 +189,17 @@ class ScreenConfig:
 
 
 @dataclass
+class HealthConfig:
+    window_steps: int = 200
+    action_share_alarm: float = 0.60
+    confidence_alarm: float = 0.85
+    flatline_iters: int = 15
+    flatline_improvement: float = 0.10
+    epsilon_boost: float = 2.0
+    boost_steps: int = 100
+
+
+@dataclass
 class AtlasConfig:
     backbone: BackboneConfig = field(default_factory=BackboneConfig)
     belief: BeliefConfig = field(default_factory=BeliefConfig)
@@ -187,6 +212,7 @@ class AtlasConfig:
     collect: CollectConfig = field(default_factory=CollectConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
     screen: ScreenConfig = field(default_factory=ScreenConfig)
+    health: HealthConfig = field(default_factory=HealthConfig)
 
 
 def resolve_device(device: str = "auto") -> str:

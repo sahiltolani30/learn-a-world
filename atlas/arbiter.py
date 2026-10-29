@@ -77,6 +77,14 @@ class AtlasAgent:
         self.safety_net = safety_net or ContinueNet(self.cfg.safety).to(self.device)
         self.readout_net = readout_net or VitalsReadout(self.cfg.readout).to(self.device)
 
+        # Set evaluation mode for play-time inference
+        self.option_net.eval()
+        self.reach_net.eval()
+        self.epistemic_net.eval()
+        self.safety_net.eval()
+        if self.readout_net is not None:
+            self.readout_net.eval()
+
         # Schedules
         self.epsilon: float = self.cfg.collect.epsilon_start
         self.beta_t: float = self.cfg.collect.beta_start
@@ -90,9 +98,13 @@ class AtlasAgent:
 
         # Mode machine
         self.mode: str = "FALLBACK"
+        self.prev_mode: str = "FALLBACK"
         self.active_goal: Optional[GoalEntry] = None
         self.goal_score: float = 0.0
         self.probe_steps_remaining: int = 0
+        self.wander_steps_remaining: int = 0
+        self.probe_unlocked: bool = False
+        self.frozen_memory: bool = False
         self.nav_steps: int = 0
         self.stagnation_counter: int = 0
         self.psi_best: float = -1.0
@@ -114,9 +126,12 @@ class AtlasAgent:
         self.h_memory.clear()
 
         self.mode = "FALLBACK"
+        self.prev_mode = "FALLBACK"
         self.active_goal = None
         self.goal_score = 0.0
         self.probe_steps_remaining = 0
+        self.wander_steps_remaining = 0
+        self.probe_unlocked = False
         self.nav_steps = 0
         self.stagnation_counter = 0
         self.psi_best = -1.0
@@ -135,7 +150,9 @@ class AtlasAgent:
         """
         # 1) Belief update from previous step's prediction and realized reward
         if step > 0 and self.last_event_probs is not None:
-            self.belief.update(self.last_event_probs, reward_prev)
+            newly_unlocked = self.belief.update(self.last_event_probs, reward_prev)
+            if self.prev_mode == "PROBE" and len(newly_unlocked) > 0:
+                self.probe_unlocked = True
 
         # 2) Encode observation and recurrent step
         z = self.backbone.encode(obs_uint8)  # [1, 128]
@@ -150,8 +167,9 @@ class AtlasAgent:
         h_np = h.squeeze(0).cpu().numpy()
         s_np = s.squeeze(0).cpu().numpy()
 
-        # Update TopoMap
-        self.topomap.observe(z_np, h_np, step)
+        # Update TopoMap (gated by frozen_memory)
+        if not self.frozen_memory:
+            self.topomap.observe(z_np, h_np, step)
         self.h_memory.append(h_np)
 
         # 3) Mode machine & candidate action selection
@@ -175,6 +193,9 @@ class AtlasAgent:
         if self.probe_steps_remaining > 0:
             self.mode = "PROBE"
             self.probe_steps_remaining -= 1
+        elif self.wander_steps_remaining > 0:
+            self.mode = "WANDER"
+            self.wander_steps_remaining -= 1
         elif self.active_goal is not None:
             g_key_np = self.active_goal.key
             arrival_cos = _cosine(z_np, g_key_np)
@@ -182,6 +203,7 @@ class AtlasAgent:
                 # Arrived at goal! Transition to PROBE
                 self.mode = "PROBE"
                 self.probe_steps_remaining = self.cfg.goals.probe_steps - 1
+                self.probe_unlocked = False
             else:
                 g_key_t = torch.from_numpy(g_key_np).float().to(self.device).unsqueeze(0)
                 psi_val = float(self.reach_net(s, g_key_t).item())
@@ -196,17 +218,19 @@ class AtlasAgent:
                     self.stagnation_counter >= self.cfg.skills.stagnation_patience
                     or self.nav_steps >= self.cfg.skills.max_option_steps
                 ):
-                    # Stagnated or timed out -> abandon goal
-                    self.goals.mark_used(g_key_np, success=False, current_iter=self.current_iter)
+                    # Stagnated or timed out -> abandon goal and enter WANDER (10 steps)
+                    if not self.frozen_memory:
+                        self.goals.mark_used(g_key_np, success=False, current_iter=self.current_iter)
                     self.active_goal = None
-                    self.mode = "FALLBACK"
+                    self.mode = "WANDER"
+                    self.wander_steps_remaining = self.cfg.skills.wander_steps - 1
                 else:
                     self.mode = "NAVIGATE"
         else:
             self.mode = "FALLBACK"
 
         # If idle / fallback, try selecting a new goal from bank
-        if self.active_goal is None and self.probe_steps_remaining <= 0:
+        if self.mode not in ("PROBE", "WANDER") and self.active_goal is None:
             best_goal, score = self.goals.select(
                 z_np,
                 h_np,
@@ -227,6 +251,7 @@ class AtlasAgent:
                 if arrival_cos >= self.cfg.skills.arrival_cosine:
                     self.mode = "PROBE"
                     self.probe_steps_remaining = self.cfg.goals.probe_steps - 1
+                    self.probe_unlocked = False
                 else:
                     self.mode = "NAVIGATE"
 
@@ -245,7 +270,8 @@ class AtlasAgent:
             a_intended = int(torch.argmax(probe_score).item())
 
             if self.probe_steps_remaining == 0 and self.active_goal is not None:
-                self.goals.mark_used(self.active_goal.key, success=True, current_iter=self.current_iter)
+                if not self.frozen_memory:
+                    self.goals.mark_used(self.active_goal.key, success=self.probe_unlocked, current_iter=self.current_iter)
                 self.active_goal = None
 
         elif self.mode == "NAVIGATE" and self.active_goal is not None:
@@ -253,17 +279,23 @@ class AtlasAgent:
             a_tensor = self.option_net.act(s, g_key_t, greedy=True)
             a_intended = int(a_tensor.item())
 
-        else:
-            # FALLBACK: BC prior + beta_t * disagreement with epsilon uniform tail
-            self.mode = "FALLBACK"
-            prior_logits = self.backbone.prior_logits(s, mask_t).squeeze(0)  # [17]
+        elif self.mode == "WANDER":
+            # WANDER: sample from softmax(beta_t * disagreement) with temperature 1.0
             d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
-            logits = prior_logits + self.beta_t * d_all
+            probs = F.softmax(self.beta_t * d_all, dim=-1)
+            a_intended = int(torch.multinomial(probs, num_samples=1).item())
 
-            if np.random.rand() < self.epsilon:
-                a_intended = int(np.random.randint(0, NUM_ACTIONS))
-            else:
-                a_intended = int(torch.argmax(logits).item())
+        else:
+            # FALLBACK: beta_t * disagreement + prior_logits_weighted
+            self.mode = "FALLBACK"
+            prior_logits = self.backbone.prior_logits_weighted(s, mask_t).squeeze(0)  # [17]
+            d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
+            logits = self.beta_t * d_all + prior_logits
+            a_intended = int(torch.argmax(logits).item())
+
+        # Universal epsilon random exploration tail across ALL modes
+        if np.random.rand() < self.epsilon:
+            a_intended = int(np.random.randint(0, NUM_ACTIONS))
 
         # 4) Safety override (§5.6)
         all_risks = self.safety_net.risk_all_actions(s).squeeze(0)  # [17]
@@ -325,11 +357,18 @@ class AtlasAgent:
                 f"PROBE (Curiosity): Chose '{a_fin_name}' exploring affordances for locked achievements "
                 f"(disagreement: {d_val:.2f}, risk: {risk_intended:.2f})."
             )
+        elif self.mode == "WANDER":
+            decision_reason = (
+                f"WANDER (Exploration on timeout): Stochastic curiosity chose '{a_fin_name}' "
+                f"after goal stagnation ({self.wander_steps_remaining} steps remaining, risk: {risk_intended:.2f})."
+            )
         else:
             decision_reason = (
                 f"FALLBACK (Prior + Exploration): Prior policy chose '{a_fin_name}' "
                 f"(disagreement: {d_val:.2f}, risk: {risk_intended:.2f})."
             )
+
+        self.prev_mode = self.mode
 
         telemetry = {
             "mode": self.mode,

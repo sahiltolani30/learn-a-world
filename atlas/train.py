@@ -22,11 +22,11 @@ import torch.optim as optim
 
 from atlas.backbone import FrozenBackbone
 from atlas.collect import ShardLoader
-from atlas.config import LATENT_DIM, RECURRENT_DIM, STATE_DIM, TrainConfig
+from atlas.config import LATENT_DIM, NUM_ACTIONS, RECURRENT_DIM, STATE_DIM, TrainConfig
 from atlas.epistemic import EpistemicNet
 from atlas.readout import VitalsReadout
 from atlas.safety import ContinueNet, focal_bce
-from atlas.skills import OptionNet, ReachabilityNet, build_her_batch, compute_her_loss
+from atlas.skills import OptionNet, ReachabilityNet, build_her_batch, compute_her_loss, build_validation_reach_pairs
 
 
 def _compute_auroc(scores: np.ndarray, labels: np.ndarray) -> float:
@@ -134,20 +134,15 @@ class HeadTrainer:
 
             h_t = torch.zeros(1, RECURRENT_DIM, device=self.device)
             for t in range(ep_len):
+                if t > 0:
+                    with torch.no_grad():
+                        h_t = self.backbone.recurrent_step(z_ep[t: t + 1], a_ep[t - 1: t], h_t)
                 h_arr[start + t] = h_t.cpu().numpy().squeeze(0)
-                z_cur = z_ep[t: t + 1]
-                a_cur = a_ep[t: t + 1]
-
-                # Compute frozen predictor residual target
                 if t < ep_len - 1:
                     with torch.no_grad():
-                        z_next_pred = self.backbone.model.predictor(z_cur, h_t, a_cur)
+                        z_next_pred = self.backbone.model.predictor(z_ep[t: t + 1], h_t, a_ep[t: t + 1])
                         residual = z_ep[t + 1: t + 2] - z_next_pred
                         target_residuals[start + t] = residual.cpu().numpy().squeeze(0)
-
-                with torch.no_grad():
-                    h_next = self.backbone.recurrent_step(z_cur, a_cur, h_t)
-                h_t = h_next
 
             start = end
             del z_ep, a_ep
@@ -267,42 +262,80 @@ class HeadTrainer:
             dt_ep = time.time() - t_epoch_start
             print(f"    -> Epoch {epoch+1}/{self.cfg.epochs_per_iter} completed in {dt_ep:.1f}s (HER CE: {final_ce_loss:.3f})")
 
-        # Gate Checks (§5.11)
-        # 1. Reachability AUROC
-        reach_auroc = 0.5
-        if her_val is not None and her_val["s_reach"].shape[0] > 0:
+        # Gate Checks (§5.11 / PLAN_V2)
+        # 1. Reachability AUROC: hard (50/50 cross-ep + far within-ep) and easy (cross-ep)
+        reach_auroc_hard = 0.5
+        reach_auroc_easy = 0.5
+        if val_eps:
+            val_easy, val_hard = build_validation_reach_pairs(val_eps, device=self.device)
+            with torch.no_grad():
+                if val_easy["s_reach"].shape[0] > 0:
+                    psi_easy = self.reach_net(val_easy["s_reach"], val_easy["g_reach"]).cpu().numpy()
+                    reach_auroc_easy = _compute_auroc(psi_easy, val_easy["reach_labels"].cpu().numpy())
+                if val_hard["s_reach"].shape[0] > 0:
+                    psi_hard = self.reach_net(val_hard["s_reach"], val_hard["g_reach"]).cpu().numpy()
+                    reach_auroc_hard = _compute_auroc(psi_hard, val_hard["reach_labels"].cpu().numpy())
+        elif her_val is not None and her_val["s_reach"].shape[0] > 0:
             with torch.no_grad():
                 psi_preds = self.reach_net(her_val["s_reach"], her_val["g_reach"]).cpu().numpy()
-            reach_auroc = _compute_auroc(psi_preds, her_val["reach_labels"].cpu().numpy())
+            reach_auroc_hard = _compute_auroc(psi_preds, her_val["reach_labels"].cpu().numpy())
+            reach_auroc_easy = reach_auroc_hard
 
-        # 2. Continue-head death recall
-        with torch.no_grad():
-            risks = self.safety_net.risk(s_t, a_t).cpu().numpy()
-        death_mask = dones_train.astype(bool)
-        if np.sum(death_mask) > 0:
-            death_recall = float(np.mean(risks[death_mask] > self.safety_net.cfg.risk_threshold))
-        else:
-            death_recall = 1.0  # vacuously true if no deaths
+        # 2. Continue-head death recall (validation episodes only)
+        death_recall = None
+        safety_gate_passed: Union[bool, str] = "skipped_no_deaths"
+        if val_eps:
+            z_val = np.concatenate([ep["z"] for ep in val_eps], axis=0)
+            h_val = np.concatenate([ep["h"] for ep in val_eps], axis=0)
+            s_val = np.concatenate([z_val, h_val], axis=-1)
+            a_val = np.concatenate([ep["actions"] for ep in val_eps], axis=0)
+            dones_val = np.concatenate([ep["dones"] for ep in val_eps], axis=0)
+
+            death_mask = dones_val.astype(bool)
+            if np.sum(death_mask) > 0:
+                with torch.no_grad():
+                    s_val_t = torch.from_numpy(s_val).float().to(self.device)
+                    a_val_t = torch.from_numpy(a_val).long().to(self.device)
+                    risks = self.safety_net.risk(s_val_t, a_val_t).cpu().numpy()
+                death_recall = float(np.mean(risks[death_mask] > self.safety_net.cfg.risk_threshold))
+                safety_gate_passed = bool(death_recall >= 0.40)
+            else:
+                death_recall = None
+                safety_gate_passed = "skipped_no_deaths"
 
         # 3. Policy CE decreasing
         ce_decreasing = bool(final_ce_loss <= initial_ce_loss + 0.1)
 
+        # 4. Action histogram
+        if her_train is not None and her_train["actions_pos"].shape[0] > 0:
+            a_pos_cpu = her_train["actions_pos"].cpu()
+            counts = torch.bincount(a_pos_cpu, minlength=NUM_ACTIONS).tolist()
+            her_action_histogram = [int(c) for c in counts]
+        else:
+            her_action_histogram = [0] * NUM_ACTIONS
+
         gates = {
-            "reach_auroc": float(reach_auroc),
-            "reach_gate_passed": bool(reach_auroc >= 0.65 or her_val is None),
-            "death_recall": float(death_recall),
-            "safety_gate_passed": bool(death_recall >= 0.40),
+            "reach_auroc_hard": float(reach_auroc_hard),
+            "reach_auroc_easy": float(reach_auroc_easy),
+            "reach_auroc": float(reach_auroc_hard),
+            "reach_gate_passed": bool(reach_auroc_hard >= 0.65 or not val_eps),
+            "death_recall": death_recall,
+            "safety_gate_passed": safety_gate_passed,
             "initial_ce_loss": float(initial_ce_loss),
             "final_ce_loss": float(final_ce_loss),
             "ce_decreasing": ce_decreasing,
+            "her_action_histogram": her_action_histogram,
         }
 
         # Log training step
         log_entry = {
             "iter": iter_idx,
             "final_ce_loss": final_ce_loss,
-            "reach_auroc": reach_auroc,
+            "reach_auroc_hard": float(reach_auroc_hard),
+            "reach_auroc_easy": float(reach_auroc_easy),
+            "reach_auroc": float(reach_auroc_hard),
             "death_recall": death_recall,
+            "her_action_histogram": her_action_histogram,
             "gates": gates,
         }
         with open(self.log_file, "a") as f:

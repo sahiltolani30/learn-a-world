@@ -98,3 +98,47 @@ def test_trainer_step_decreases_loss():
         log_entry = trainer.train_epoch(train_eps=[ep], val_eps=[ep], iter_idx=0)
         assert "gates" in log_entry
         assert "final_ce_loss" in log_entry
+
+
+def test_journal_positions_and_strict_signature():
+    """Round-trip test: run 30 steps, assert journal parses, moved_fraction matches trace, and signature clean."""
+    import inspect
+    import json
+
+    cfg = AtlasConfig()
+    cfg.collect.max_steps = 30
+    fb = FrozenBackbone(config=cfg, device="cpu")
+    agent = AtlasAgent(backbone=fb, cfg=cfg)
+
+    # Invariant: agent.act must never accept positions or env info
+    sig = inspect.signature(AtlasAgent.act)
+    assert list(sig.parameters.keys()) == ["self", "obs_uint8", "reward_prev", "step"]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        journal_p = Path(tmp_dir) / "test_journal.jsonl"
+        collector = EpisodeCollector(
+            agent=agent,
+            out_dir=tmp_dir,
+            cfg=cfg.collect,
+            journal_path=journal_p,
+        )
+
+        ep = collector.run_episode(seed=42, iter_idx=0)
+        assert ep["episode_length"] == 30
+        assert len(ep["positions"]) == 30
+        assert ep["moved_fraction"] == float(ep["moved_steps"] / 30)
+
+        assert journal_p.exists()
+        with open(journal_p, "r") as f:
+            lines = [json.loads(line) for line in f]
+        assert len(lines) == 1
+        entry = lines[0]
+
+        assert "positions" in entry
+        assert "moved_steps" in entry
+        assert "moved_fraction" in entry
+        assert "action_histogram" in entry
+        assert entry["length"] == 30
+        assert len(entry["positions"]) == 30
+        assert entry["moved_fraction"] == ep["moved_fraction"]
+        assert entry["moved_steps"] == ep["moved_steps"]

@@ -20,7 +20,9 @@ from atlas.backbone import FrozenBackbone
 from atlas.collect import EpisodeCollector, ShardLoader
 from atlas.config import NUM_ACHIEVEMENTS, NUM_ACTIONS, AtlasConfig
 from atlas.goals import GoalEntry
+from atlas.health import HealthMonitor
 from atlas.screen import screen_agent
+from atlas.skills import build_her_batch
 from atlas.train import HeadTrainer
 
 
@@ -36,6 +38,7 @@ def mine_goals_and_lift(
     # 1) Mine PredecessorLift
     all_events = [ep["events"] for ep in cached_episodes]
     agent.lift.mine(all_events, window=agent.cfg.goals.predecessor_window)
+    agent.lift.assert_consistent()
 
     # 2) Mine GoalEntries
     # Always include all episodes that unlocked any achievement
@@ -146,11 +149,13 @@ class SelfLearnLoop:
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         self.journal_path = self.run_dir / "game_journal.jsonl"
+        self.health = HealthMonitor(self.cfg.health)
         self.collector = EpisodeCollector(
             agent=self.agent,
             out_dir=self.shards_dir,
             cfg=self.cfg.collect,
             journal_path=self.journal_path,
+            health=self.health,
         )
         self.trainer = HeadTrainer(
             backbone=self.agent.backbone,
@@ -294,21 +299,48 @@ class SelfLearnLoop:
 
             train_metrics = self.trainer.train_epoch(train_eps, val_eps, iter_idx=it)
 
+            # Observe OptionNet confidence on validation HER batch
+            val_her = build_her_batch(val_eps, device=self.agent.device) if val_eps else None
+            if val_her is not None and val_her["s_pos"].shape[0] > 0:
+                with torch.no_grad():
+                    logits = self.agent.option_net.logits(val_her["s_pos"], val_her["g_pos"])
+                    probs = torch.softmax(logits, dim=-1)
+                    mean_max_prob = float(torch.max(probs, dim=-1).values.mean().item())
+                self.health.observe_confidence(mean_max_prob)
+
             # 4. Mine GoalBank and PredecessorLift
             mine_goals_and_lift(self.agent, self.all_cached_episodes, iter_idx=it)
 
             # 5. Dev screen every 5 iterations
             if (it + 1) % 5 == 0:
                 print(f"[SelfLearnLoop] Running dev screen at iteration {it}...")
-                screen_agent(
+                screen_res = screen_agent(
                     agent=self.agent,
                     seeds=self.cfg.screen.dev_seeds,
                     num_episodes=10,
                     tag=f"{self.run_id}_dev_it{it}",
                     out_dir=self.results_dir,
                 )
+                ach_per_ep = float(screen_res.get("summary", {}).get("achievements_per_episode", 0.0))
+                self.health.observe_progress(it, ach_per_ep)
 
-            # 6. Save atomic state
+            # 6. Runtime health check and alarms
+            health_status = self.health.check(it, log_file=self.trainer.log_file)
+            if health_status.get("beta_reset", False):
+                self.agent.beta_t = 0.8
+                print(f"[SelfLearnLoop] Beta reset to 0.8 triggered by health flatline alarm at iter {it}")
+
+            # 7. Write health report cards at iterations 30 and 50
+            if it in (30, 50):
+                report_path = self.results_dir / f"atlas_health_it{it}.json"
+                self.health.generate_report_card(
+                    iter_idx=it,
+                    agent=self.agent,
+                    val_her_batch=val_her,
+                    out_path=report_path,
+                )
+
+            # 8. Save atomic state
             self.save_state(it)
 
         print("[SelfLearnLoop] Execution finished.")

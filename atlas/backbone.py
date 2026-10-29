@@ -131,6 +131,12 @@ class FrozenBackbone:
         """Behavior-cloned policy prior logits [B,17] over composite state s."""
         return self.model.policy_prior(s, mask)
 
+    @torch.no_grad()
+    def prior_logits_weighted(self, s: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Behavior-cloned policy prior logits [B,17] multiplied by backbone.prior_weight."""
+        weight = float(getattr(self.config.backbone, "prior_weight", 0.0))
+        return self.prior_logits(s, mask) * weight
+
     # ------------------------------------------------------------- module IO
     def state_dict_of_frozen(self) -> Dict[str, object]:
         return {"path": self.checkpoint_path, "sha256": self.provenance["checkpoint_sha256"]}
