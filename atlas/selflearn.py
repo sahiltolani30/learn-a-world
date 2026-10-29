@@ -6,6 +6,7 @@ Resumable cycle:
 
 from __future__ import annotations
 
+import gc
 import os
 import time
 from pathlib import Path
@@ -221,28 +222,37 @@ class SelfLearnLoop:
             )
 
             # 2. Latent caching
-            latents_path = self.trainer.cache_latents(shard_path)
+            latents_path = self.trainer.cache_latents(shard_path, cache_dir=self.shards_dir)
 
-            # Load cached shard into episode memory
-            shard_data = ShardLoader.load_shard(shard_path)
-            latents_data = np.load(latents_path)
+            # Load cached shard into episode memory without raw pixel images
+            shard_data = ShardLoader.load_shard(shard_path, load_obs=False)
+            with np.load(latents_path) as latents_data:
+                z_full = np.array(latents_data["z"])
+                h_full = np.array(latents_data["h"])
+                res_full = np.array(latents_data["target_residuals"])
+
             ep_lengths = shard_data["episode_lengths"]
 
             start = 0
             for ep_len in ep_lengths:
                 end = start + ep_len
                 self.all_cached_episodes.append({
-                    "z": latents_data["z"][start:end],
-                    "h": latents_data["h"][start:end],
-                    "target_residuals": latents_data["target_residuals"][start:end],
-                    "actions": shard_data["actions"][start:end],
-                    "rewards": shard_data["rewards"][start:end],
-                    "dones": shard_data["dones"][start:end],
-                    "events": shard_data["events"][start:end],
-                    "mask_before": shard_data["mask_before"][start:end],
-                    "inventory": shard_data["inventory"][start:end],
+                    "z": z_full[start:end].copy(),
+                    "h": h_full[start:end].copy(),
+                    "target_residuals": res_full[start:end].copy(),
+                    "actions": shard_data["actions"][start:end].copy(),
+                    "rewards": shard_data["rewards"][start:end].copy(),
+                    "dones": shard_data["dones"][start:end].copy(),
+                    "events": shard_data["events"][start:end].copy(),
+                    "mask_before": shard_data["mask_before"][start:end].copy(),
+                    "inventory": shard_data["inventory"][start:end].copy(),
                 })
                 start = end
+
+            del z_full, h_full, res_full, shard_data
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             # 3. Train heads (90% train, 10% val split by episode)
             num_eps = len(self.all_cached_episodes)

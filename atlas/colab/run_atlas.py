@@ -19,6 +19,7 @@ Phases:
 from __future__ import annotations
 
 import argparse
+import gc
 import glob
 import importlib.util
 import os
@@ -164,27 +165,48 @@ def run_bootstrap_phase(loop: SelfLearnLoop, paths: dict, iters: int):
     all_episodes = []
     for idx, s_path in enumerate(selected_shards):
         print(f"[Bootstrap {idx+1}/{len(selected_shards)}] Caching latents for {s_path.name}...")
-        lat_path = loop.trainer.cache_latents(s_path)
+        lat_path = loop.trainer.cache_latents(s_path, cache_dir=paths["shards_dir"])
 
-        shard_data = ShardLoader.load_shard(s_path)
-        lat_data = np.load(lat_path)
+        # Load metadata/actions/targets without loading pixel observations
+        shard_data = ShardLoader.load_shard(s_path, load_obs=False)
+        with np.load(lat_path) as lat_data:
+            z_full = np.array(lat_data["z"])
+            h_full = np.array(lat_data["h"])
+            res_full = np.array(lat_data["target_residuals"])
+
         ep_lengths = shard_data["episode_lengths"]
 
         start = 0
         for ep_len in ep_lengths:
             end = start + ep_len
             all_episodes.append({
-                "z": lat_data["z"][start:end],
-                "h": lat_data["h"][start:end],
-                "target_residuals": lat_data["target_residuals"][start:end],
-                "actions": shard_data["actions"][start:end],
-                "rewards": shard_data["rewards"][start:end],
-                "dones": shard_data["dones"][start:end],
-                "events": shard_data["events"][start:end],
-                "mask_before": shard_data["mask_before"][start:end],
-                "inventory": shard_data["inventory"][start:end],
+                "z": z_full[start:end].copy(),
+                "h": h_full[start:end].copy(),
+                "target_residuals": res_full[start:end].copy(),
+                "actions": shard_data["actions"][start:end].copy(),
+                "rewards": shard_data["rewards"][start:end].copy(),
+                "dones": shard_data["dones"][start:end].copy(),
+                "events": shard_data["events"][start:end].copy(),
+                "mask_before": shard_data["mask_before"][start:end].copy(),
+                "inventory": shard_data["inventory"][start:end].copy(),
             })
             start = end
+
+        del z_full, h_full, res_full, shard_data
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        try:
+            import resource
+            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if sys.platform != "darwin":
+                rss /= 1024  # Linux: ru_maxrss is in KB
+            else:
+                rss /= (1024 * 1024)  # macOS: bytes
+            print(f"  -> Ingested cleanly (RAM max RSS: {rss:.1f} MB)")
+        except Exception:
+            pass
 
     print(f"[Bootstrap] Ingested {len(all_episodes)} episodes. Training initial heads...")
     val_count = max(1, int(0.1 * len(all_episodes)))

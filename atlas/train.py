@@ -7,7 +7,10 @@ Logs training metrics and verifies quality gates after each iteration.
 
 from __future__ import annotations
 
+import gc
 import json
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -65,29 +68,52 @@ class HeadTrainer:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.log_dir / "train_log.jsonl"
 
-    def cache_latents(self, shard_path: Union[str, Path]) -> Path:
+    def cache_latents(
+        self,
+        shard_path: Union[str, Path],
+        cache_dir: Optional[Union[str, Path]] = None,
+    ) -> Path:
         """Encodes observations and computes GRU latents, saving sidecar *.latents.npz."""
         p = Path(shard_path)
-        out_path = p.with_suffix(".latents.npz")
+        if cache_dir is not None:
+            c_dir = Path(cache_dir)
+            c_dir.mkdir(parents=True, exist_ok=True)
+            out_path = c_dir / f"{p.stem}.latents.npz"
+        else:
+            out_path = p.with_suffix(".latents.npz")
+
         if out_path.exists():
             return out_path
+        sidecar_next_to_shard = p.with_suffix(".latents.npz")
+        if sidecar_next_to_shard.exists():
+            return sidecar_next_to_shard
 
-        shard = ShardLoader.load_shard(p)
+        shard = ShardLoader.load_shard(p, load_obs=True)
         obs = shard["obs"]
         actions = shard["actions"]
         ep_lengths = shard["episode_lengths"]
 
-        T_total = len(obs)
+        T_total = len(actions)
         z_list: List[np.ndarray] = []
 
-        # 1) Batched visual encoding
-        batch_size = 512
+        # 1) Batched visual encoding (chunk size 256 for tight memory bounds)
+        batch_size = 256
         for i in range(0, T_total, batch_size):
             obs_batch = obs[i: i + batch_size]
             with torch.no_grad():
                 z_batch = self.backbone.encode(obs_batch)
             z_list.append(z_batch.cpu().numpy())
+            del obs_batch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
         z_arr = np.concatenate(z_list, axis=0)
+        del z_list
+
+        # Free raw pixel observation images immediately before recurrence
+        del obs
+        del shard
+        gc.collect()
 
         # 2) GRU sequence recurrence per episode
         h_arr = np.zeros((T_total, RECURRENT_DIM), dtype=np.float32)
@@ -117,13 +143,25 @@ class HeadTrainer:
                 h_t = h_next
 
             start = end
+            del z_ep, a_ep
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # Write to local temp file first to avoid network FUSE memory buffering
+        with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
 
         np.savez_compressed(
-            out_path,
+            tmp_path,
             z=z_arr,
             h=h_arr,
             target_residuals=target_residuals,
         )
+        shutil.move(str(tmp_path), str(out_path))
+
+        del z_arr, h_arr, target_residuals
+        gc.collect()
         return out_path
 
     def train_epoch(

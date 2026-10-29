@@ -216,52 +216,52 @@ class ShardLoader:
     """Loads and standardizes shards (ATLAS live or T2 sequences format)."""
 
     @staticmethod
-    def load_shard(path: Union[str, Path]) -> Dict[str, Any]:
+    def load_shard(path: Union[str, Path], load_obs: bool = True) -> Dict[str, Any]:
         p = Path(path)
-        data = np.load(p)
-        keys = set(data.keys())
+        with np.load(p) as data:
+            keys = set(data.keys())
 
-        obs = data["obs"]
-        actions = data["actions"]
-        rewards = data["rewards"]
-        dones = data["dones"]
-        events = data["events"]
-        mask_before = data["mask_before"]
-        episode_lengths = data["episode_lengths"]
+            obs = data["obs"] if load_obs else np.empty((0, 64, 64, 3), dtype=np.uint8)
+            actions = data["actions"]
+            rewards = data["rewards"]
+            dones = data["dones"]
+            events = data["events"]
+            mask_before = data["mask_before"]
+            episode_lengths = data["episode_lengths"]
 
-        T = len(actions)
-        if "truncated" in keys:
-            truncated = data["truncated"]
-        else:
-            truncated = np.zeros(T, dtype=bool)
+            T = len(actions)
+            if "truncated" in keys:
+                truncated = data["truncated"]
+            else:
+                truncated = np.zeros(T, dtype=bool)
 
-        if "discounts" in keys:
-            discounts = data["discounts"]
-        else:
-            discounts = (1.0 - dones.astype(np.float32)).astype(np.float32)
+            if "discounts" in keys:
+                discounts = data["discounts"]
+            else:
+                discounts = (1.0 - dones.astype(np.float32)).astype(np.float32)
 
-        has_inventory = "inventory" in keys
-        if has_inventory:
-            inventory = data["inventory"]
-        else:
-            inventory = np.zeros((T, STATE_VECTOR_DIM), dtype=np.float32)
+            has_inventory = "inventory" in keys
+            if has_inventory:
+                inventory = data["inventory"]
+            else:
+                inventory = np.zeros((T, STATE_VECTOR_DIM), dtype=np.float32)
 
-        seeds = data["seeds"] if "seeds" in keys else np.zeros(len(episode_lengths), dtype=np.int64)
+            seeds = data["seeds"] if "seeds" in keys else np.zeros(len(episode_lengths), dtype=np.int64)
 
-        return {
-            "obs": obs,
-            "actions": actions,
-            "rewards": rewards,
-            "dones": dones,
-            "truncated": truncated,
-            "discounts": discounts,
-            "events": events,
-            "mask_before": mask_before,
-            "inventory": inventory,
-            "has_inventory": has_inventory,
-            "episode_lengths": episode_lengths,
-            "seeds": seeds,
-        }
+            return {
+                "obs": obs,
+                "actions": actions,
+                "rewards": rewards,
+                "dones": dones,
+                "truncated": truncated,
+                "discounts": discounts,
+                "events": events,
+                "mask_before": mask_before,
+                "inventory": inventory,
+                "has_inventory": has_inventory,
+                "episode_lengths": episode_lengths,
+                "seeds": seeds,
+            }
 
     @staticmethod
     def split_episodes(shard_dict: Dict[str, Any]) -> List[Dict[str, Any]]:
