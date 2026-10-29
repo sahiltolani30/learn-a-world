@@ -150,13 +150,12 @@ class HomeostaticArbiter:
         if urgency["u_hunger"] >= 0.5 and food_adjacent:
             return 5, "homeostatic_eat"
 
-        # 6. Modulated dusk defense (Prevents 116-step immobilization)
-        # Allows movement/navigation on (cadence - 1) out of cadence steps
+        # 6. Active inference survival defense (zero artificial clock cadence modulos)
+        # When dusk/darkness is present, defend if threats emerge or continue tactical maneuvering
         if urgency["dusk_factor"] >= 0.5:
-            if (step % self.combat_cadence) == 0:
+            if urgency["imminent_threat"] >= 0.6 or monster_adjacent:
                 return 5, "homeostatic_combat"
-            else:
-                return teleological_action, "teleological_dusk_maneuver"
+            return teleological_action, "teleological_dusk_maneuver"
 
         # 7. Default fallback to teleological action if maintenance precondition unavailable
         return teleological_action, "teleological_fallback"

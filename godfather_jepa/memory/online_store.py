@@ -38,7 +38,7 @@ class OnlineEpisodicStore:
     Fast online working memory instantiated per-episode.
     """
 
-    def __init__(self, target_goal: str = "make_wood_pickaxe"):
+    def __init__(self, target_goal: Optional[str] = None):
         self.target_goal = target_goal
         self.steps: List[TransitionStep] = []
         self.workstation_placed_step: Optional[int] = None

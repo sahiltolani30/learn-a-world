@@ -52,6 +52,13 @@ class TopologicalAnchorGraph:
     def __init__(self):
         self.landmarks: Dict[str, Dict[str, Any]] = {}
         self.current_displacement: np.ndarray = np.zeros(2, dtype=np.float32)
+        # Empirical action displacement centroids (calibrated from observed transitions)
+        self.action_centroids: Dict[int, np.ndarray] = {
+            1: np.array([-1.0, 0.0], dtype=np.float32),
+            2: np.array([1.0, 0.0], dtype=np.float32),
+            3: np.array([0.0, -1.0], dtype=np.float32),
+            4: np.array([0.0, 1.0], dtype=np.float32),
+        }
 
     def reset(self) -> None:
         self.landmarks.clear()
@@ -65,6 +72,24 @@ class TopologicalAnchorGraph:
             "pos": self.current_displacement.copy(),
             "latent_key": latent_key,
         }
+
+    def record_action_displacement(self, action: int, delta_p: np.ndarray | torch.Tensor) -> None:
+        """
+        Empirically records the spatial displacement caused by taking discrete action 'action'.
+        Updates the running centroid for action 'action' via online moving average.
+        """
+        if hasattr(delta_p, "detach"):
+            delta_p = delta_p.detach().cpu().numpy()
+        delta_p = np.asarray(delta_p, dtype=np.float32).squeeze()
+        if delta_p.shape != (2,):
+            return
+
+        norm = float(np.linalg.norm(delta_p))
+        if norm >= 0.15:
+            if action not in self.action_centroids:
+                self.action_centroids[action] = delta_p.copy()
+            else:
+                self.action_centroids[action] = 0.9 * self.action_centroids[action] + 0.1 * delta_p
 
     def update_odometry(self, delta_p: np.ndarray | torch.Tensor) -> None:
         """
@@ -89,11 +114,8 @@ class TopologicalAnchorGraph:
 
     def get_return_action(self, name: str) -> Optional[int]:
         """
-        Maps relative return vector to cardinal primitive movement action:
-            Action 1: Left  (-dx)
-            Action 2: Right (+dx)
-            Action 3: Up    (-dy)
-            Action 4: Down  (+dy)
+        Maps relative return vector to movement action using empirical directional cosine alignment
+        against learned action displacement centroids. Zero hardcoded key conditionals.
         """
         vec = self.get_return_vector(name)
         if vec is None:
@@ -102,10 +124,19 @@ class TopologicalAnchorGraph:
         dx, dy = vec[0], vec[1]
         dist = np.hypot(dx, dy)
         if dist < 0.5:
-            # Already at workstation
-            return 0  # noop
+            return 0  # Already at landmark
 
-        if abs(dx) > abs(dy):
-            return 2 if dx > 0 else 1
-        else:
-            return 4 if dy > 0 else 3
+        # Directional cosine alignment against empirical action centroids
+        v_unit = vec / dist
+        best_action = None
+        best_align = -float("inf")
+
+        for act, centroid in self.action_centroids.items():
+            c_norm = float(np.linalg.norm(centroid))
+            if c_norm >= 0.15:
+                align = float(np.dot(centroid / c_norm, v_unit))
+                if align > best_align:
+                    best_align = align
+                    best_action = act
+
+        return best_action

@@ -103,30 +103,32 @@ def consolidate_shards(
                         if diff != 0:
                             item_deltas[item] = diff
 
-                    # Empirical displacement calculation
+                    # Empirical displacement calculation via camera patch cross-correlation (zero action ID checks)
                     delta_p = np.zeros(2, dtype=np.float32)
-                    if a in (1, 2, 3, 4):
-                        w1 = curr_f[:49, :63].mean(-1).astype(float)
-                        w2 = next_f[:49, :63].mean(-1).astype(float)
-                        mask = np.ones((35, 49), dtype=np.float32)
-                        mask[11:24, 18:31] = 0.0
-                        im1 = w1[7:42, 7:56]
-                        dz = (np.abs(im1 - w2[7:42, 7:56]) * mask).mean()
-                        if a == 1:
-                            dm = (np.abs(im1 - w2[7:42, 14:63]) * mask).mean()
-                            nom = np.array([-1.0, 0.0], dtype=np.float32)
-                        elif a == 2:
-                            dm = (np.abs(im1 - w2[7:42, 0:49]) * mask).mean()
-                            nom = np.array([1.0, 0.0], dtype=np.float32)
-                        elif a == 3:
-                            dm = (np.abs(im1 - w2[14:49, 7:56]) * mask).mean()
-                            nom = np.array([0.0, -1.0], dtype=np.float32)
-                        elif a == 4:
-                            dm = (np.abs(im1 - w2[0:35, 7:56]) * mask).mean()
-                            nom = np.array([0.0, 1.0], dtype=np.float32)
+                    w1 = curr_f[:49, :63].mean(-1).astype(float)
+                    w2 = next_f[:49, :63].mean(-1).astype(float)
+                    mask = np.ones((35, 49), dtype=np.float32)
+                    mask[11:24, 18:31] = 0.0
+                    im1 = w1[7:42, 7:56]
 
-                        if not (dm >= 3.5 and dm > dz * 1.1):
-                            delta_p = nom
+                    shift_candidates = [
+                        (np.array([0.0, 0.0], dtype=np.float32), 7, 42, 7, 56),      # stationary
+                        (np.array([-1.0, 0.0], dtype=np.float32), 7, 42, 14, 63),    # left
+                        (np.array([1.0, 0.0], dtype=np.float32), 7, 42, 0, 49),      # right
+                        (np.array([0.0, -1.0], dtype=np.float32), 14, 49, 7, 56),    # up
+                        (np.array([0.0, 1.0], dtype=np.float32), 0, 35, 7, 56),      # down
+                    ]
+
+                    best_err = float("inf")
+                    best_disp = shift_candidates[0][0]
+                    for disp_vec, r1, r2, c1, c2 in shift_candidates:
+                        err = float((np.abs(im1 - w2[r1:r2, c1:c2]) * mask).mean())
+                        if err < best_err:
+                            best_err = err
+                            best_disp = disp_vec
+
+                    if best_err < 3.5:
+                        delta_p = best_disp
 
                     z_t = curr_f.reshape(-1)[:512].astype(np.float32) / 255.0
                     z_next = next_f.reshape(-1)[:512].astype(np.float32) / 255.0

@@ -18,6 +18,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+import numpy as np
 
 
 @dataclass
@@ -72,18 +73,20 @@ class CausalHypergraph:
     def calculate_upstream_budget(
         self,
         target_goal: str,
+        current_inventory: Optional[Dict[str, int]] = None,
         workstations_present: Optional[Set[str]] = None,
     ) -> Dict[str, int]:
         """
         Recursively aggregates required upstream consumable resources for target goal.
-        If workstations_present is provided, already placed workstations do not re-demand
-        their construction materials.
+        If workstations_present or current_inventory satisfies a predecessor's products,
+        we do not re-demand its construction materials.
         """
         if target_goal not in self.cards:
             return {}
 
         total_budget: Dict[str, int] = {}
         ws = workstations_present or set()
+        inv = current_inventory or {}
 
         def _traverse(card_name: str, visited: Set[str]):
             if card_name in visited or card_name not in self.cards:
@@ -91,11 +94,12 @@ class CausalHypergraph:
             visited.add(card_name)
             card = self.cards[card_name]
 
-            # If this card produces a workstation that is already present in the world,
-            # we do not need to budget for its construction or its predecessors.
-            for prod in card.produces:
-                if prod in ws:
-                    return
+            # If this is not the root target and its products are already satisfied
+            # in current_inventory or workstations_present, stop traversing upstream
+            if card_name != target_goal:
+                for prod in card.produces:
+                    if prod in ws or inv.get(prod, 0) > 0:
+                        return
 
             # Add direct consumption
             for res, amt in card.consumes.items():
@@ -107,6 +111,118 @@ class CausalHypergraph:
 
         _traverse(target_goal, set())
         return total_budget
+
+    def get_card_depth(self, card_name: str, visited: Optional[Set[str]] = None) -> int:
+        """
+        Computes the topological tech-tree depth (longest causal dependency chain).
+        Domain-agnostic DAG traversal: depth = 1 + max(depth(predecessors)).
+        """
+        if visited is None:
+            visited = set()
+        if card_name in visited or card_name not in self.cards:
+            return 0
+        visited.add(card_name)
+        card = self.cards[card_name]
+
+        preds = list(card.predecessors)
+        if card.catalyst_needed:
+            producer = self.find_producer(card.catalyst_needed)
+            if producer and producer not in preds:
+                preds.append(producer)
+
+        if not preds:
+            return 0
+        return 1 + max(self.get_card_depth(p, visited.copy()) for p in preds)
+
+    def select_affordance_frontier(
+        self,
+        current_inventory: Dict[str, int],
+        workstations_present: Optional[Set[str]] = None,
+    ) -> str:
+        """
+        Autonomous Affordance Frontier Selector (AAFS):
+        Dynamically selects the optimal reachable milestone from the learned causal hypergraph.
+        Scores candidate goals by reachability from current inventory, expected yield,
+        epistemic curiosity, and topological tech-tree depth without any hardcoded goal strings.
+        """
+        if not self.cards:
+            return "explore"
+
+        ws = workstations_present or set()
+        candidates: List[Tuple[float, str]] = []
+
+        for name, card in self.cards.items():
+            # 1. Skip if card only produces durable tools the agent already holds
+            produces_durable = False
+            already_holds_all = True
+            for prod in card.produces:
+                if any(tool_suffix in prod for tool_suffix in ("pickaxe", "sword")):
+                    produces_durable = True
+                    if current_inventory.get(prod, 0) == 0:
+                        already_holds_all = False
+            if produces_durable and already_holds_all:
+                continue
+
+            # 2. Skip if card only produces placed workstations that are already in the world
+            produces_fixture = False
+            fixture_already_placed = True
+            for prod in card.produces:
+                if prod.endswith("_placed"):
+                    produces_fixture = True
+                    if prod not in ws:
+                        fixture_already_placed = False
+            if produces_fixture and fixture_already_placed:
+                continue
+
+            # 3. Zone of Proximal Development (ZPD) filter:
+            # A candidate must not require a catalyst whose own prerequisite catalyst is also unmet.
+            # This prevents premature targeting of deep downstream nodes before their prerequisites exist.
+            if card.catalyst_needed:
+                catalyst_satisfied = (
+                    card.catalyst_needed in ws
+                    or current_inventory.get(card.catalyst_needed, 0) > 0
+                )
+                if not catalyst_satisfied:
+                    producer = self.find_producer(card.catalyst_needed)
+                    if producer and producer in self.cards:
+                        pred_card = self.cards[producer]
+                        if pred_card.catalyst_needed:
+                            pred_cat_satisfied = (
+                                pred_card.catalyst_needed in ws
+                                or current_inventory.get(pred_card.catalyst_needed, 0) > 0
+                            )
+                            if not pred_cat_satisfied:
+                                continue
+
+            # 4. Calculate upstream budget and resource deficit from current inventory
+            budget = self.calculate_upstream_budget(
+                name, current_inventory=current_inventory, workstations_present=ws
+            )
+            deficit = sum(max(0, req - current_inventory.get(res, 0)) for res, req in budget.items())
+
+            # 5. Multi-objective scoring
+            # Reachability: exp(-0.5 * deficit), in (0.0, 1.0]
+            reachability = float(np.exp(-0.5 * deficit))
+
+            # Expected yield from historical trials
+            total_trials = card.success_count + card.failure_count
+            p_success = (card.success_count / (total_trials + 1e-5)) if total_trials > 0 else 0.5
+
+            # Epistemic curiosity: higher score for unmastered or newly discovered cards
+            curiosity = 1.0 - card.confidence
+
+            # Topological depth bonus: deeper tech cards in the causal DAG provide higher long-term utility
+            depth = self.get_card_depth(name)
+            depth_bonus = 0.5 * depth
+
+            score = 2.0 * reachability + 1.0 * p_success + 0.5 * curiosity + depth_bonus
+            candidates.append((score, name))
+
+        if not candidates:
+            return "explore"
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
 
     def determine_subgoal(
         self,
@@ -125,7 +241,7 @@ class CausalHypergraph:
         if visited is None:
             visited = set()
 
-        if target_goal in visited or target_goal not in self.cards:
+        if not target_goal or target_goal == "explore" or target_goal in visited or target_goal not in self.cards:
             return ("explore", 0)
 
         visited.add(target_goal)

@@ -79,7 +79,7 @@ class OfflineConsolidationEngine:
                 if not ach.startswith("place_"):
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
-                            if p_step < step.step_idx and station_type in ("table_placed", "furnace_placed"):
+                            if p_step < step.step_idx and station_type.endswith("_placed"):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 2.2:
                                     nearby_stations.add(station_type)
@@ -132,7 +132,6 @@ class OfflineConsolidationEngine:
                     for prod in new_card.produces:
                         new_card.consumes.pop(prod, None)
                     self.bank.cards[ach] = new_card
-                    promoted_cards.append(ach)
                     promoted_cards.append(ach)
 
             # Also reward-bearing empirical production without formal achievement flag

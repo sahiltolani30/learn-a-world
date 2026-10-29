@@ -79,7 +79,7 @@ class LatentMPCPlanner:
         inventory: Dict[str, int],
         workstations: Set[str],
         anchor_graph: TopologicalAnchorGraph,
-        target_goal: str = "make_wood_pickaxe",
+        target_goal: Optional[str] = None,
     ) -> Tuple[int, Dict[str, Any]]:
         """
         Executes latent MPC trajectory search given current latent and recurrent belief.
@@ -91,12 +91,18 @@ class LatentMPCPlanner:
             inventory: Mental inventory dictionary.
             workstations: Set of placed workstations.
             anchor_graph: TopologicalAnchorGraph holding landmark return paths.
-            target_goal: High-level teleological goal.
+            target_goal: High-level teleological goal (if None, dynamically selected via AAFS).
 
         Returns:
             (best_action, debug_info)
         """
         # 1. Determine causal subgoal and budget from CausalHypergraph
+        if target_goal is None:
+            target_goal = self.causal_hypergraph.select_affordance_frontier(
+                current_inventory=inventory,
+                workstations_present=workstations,
+            )
+
         subgoal, determined_action = self.causal_hypergraph.determine_subgoal(
             target_goal=target_goal,
             current_inventory=inventory,
@@ -127,14 +133,11 @@ class LatentMPCPlanner:
         N = self.num_candidates
         N_elite = max(2, int(N * self.elite_ratio))
 
-        # Action priors: Movement (1..4) and Interaction (5=Do) get dominant initial probability
-        # 0=noop, 1=left, 2=right, 3=up, 4=down, 5=do, 6..16=crafts/sleep
-        base_probs = torch.full((self.num_actions,), 0.02, device=self.device)
-        base_probs[1:5] = 0.18  # Movement (left, right, up, down)
-        base_probs[5] = 0.20    # Do / hit action
-        action_probs = base_probs.unsqueeze(0).expand(H, -1).clone()  # (H, num_actions)
+        # Tabula-rasa uninformative uniform proposal distribution across all actions:
+        # Zero hardcoded movement boosts, zero hardcoded interaction boosts
+        action_probs = torch.full((H, self.num_actions), 1.0 / self.num_actions, device=self.device)
 
-        best_action = 5
+        best_action = 0
         best_score = -float("inf")
 
         with torch.no_grad():
@@ -145,9 +148,6 @@ class LatentMPCPlanner:
                 for t in range(H):
                     dist = torch.distributions.Categorical(probs=action_probs[t])
                     candidate_actions[:, t] = dist.sample((N,))
-
-                # Inject target interaction at step 0 for 25% of candidates to evaluate immediate hit
-                candidate_actions[: N // 4, 0] = 5
 
                 # Expand root tensors to batch dimension N
                 z_k = z_0.expand(N, -1).clone()

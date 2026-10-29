@@ -320,3 +320,27 @@ class TestAdversarialSubgoalVulnerabilities:
         )
         assert subgoal == "collect_wood"
         assert action == 5
+
+
+class TestAutonomousAffordanceFrontierSelector:
+    """Verifies that AAFS dynamically selects goals without hardcoded curricula."""
+
+    def test_empty_graph_returns_explore(self):
+        graph = CausalHypergraph()
+        goal = graph.select_affordance_frontier(current_inventory={})
+        assert goal == "explore"
+
+    def test_frontier_selects_pickaxe_when_holding_budget(self):
+        graph = _build_test_graph()
+        # With 3 wood, pickaxe is reachable and preferred over basic wood gathering
+        goal = graph.select_affordance_frontier(current_inventory={"wood": 3})
+        assert goal in ("make_wood_pickaxe", "make_wood_sword")
+
+    def test_frontier_advances_to_stone_once_pickaxe_held(self):
+        graph = _build_test_graph()
+        # Holding a wood pickaxe, the agent must NOT re-target pickaxe; it advances to collect_stone
+        goal = graph.select_affordance_frontier(
+            current_inventory={"wood_pickaxe": 1, "wood": 0},
+            workstations_present={"table_placed"},
+        )
+        assert goal == "collect_stone"

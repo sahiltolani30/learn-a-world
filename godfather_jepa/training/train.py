@@ -73,12 +73,12 @@ from godfather_jepa.utils.visual_decoder import (
 def compute_empirical_displacement(
     obs_curr: torch.Tensor,
     obs_next: torch.Tensor,
-    actions: torch.Tensor,
+    actions: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
-    Computes empirical spatial displacement from world image cross-correlation/optical flow.
-    Replaces rigid kinematic assumptions so collisions (walking into trees/water)
-    correctly supervise with [0.0, 0.0].
+    Computes empirical spatial displacement purely from visual 2D patch cross-correlation.
+    Finds the spatial shift that minimizes masked L1 patch difference across candidate shifts.
+    Zero action index checking; purely derived from raw camera optical flow.
     """
     b = obs_curr.shape[0]
     device = obs_curr.device
@@ -92,34 +92,31 @@ def compute_empirical_displacement(
     mask = torch.ones(35, 49, device=device)
     mask[11:24, 18:31] = 0.0
 
+    shift_candidates = [
+        (torch.tensor([0.0, 0.0], device=device), 7, 42, 7, 56),      # stationary
+        (torch.tensor([-1.0, 0.0], device=device), 7, 42, 14, 63),    # left (world scrolls right)
+        (torch.tensor([1.0, 0.0], device=device), 7, 42, 0, 49),      # right (world scrolls left)
+        (torch.tensor([0.0, -1.0], device=device), 14, 49, 7, 56),    # up (world scrolls down)
+        (torch.tensor([0.0, 1.0], device=device), 0, 35, 7, 56),      # down (world scrolls up)
+    ]
+
     for i in range(b):
-        act = int(actions[i].item())
-        if act not in (1, 2, 3, 4):
-            continue
-
         im1_center = w1[i, 7:42, 7:56]
-        im2_center = w2[i, 7:42, 7:56]
-        dz = ((im1_center - im2_center).abs() * mask).mean()
+        best_err = float("inf")
+        best_disp = shift_candidates[0][0]
 
-        if act == 1:    # Left: expected world scroll right (+7 px in col)
-            im2_moved = w2[i, 7:42, 14:63]
-            nom = torch.tensor([-1.0, 0.0], device=device)
-        elif act == 2:  # Right: expected world scroll left (-7 px in col)
-            im2_moved = w2[i, 7:42, 0:49]
-            nom = torch.tensor([1.0, 0.0], device=device)
-        elif act == 3:  # Up: expected world scroll down (+7 px in row)
-            im2_moved = w2[i, 14:49, 7:56]
-            nom = torch.tensor([0.0, -1.0], device=device)
-        elif act == 4:  # Down: expected world scroll up (-7 px in row)
-            im2_moved = w2[i, 0:35, 7:56]
-            nom = torch.tensor([0.0, 1.0], device=device)
+        for disp_vec, r1, r2, c1, c2 in shift_candidates:
+            im2_patch = w2[i, r1:r2, c1:c2]
+            err = float(((im1_center - im2_patch).abs() * mask).mean().item())
+            if err < best_err:
+                best_err = err
+                best_disp = disp_vec
 
-        dm = ((im1_center - im2_moved).abs() * mask).mean()
-
-        if dm >= 3.5 and dm > dz * 1.1:
-            displacements[i] = torch.tensor([0.0, 0.0], device=device)
+        # If best match is noisy (> 3.5), default to stationary
+        if best_err < 3.5:
+            displacements[i] = best_disp
         else:
-            displacements[i] = nom
+            displacements[i] = torch.tensor([0.0, 0.0], device=device)
 
     return displacements
 
@@ -135,12 +132,14 @@ class GodfatherJEPAPipeline:
         checkpoint_init: Optional[str] = None,
         learning_rate: float = 3e-4,
         latent_dim: int = 512,
+        num_actions: int = 17,
         horizon: int = 15,
         gamma: float = 0.997,
         lambd: float = 0.95,
     ):
         self.device = device
         self.latent_dim = latent_dim
+        self.num_actions = num_actions
         self.horizon = horizon
         self.gamma = gamma
         self.lambd = lambd
@@ -151,13 +150,13 @@ class GodfatherJEPAPipeline:
         self.projector = ExpanderProjector(in_dim=latent_dim, proj_dim=1024).to(device)
         self.spatial_projector = SpatialFeatureProjector(in_channels=256, out_channels=64).to(device)
 
-        self.spatial_gru = SpatialConvGRU(channels=64).to(device)
-        self.vector_belief = VectorBeliefCore(latent_dim=latent_dim).to(device)
-        self.ensemble = EpistemicPredictorEnsemble(k_heads=5, latent_dim=latent_dim).to(device)
+        self.spatial_gru = SpatialConvGRU(channels=64, num_actions=num_actions).to(device)
+        self.vector_belief = VectorBeliefCore(latent_dim=latent_dim, num_actions=num_actions).to(device)
+        self.ensemble = EpistemicPredictorEnsemble(k_heads=5, latent_dim=latent_dim, num_actions=num_actions).to(device)
         self.predictor = self.ensemble.heads[0]
         self.continuation_head = SurvivalContinuationHead(state_dim=latent_dim * 2).to(device)
-        self.reward_head = DenseRewardHead(state_dim=latent_dim * 2).to(device)
-        self.odometry_head = VisualOdometryHead(latent_dim=latent_dim).to(device)
+        self.reward_head = DenseRewardHead(state_dim=latent_dim * 2, num_actions=num_actions).to(device)
+        self.odometry_head = VisualOdometryHead(latent_dim=latent_dim, num_actions=num_actions).to(device)
         self.semantic_bank = SemanticConsolidatedBank()
         self.causal_hypergraph = self.semantic_bank.hypergraph
         self.consolidation_engine = OfflineConsolidationEngine(self.semantic_bank)
@@ -170,7 +169,7 @@ class GodfatherJEPAPipeline:
         # 2. Actor-Critic
         self.critic = SymlogCategoricalCritic(state_dim=latent_dim * 2).to(device)
         self.target_critic = TargetEMA(self.critic, initial_tau=0.996).to(device)
-        self.actor = AmortizedPolicyActor(state_dim=latent_dim * 2).to(device)
+        self.actor = AmortizedPolicyActor(state_dim=latent_dim * 2, num_actions=num_actions).to(device)
         self.symlog_coder = SymlogTwoHotCoder()
 
         # 3. Optimizers
@@ -213,6 +212,7 @@ class GodfatherJEPAPipeline:
             num_candidates=64,
             cem_iterations=2,
             gamma=self.gamma,
+            num_actions=self.num_actions,
             device=device,
         )
 
@@ -267,7 +267,7 @@ class GodfatherJEPAPipeline:
                 "prev_action": 0,
                 "prev_z": None,
                 "anchor_graph": TopologicalAnchorGraph(),
-                "inventory": {"wood": 0, "stone": 0, "wood_pickaxe": 0},
+                "inventory": {},
                 "workstations": set(),
                 "internal_vitals": {"drink": 9.0, "food": 9.0, "health": 9.0},
                 "step": 0,
@@ -307,6 +307,7 @@ class GodfatherJEPAPipeline:
             if prev_z is not None:
                 delta_p = self.odometry_head(prev_z, act_t, z)
                 anchor.update_odometry(delta_p)
+                anchor.record_action_displacement(prev_act, delta_p)
 
             # 2. Survival continuation probability
             contin_prob = float(self.continuation_head(composite).item())
@@ -315,8 +316,11 @@ class GodfatherJEPAPipeline:
             actor_action_t = self.actor.sample_action(composite, deterministic=deterministic)
             actor_action = int(actor_action_t.item())
 
-            # 4. Teleological target selection & action determination
-            target_goal = "make_wood_pickaxe" if inv.get("wood_pickaxe", 0) == 0 else "collect_stone"
+            # 4. Autonomous affordance frontier selection (zero hardcoded goal curricula)
+            target_goal = self.causal_hypergraph.select_affordance_frontier(
+                current_inventory=inv,
+                workstations_present=ws,
+            )
             if use_mpc:
                 teleo_action, mpc_debug = self.mpc_planner.plan(
                     z_0=z,
@@ -379,7 +383,7 @@ class GodfatherJEPAPipeline:
         obs_list, act_list, rew_list, done_list = [obs], [], [], []
         achievements_dict: Dict[str, List[int]] = {}
 
-        online_store = OnlineEpisodicStore(target_goal="make_wood_pickaxe")
+        online_store = OnlineEpisodicStore()
         state = None
         done = False
         steps = 0
