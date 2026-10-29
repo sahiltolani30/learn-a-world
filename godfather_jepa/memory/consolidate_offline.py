@@ -28,10 +28,11 @@ from godfather_jepa.utils.visual_decoder import decode_inventory_from_frame
 def consolidate_shards(
     shard_dir: str,
     output_path: str = "checkpoints/godfather_memory_bank.pt",
-    max_episodes: int = 500,
+    max_episodes: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Ingests sequence shards and consolidates them into the semantic bank.
+    If max_episodes is None or <= 0, processes all available episodes across all shards.
     """
     bank = SemanticConsolidatedBank(persistence_path=output_path)
     engine = OfflineConsolidationEngine(semantic_bank=bank)
@@ -146,10 +147,10 @@ def consolidate_shards(
                 total_episodes += 1
                 ep_start = ep_end + 1
 
-                if total_episodes >= max_episodes:
+                if max_episodes is not None and max_episodes > 0 and total_episodes >= max_episodes:
                     break
 
-            if total_episodes >= max_episodes:
+            if max_episodes is not None and max_episodes > 0 and total_episodes >= max_episodes:
                 break
         except Exception as e:
             continue
@@ -168,7 +169,12 @@ def main():
     parser = argparse.ArgumentParser(description="Godfather JEPA Offline Memory Consolidation")
     parser.add_argument("--shard-dir", type=str, default="/content/drive/MyDrive/learn-a-world/data/sequences/")
     parser.add_argument("--out-bank", type=str, default="checkpoints/godfather_memory_bank.pt")
-    parser.add_argument("--max-episodes", type=int, default=500)
+    parser.add_argument(
+        "--max-episodes",
+        type=int,
+        default=0,
+        help="Maximum episodes to consolidate (default: 0 for all episodes in shard directory)",
+    )
     args = parser.parse_args()
 
     consolidate_shards(

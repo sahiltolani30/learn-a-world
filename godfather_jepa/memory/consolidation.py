@@ -31,6 +31,7 @@ class OfflineConsolidationEngine:
 
     def __init__(self, semantic_bank: Optional[SemanticConsolidatedBank] = None):
         self.bank = semantic_bank or SemanticConsolidatedBank()
+        self.candidate_catalysts: Dict[str, Set[str]] = {}
 
     def consolidate_episode(self, episodic_store: OnlineEpisodicStore) -> Dict[str, Any]:
         """
@@ -73,28 +74,36 @@ class OfflineConsolidationEngine:
                         step_produces = {ach: 1}
 
                 # Pearlian Causal Contrast for Catalyst Induction:
-                # A workstation catalyst is bound only if adjacent (<= 1.5) to a previously placed workstation,
-                # and rejected if the action is placing a workstation or has already succeeded in open terrain.
-                catalyst_needed = None
+                # Identify all workstations adjacent (<= 1.5) to the agent at this milestone.
+                # Only entities with "_placed" designation are valid spatial structures.
+                nearby_stations: Set[str] = set()
                 if not ach.startswith("place_"):
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
-                            if p_step < step.step_idx:
+                            if p_step < step.step_idx and station_type in ("table_placed", "furnace_placed"):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 1.5:
-                                    catalyst_needed = station_type
-                                    break
+                                    nearby_stations.add(station_type)
                     elif (
                         episodic_store.workstation_placed_step is not None
                         and episodic_store.workstation_placed_step < step.step_idx
                     ):
                         dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
                         if dist <= 1.5:
-                            catalyst_needed = "table_placed"
+                            nearby_stations.add("table_placed")
 
-                # If this card has already proven it succeeds in open terrain without a catalyst, preserve independence
-                if ach in self.bank.cards and self.bank.cards[ach].catalyst_needed is None and self.bank.cards[ach].success_count > 0:
-                    catalyst_needed = None
+                # Causal Contrast: Intersect candidate catalysts across all successful executions of this milestone.
+                # If an action succeeds even once without station S nearby, S is ruled out as a necessary catalyst.
+                if ach not in self.candidate_catalysts:
+                    self.candidate_catalysts[ach] = set(nearby_stations)
+                else:
+                    self.candidate_catalysts[ach] = self.candidate_catalysts[ach].intersection(nearby_stations)
+
+                catalyst_needed = (
+                    next(iter(self.candidate_catalysts[ach]))
+                    if len(self.candidate_catalysts[ach]) == 1
+                    else None
+                )
 
                 # Never consume what this step produces
                 for prod in step_produces:
