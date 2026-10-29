@@ -103,25 +103,29 @@ def consolidate_shards(
                     mask = np.ones((35, 49), dtype=np.float32)
                     mask[11:24, 18:31] = 0.0
                     im1 = w1[7:42, 7:56]
+                    err_stay = float((np.abs(im1 - w2[7:42, 7:56]) * mask).mean())
 
-                    shift_candidates = [
-                        (np.array([0.0, 0.0], dtype=np.float32), 7, 42, 7, 56),      # stationary
-                        (np.array([-1.0, 0.0], dtype=np.float32), 7, 42, 14, 63),    # left
-                        (np.array([1.0, 0.0], dtype=np.float32), 7, 42, 0, 49),      # right
-                        (np.array([0.0, -1.0], dtype=np.float32), 14, 49, 7, 56),    # up
-                        (np.array([0.0, 1.0], dtype=np.float32), 0, 35, 7, 56),      # down
-                    ]
+                    # If camera background did not shift (err_stay < 2.0), agent is stationary
+                    if err_stay < 2.0:
+                        delta_p = np.array([0.0, 0.0], dtype=np.float32)
+                    else:
+                        shift_candidates = [
+                            (np.array([-1.0, 0.0], dtype=np.float32), 7, 42, 14, 63),    # left
+                            (np.array([1.0, 0.0], dtype=np.float32), 7, 42, 0, 49),      # right
+                            (np.array([0.0, -1.0], dtype=np.float32), 14, 49, 7, 56),    # up
+                            (np.array([0.0, 1.0], dtype=np.float32), 0, 35, 7, 56),      # down
+                        ]
 
-                    best_err = float("inf")
-                    best_disp = shift_candidates[0][0]
-                    for disp_vec, r1, r2, c1, c2 in shift_candidates:
-                        err = float((np.abs(im1 - w2[r1:r2, c1:c2]) * mask).mean())
-                        if err < best_err:
-                            best_err = err
-                            best_disp = disp_vec
+                        best_err = float("inf")
+                        best_disp = np.array([0.0, 0.0], dtype=np.float32)
+                        for disp_vec, r1, r2, c1, c2 in shift_candidates:
+                            err = float((np.abs(im1 - w2[r1:r2, c1:c2]) * mask).mean())
+                            if err < best_err:
+                                best_err = err
+                                best_disp = disp_vec
 
-                    if best_err < 3.5:
-                        delta_p = best_disp
+                        if best_err < 3.5:
+                            delta_p = best_disp
 
                     z_t = curr_f.reshape(-1)[:512].astype(np.float32) / 255.0
                     z_next = next_f.reshape(-1)[:512].astype(np.float32) / 255.0

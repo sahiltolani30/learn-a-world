@@ -93,7 +93,6 @@ def compute_empirical_displacement(
     mask[11:24, 18:31] = 0.0
 
     shift_candidates = [
-        (torch.tensor([0.0, 0.0], device=device), 7, 42, 7, 56),      # stationary
         (torch.tensor([-1.0, 0.0], device=device), 7, 42, 14, 63),    # left (world scrolls right)
         (torch.tensor([1.0, 0.0], device=device), 7, 42, 0, 49),      # right (world scrolls left)
         (torch.tensor([0.0, -1.0], device=device), 14, 49, 7, 56),    # up (world scrolls down)
@@ -102,21 +101,25 @@ def compute_empirical_displacement(
 
     for i in range(b):
         im1_center = w1[i, 7:42, 7:56]
-        best_err = float("inf")
-        best_disp = shift_candidates[0][0]
+        err_stay = float(((im1_center - w2[i, 7:42, 7:56]).abs() * mask).mean().item())
 
-        for disp_vec, r1, r2, c1, c2 in shift_candidates:
-            im2_patch = w2[i, r1:r2, c1:c2]
-            err = float(((im1_center - im2_patch).abs() * mask).mean().item())
-            if err < best_err:
-                best_err = err
-                best_disp = disp_vec
-
-        # If best match is noisy (> 3.5), default to stationary
-        if best_err < 3.5:
-            displacements[i] = best_disp
-        else:
+        if err_stay < 2.0:
             displacements[i] = torch.tensor([0.0, 0.0], device=device)
+        else:
+            best_err = float("inf")
+            best_disp = torch.tensor([0.0, 0.0], device=device)
+
+            for disp_vec, r1, r2, c1, c2 in shift_candidates:
+                im2_patch = w2[i, r1:r2, c1:c2]
+                err = float(((im1_center - im2_patch).abs() * mask).mean().item())
+                if err < best_err:
+                    best_err = err
+                    best_disp = disp_vec
+
+            if best_err < 3.5:
+                displacements[i] = best_disp
+            else:
+                displacements[i] = torch.tensor([0.0, 0.0], device=device)
 
     return displacements
 

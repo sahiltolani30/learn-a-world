@@ -184,21 +184,23 @@ class OfflineConsolidationEngine:
             for item, delta in step.item_deltas.items():
                 inv[item] = max(0, inv.get(item, 0) + delta)
 
-        # Empirically link predecessors based on input consumption and catalyst requirements
+        # Empirically link predecessors based on CURRENT input consumption and catalyst requirements
         for c_name, c_card in self.bank.cards.items():
+            new_preds = []
             for req_res in c_card.consumes:
                 for other_name, other_card in self.bank.cards.items():
                     if other_name != c_name and other_card.produces.get(req_res, 0) > 0:
-                        if other_name not in c_card.predecessors:
-                            c_card.predecessors.append(other_name)
+                        if other_name not in new_preds:
+                            new_preds.append(other_name)
             if c_card.catalyst_needed:
                 for other_name, other_card in self.bank.cards.items():
                     if other_name != c_name and (
                         other_name == c_card.catalyst_needed
                         or other_card.produces.get(c_card.catalyst_needed, 0) > 0
                     ):
-                        if other_name not in c_card.predecessors:
-                            c_card.predecessors.append(other_name)
+                        if other_name not in new_preds:
+                            new_preds.append(other_name)
+            c_card.predecessors = new_preds
 
         return {
             "promoted_cards": promoted_cards,
