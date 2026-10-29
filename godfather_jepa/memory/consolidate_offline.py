@@ -30,12 +30,16 @@ def consolidate_shards(
     shard_dir: str,
     output_path: str = "checkpoints/godfather_memory_bank.pt",
     max_episodes: Optional[int] = None,
+    resume: bool = False,
 ) -> Dict[str, Any]:
     """
     Ingests sequence shards and consolidates them into the semantic bank.
     If max_episodes is None or <= 0, processes all available episodes across all shards.
     """
     bank = SemanticConsolidatedBank(persistence_path=output_path)
+    if resume and os.path.exists(output_path):
+        bank.load(output_path)
+        print(f"[Consolidation] Resumed existing bank from {output_path} with {len(bank.cards)} cards.")
     engine = OfflineConsolidationEngine(semantic_bank=bank)
 
     shard_files = sorted(Path(shard_dir).glob("*.npz"))
@@ -45,6 +49,15 @@ def consolidate_shards(
 
     print(f"[Consolidation] Found {len(shard_files)} shard files in {shard_dir}")
     total_episodes = 0
+
+    mask = np.ones((35, 49), dtype=np.float32)
+    mask[11:24, 18:31] = 0.0
+    shift_candidates = [
+        (np.array([-1.0, 0.0], dtype=np.float32), 7, 42, 14, 63),    # left
+        (np.array([1.0, 0.0], dtype=np.float32), 7, 42, 0, 49),      # right
+        (np.array([0.0, -1.0], dtype=np.float32), 14, 49, 7, 56),    # up
+        (np.array([0.0, 1.0], dtype=np.float32), 0, 35, 7, 56),      # down
+    ]
 
     for s_idx, sf in enumerate(shard_files):
         try:
@@ -75,14 +88,29 @@ def consolidate_shards(
                     ep_events = events[ep_start : ep_end + 1] if events is not None else None
 
                     store = OnlineEpisodicStore()
+                    prev_c = decode_inventory_from_frame(ep_obs[0])
+                    prev_w = ep_obs[0][:49, :63].mean(-1).astype(float)
 
                     for t_idx in range(len(ep_acts)):
                         a = int(ep_acts[t_idx])
                         r = float(ep_rews[t_idx])
                         curr_f = ep_obs[t_idx]
-                        next_f = ep_obs[t_idx + 1] if t_idx < len(ep_acts) - 1 else curr_f
-                        unlocked = None
+                        if t_idx < len(ep_acts) - 1:
+                            next_f = ep_obs[t_idx + 1]
+                            next_c = decode_inventory_from_frame(next_f)
+                            w2 = next_f[:49, :63].mean(-1).astype(float)
+                        else:
+                            next_f = curr_f
+                            next_c = prev_c
+                            w2 = prev_w
 
+                        c1 = prev_c
+                        c2 = next_c
+                        w1 = prev_w
+                        prev_c = next_c
+                        prev_w = w2
+
+                        unlocked = None
                         if ep_events is not None:
                             for a_idx, ach_name in enumerate(CRAFTER_ACHIEVEMENTS):
                                 if a_idx < ep_events.shape[1] and ep_events[t_idx, a_idx] > 0:
@@ -90,44 +118,31 @@ def consolidate_shards(
                                     break
 
                         # Empirical visual inventory detection via exact font pattern matching
-                        c1 = decode_inventory_from_frame(curr_f)
-                        c2 = decode_inventory_from_frame(next_f)
                         item_deltas = {}
                         for item in c1:
                             diff = c2[item] - c1[item]
                             if diff != 0:
                                 item_deltas[item] = diff
 
-                        # Empirical displacement calculation via camera patch cross-correlation (zero action ID checks)
-                        delta_p = np.zeros(2, dtype=np.float32)
-                        w1 = curr_f[:49, :63].mean(-1).astype(float)
-                        w2 = next_f[:49, :63].mean(-1).astype(float)
-                        mask = np.ones((35, 49), dtype=np.float32)
-                        mask[11:24, 18:31] = 0.0
+                        # Empirical displacement calculation via camera patch cross-correlation
                         im1 = w1[7:42, 7:56]
                         err_stay = float((np.abs(im1 - w2[7:42, 7:56]) * mask).mean())
 
-                        # If camera background did not shift (err_stay < 2.0), agent is stationary
                         if err_stay < 2.0:
                             delta_p = np.array([0.0, 0.0], dtype=np.float32)
                         else:
-                            shift_candidates = [
-                                (np.array([-1.0, 0.0], dtype=np.float32), 7, 42, 14, 63),    # left
-                                (np.array([1.0, 0.0], dtype=np.float32), 7, 42, 0, 49),      # right
-                                (np.array([0.0, -1.0], dtype=np.float32), 14, 49, 7, 56),    # up
-                                (np.array([0.0, 1.0], dtype=np.float32), 0, 35, 7, 56),      # down
-                            ]
-
                             best_err = float("inf")
                             best_disp = np.array([0.0, 0.0], dtype=np.float32)
-                            for disp_vec, r1, r2, c1, c2 in shift_candidates:
-                                err = float((np.abs(im1 - w2[r1:r2, c1:c2]) * mask).mean())
+                            for disp_vec, r1, r2, col1, col2 in shift_candidates:
+                                err = float((np.abs(im1 - w2[r1:r2, col1:col2]) * mask).mean())
                                 if err < best_err:
                                     best_err = err
                                     best_disp = disp_vec
 
                             if best_err < 3.5:
                                 delta_p = best_disp
+                            else:
+                                delta_p = np.array([0.0, 0.0], dtype=np.float32)
 
                         z_t = curr_f.reshape(-1)[:512].astype(np.float32) / 255.0
                         z_next = next_f.reshape(-1)[:512].astype(np.float32) / 255.0
@@ -194,12 +209,33 @@ def main():
         default=0,
         help="Maximum episodes to consolidate (default: 0 for all episodes in shard directory)",
     )
+    parser.add_argument("--resume", action="store_true", help="Resume from existing bank file if it exists")
+    parser.add_argument("--inspect", action="store_true", help="Inspect and display existing memory bank cards and exit")
     args = parser.parse_args()
+
+    if args.inspect:
+        if os.path.exists(args.out_bank):
+            import json
+            bank = SemanticConsolidatedBank(persistence_path=args.out_bank)
+            bank.load(args.out_bank)
+            print(f"[Inspect] Loaded memory bank from {args.out_bank}")
+            print(f"[Inspect] Total Active Causal Cards: {len(bank.cards)}")
+            for name, card in sorted(bank.cards.items()):
+                print(f"  - Card '{name}': Action {card.action}, Successes: {card.success_count}, Failures: {card.failure_count}, Consumes: {card.consumes}, Produces: {card.produces}, Catalyst: {card.catalyst_needed}, Predecessors: {card.predecessors}")
+            json_path = args.out_bank.replace(".pt", ".json")
+            if os.path.exists(json_path):
+                print(f"\n[Inspect] Full JSON Architecture ({json_path}):")
+                with open(json_path, "r") as f:
+                    print(json.dumps(json.load(f), indent=2))
+        else:
+            print(f"[Inspect] Error: Target file {args.out_bank} does not exist.")
+        return
 
     consolidate_shards(
         shard_dir=args.shard_dir,
         output_path=args.out_bank,
         max_episodes=args.max_episodes,
+        resume=args.resume,
     )
 
 
