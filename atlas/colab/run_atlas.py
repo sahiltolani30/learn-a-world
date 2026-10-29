@@ -146,6 +146,10 @@ def sync_results_to_repo(results_dir: Path, drive_root: Optional[Path] = None, r
             state_file = runs_dir / "state.pt"
             if state_file.exists():
                 shutil.copy2(state_file, main_ckpts / "atlas_state.pt")
+            journal_file = runs_dir / "game_journal.jsonl"
+            if journal_file.exists():
+                shutil.copy2(journal_file, main_results / "game_journal.jsonl")
+                shutil.copy2(journal_file, repo_results / "game_journal.jsonl")
 
 
 def run_bootstrap_phase(loop: SelfLearnLoop, paths: dict, iters: int):

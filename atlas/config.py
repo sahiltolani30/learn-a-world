@@ -10,6 +10,12 @@ from typing import Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 NUM_ACTIONS = 17
+CRAFTER_ACTION_NAMES = [
+    "noop", "move_left", "move_right", "move_up", "move_down",
+    "do", "sleep", "place_stone", "place_table", "place_furnace",
+    "place_plant", "make_wood_pickaxe", "make_stone_pickaxe",
+    "make_iron_pickaxe", "make_wood_sword", "make_stone_sword", "make_iron_sword",
+]
 LATENT_DIM = 128
 RECURRENT_DIM = 256
 STATE_DIM = LATENT_DIM + RECURRENT_DIM  # composite s = [z; h]

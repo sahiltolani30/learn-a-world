@@ -8,6 +8,7 @@ The agent itself NEVER reads env info during rollouts.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
@@ -15,6 +16,7 @@ import numpy as np
 
 from atlas.arbiter import AtlasAgent
 from atlas.config import (
+    CRAFTER_ACTION_NAMES,
     NUM_ACHIEVEMENTS,
     NUM_ACTIONS,
     STATE_VECTOR_DIM,
@@ -71,11 +73,15 @@ class EpisodeCollector:
         agent: AtlasAgent,
         out_dir: Optional[Union[str, Path]] = None,
         cfg: Optional[CollectConfig] = None,
+        journal_path: Optional[Union[str, Path]] = None,
     ):
         self.agent = agent
         self.cfg = cfg or CollectConfig()
         self.out_dir = Path(out_dir or self.cfg.out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
+        self.journal_path = Path(journal_path) if journal_path is not None else None
+        if self.journal_path is not None:
+            self.journal_path.parent.mkdir(parents=True, exist_ok=True)
 
     def set_schedules(self, iter_idx: int) -> None:
         """Updates epsilon and beta exploration parameters according to linear decay."""
@@ -87,7 +93,7 @@ class EpisodeCollector:
         self.agent.beta_t = float(beta)
         self.agent.current_iter = int(iter_idx)
 
-    def run_episode(self, seed: int) -> Dict[str, Any]:
+    def run_episode(self, seed: int, iter_idx: int = 0) -> Dict[str, Any]:
         """Runs a single episode in CrafterEnv and returns recorded transition arrays."""
         env = CrafterEnv(seed=seed)
         obs, reset_info = env.reset(seed=seed)
@@ -103,6 +109,7 @@ class EpisodeCollector:
         events_list: List[np.ndarray] = []
         mask_before_list: List[np.ndarray] = []
         inventory_list: List[np.ndarray] = []
+        telemetry_list: List[Dict[str, Any]] = []
 
         reward_prev = 0.0
         step = 0
@@ -135,6 +142,21 @@ class EpisodeCollector:
             mask_before_list.append(mask_before_step)
             inventory_list.append(inv_vec)
 
+            # Record step telemetry for game journal
+            ach_step = [CRAFTER_ACHIEVEMENTS[idx] for idx, val in enumerate(events_step) if val]
+            action_str = CRAFTER_ACTION_NAMES[action] if action < len(CRAFTER_ACTION_NAMES) else str(action)
+            step_record = {
+                "t": step,
+                "a": action_str,
+                "mode": telemetry.get("mode", "UNKNOWN"),
+                "risk": round(float(telemetry.get("risk_intended", 0.0)), 3),
+                "override": bool(telemetry.get("override_fired", False)),
+                "r": round(float(reward), 2),
+            }
+            if ach_step:
+                step_record["unlocked"] = ach_step
+            telemetry_list.append(step_record)
+
             prev_ach_vec = curr_ach_vec
             reward_prev = float(reward)
             obs = next_obs
@@ -142,6 +164,33 @@ class EpisodeCollector:
 
             if terminated or truncated:
                 break
+
+        # Log to game journal if configured
+        if self.journal_path is not None:
+            all_unlocked = [CRAFTER_ACHIEVEMENTS[idx] for idx in range(NUM_ACHIEVEMENTS) if curr_ach_vec[idx] > 0]
+            mode_counts: Dict[str, int] = {}
+            for t_item in telemetry_list:
+                m = t_item["mode"]
+                mode_counts[m] = mode_counts.get(m, 0) + 1
+
+            journal_entry = {
+                "iter": iter_idx,
+                "seed": seed,
+                "game_id": f"it{iter_idx}_seed{seed}",
+                "length": step,
+                "total_reward": round(float(sum(reward_list)), 2),
+                "died": bool(done_list[-1]) if done_list else False,
+                "achievements": all_unlocked,
+                "num_achievements": len(all_unlocked),
+                "mode_counts": mode_counts,
+                "overrides_count": sum(1 for t_item in telemetry_list if t_item["override"]),
+                "steps": telemetry_list,
+            }
+            try:
+                with open(self.journal_path, "a") as jf:
+                    jf.write(json.dumps(journal_entry) + "\n")
+            except Exception:
+                pass
 
         return {
             "obs": np.stack(obs_list, axis=0),
@@ -155,6 +204,7 @@ class EpisodeCollector:
             "inventory": np.stack(inventory_list, axis=0),
             "episode_length": step,
             "seed": seed,
+            "telemetry": telemetry_list,
         }
 
     def run_episodes(
@@ -180,7 +230,7 @@ class EpisodeCollector:
 
         for i in range(n):
             ep_seed = seed_base + i
-            ep_data = self.run_episode(ep_seed)
+            ep_data = self.run_episode(ep_seed, iter_idx=iter_idx)
             all_obs.append(ep_data["obs"])
             all_actions.append(ep_data["actions"])
             all_rewards.append(ep_data["rewards"])

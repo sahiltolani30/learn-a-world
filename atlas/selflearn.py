@@ -145,7 +145,13 @@ class SelfLearnLoop:
         self.results_dir = Path(results_dir) if results_dir else (self.run_dir / "results")
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        self.collector = EpisodeCollector(agent=self.agent, out_dir=self.shards_dir, cfg=self.cfg.collect)
+        self.journal_path = self.run_dir / "game_journal.jsonl"
+        self.collector = EpisodeCollector(
+            agent=self.agent,
+            out_dir=self.shards_dir,
+            cfg=self.cfg.collect,
+            journal_path=self.journal_path,
+        )
         self.trainer = HeadTrainer(
             backbone=self.agent.backbone,
             option_net=self.agent.option_net,
