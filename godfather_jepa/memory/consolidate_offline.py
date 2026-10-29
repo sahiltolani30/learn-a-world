@@ -37,8 +37,22 @@ def consolidate_shards(
     If max_episodes is None or <= 0, processes all available episodes across all shards.
     """
     bank = SemanticConsolidatedBank(persistence_path=output_path)
+    shards_meta_path = str(Path(output_path).with_suffix(".shards.json"))
+    processed_shards = set()
+    total_episodes = 0
+
     if resume and os.path.exists(output_path):
         bank.load(output_path)
+        if os.path.exists(shards_meta_path):
+            try:
+                import json
+                with open(shards_meta_path, "r") as f:
+                    meta = json.load(f)
+                    processed_shards = set(meta.get("processed_shards", []))
+                    total_episodes = meta.get("total_episodes", 0)
+                print(f"[Consolidation] Resumed: {len(processed_shards)} shards already completed ({total_episodes} episodes).")
+            except Exception:
+                pass
         print(f"[Consolidation] Resumed existing bank from {output_path} with {len(bank.cards)} cards.")
     engine = OfflineConsolidationEngine(semantic_bank=bank)
 
@@ -48,7 +62,6 @@ def consolidate_shards(
         return {"total_cards": len(bank.cards), "episodes_processed": 0}
 
     print(f"[Consolidation] Found {len(shard_files)} shard files in {shard_dir}")
-    total_episodes = 0
 
     mask = np.ones((35, 49), dtype=np.float32)
     mask[11:24, 18:31] = 0.0
@@ -60,6 +73,9 @@ def consolidate_shards(
     ]
 
     for s_idx, sf in enumerate(shard_files):
+        if sf.name in processed_shards:
+            print(f"[Consolidation] Shard {s_idx+1}/{len(shard_files)} ({sf.name}) already completed. Skipping.", flush=True)
+            continue
         try:
             with np.load(str(sf), allow_pickle=True) as data:
                 if "obs" not in data or "dones" not in data:
@@ -174,9 +190,17 @@ def consolidate_shards(
                 flush=True,
             )
 
+            processed_shards.add(sf.name)
+
             # Checkpoint progress to Drive every 5 shards so nothing is lost if Colab disconnects
             if (s_idx + 1) % 5 == 0 or (s_idx + 1) == len(shard_files):
                 bank.save(output_path)
+                try:
+                    import json
+                    with open(shards_meta_path, "w") as f:
+                        json.dump({"processed_shards": sorted(list(processed_shards)), "total_episodes": total_episodes}, f, indent=2)
+                except Exception:
+                    pass
                 print(f"[Consolidation] Checkpoint persisted to {output_path} ({total_episodes} episodes).", flush=True)
 
             del obs, acts, rews, dones
@@ -191,6 +215,12 @@ def consolidate_shards(
 
     # Save consolidated bank to disk and JSON
     bank.save(output_path)
+    try:
+        import json
+        with open(shards_meta_path, "w") as f:
+            json.dump({"processed_shards": sorted(list(processed_shards)), "total_episodes": total_episodes}, f, indent=2)
+    except Exception:
+        pass
     print(f"[Consolidation] Consolidated {total_episodes} episodes into {output_path}")
     print(f"[Consolidation] Active Causal Cards in Memory Bank: {len(bank.cards)}")
     for name, card in bank.cards.items():
