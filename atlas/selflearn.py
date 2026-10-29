@@ -291,6 +291,7 @@ class SelfLearnLoop:
         self.agent.topomap.load(self.run_dir / "topomap.npz")
 
         resume_iter = int(ckpt.get("iter", 0)) + 1
+        self.start_iter = resume_iter
         print(f"[SelfLearnLoop] Resumed from iteration {resume_iter}")
         return resume_iter
 
