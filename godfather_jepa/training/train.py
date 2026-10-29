@@ -798,6 +798,8 @@ def main():
     parser.add_argument("--updates-per-episode", type=int, default=50, help="Number of gradient update steps per episode")
     parser.add_argument("--save-every", type=int, default=10, help="Periodic auto-save frequency in episodes")
     parser.add_argument("--eval-every", type=int, default=50, help="Periodic evaluation on locked benchmark seeds every N episodes")
+    parser.add_argument("--eval-only", action="store_true", help="Run benchmark evaluation only and exit")
+    parser.add_argument("--eval-seeds", type=int, default=10, help="Number of locked seeds for evaluation (10 for quick smoke test, 50 for full locked benchmark)")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in out-dir if available")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
@@ -841,6 +843,20 @@ def main():
     if args.resume and latest_ckpt.exists():
         print(f"[Resume] Resuming weights and memory bank from {latest_ckpt}...")
         pipeline.load_checkpoint(str(latest_ckpt))
+
+    # If --eval-only is set, execute benchmark immediately and exit
+    if args.eval_only:
+        num_seeds = min(50, max(1, args.eval_seeds))
+        seeds = list(range(2050, 2050 + num_seeds))
+        print(f"\n=== Running Immediate Evaluation on {num_seeds} Locked Seeds ({seeds[0]}..{seeds[-1]}) ===")
+        eval_res = pipeline.evaluate(seeds=seeds)
+        print(f"\n[Result] Crafter Score: {eval_res['crafter_score']:.2f}%")
+        print(f"[Result] Mean Survival Length: {eval_res['mean_survival_length']:.1f} steps")
+        print(f"[Result] Mean Episode Reward: {eval_res['mean_episode_reward']:.2f}")
+        print("\n[Result] Unlocked Achievements Breakdown:")
+        for ach, pct in sorted(eval_res['unlock_percentages'].items(), key=lambda x: -x[1]):
+            print(f"  - {ach:22s}: {pct:5.1f}%")
+        return
 
     # Optional: Load Drive / local sequence shards into MilestoneReplayBuffer
     if args.shard_dir and os.path.exists(args.shard_dir):
