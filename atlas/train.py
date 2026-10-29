@@ -11,6 +11,7 @@ import gc
 import json
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -206,9 +207,15 @@ class HeadTrainer:
         initial_ce_loss = 0.0
         final_ce_loss = 0.0
 
+        n_her = her_train["s_pos"].shape[0] if her_train is not None else 0
+        print(f"  [Train] HER batch: {n_her} pairs | Transitions: {N} | Epochs: {self.cfg.epochs_per_iter}")
+
+        max_epoch_samples = min(N, 32768)
+
         for epoch in range(self.cfg.epochs_per_iter):
+            t_epoch_start = time.time()
             # 1) Train OptionNet & ReachabilityNet
-            if her_train["s_pos"].shape[0] > 0:
+            if her_train is not None and her_train["s_pos"].shape[0] > 0:
                 opt_skills.zero_grad()
                 loss_skills, metrics_skills = compute_her_loss(self.option_net, self.reach_net, her_train)
                 loss_skills.backward()
@@ -219,8 +226,8 @@ class HeadTrainer:
                 final_ce_loss = metrics_skills["ce_loss"]
 
             # 2) Train EpistemicNet, ContinueNet, ReadoutNet in mini-batches
-            indices = np.random.permutation(N)
-            for b_start in range(0, N, batch_size):
+            indices = np.random.permutation(N)[:max_epoch_samples]
+            for b_start in range(0, max_epoch_samples, batch_size):
                 b_idx = indices[b_start: b_start + batch_size]
                 b_s = s_t[b_idx]
                 b_a = a_t[b_idx]
@@ -250,6 +257,9 @@ class HeadTrainer:
                     loss_readout.backward()
                     nn.utils.clip_grad_norm_(self.readout_net.parameters(), 1.0)
                     opt_readout.step()
+
+            dt_ep = time.time() - t_epoch_start
+            print(f"    -> Epoch {epoch+1}/{self.cfg.epochs_per_iter} completed in {dt_ep:.1f}s (HER CE: {final_ce_loss:.3f})")
 
         # Gate Checks (§5.11)
         # 1. Reachability AUROC

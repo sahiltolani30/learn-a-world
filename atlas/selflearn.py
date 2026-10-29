@@ -38,7 +38,19 @@ def mine_goals_and_lift(
     agent.lift.mine(all_events, window=agent.cfg.goals.predecessor_window)
 
     # 2) Mine GoalEntries
-    for ep in cached_episodes:
+    # Always include all episodes that unlocked any achievement
+    event_eps = [ep for ep in cached_episodes if np.any(ep["events"])]
+    other_eps = [ep for ep in cached_episodes if not np.any(ep["events"])]
+    if len(other_eps) > 100:
+        sample_indices = np.random.choice(len(other_eps), size=100, replace=False)
+        selected_other = [other_eps[i] for i in sample_indices]
+    else:
+        selected_other = other_eps
+
+    mining_eps = event_eps + selected_other
+    print(f"  [Mining] Extracting goals from {len(mining_eps)} trajectories ({len(event_eps)} with achievements)...")
+
+    for ep in mining_eps:
         z = ep["z"]
         h = ep["h"]
         a = ep["actions"]

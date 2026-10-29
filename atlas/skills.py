@@ -107,6 +107,7 @@ def build_her_batch(
     episodes: Sequence[Dict[str, Union[np.ndarray, torch.Tensor]]],
     horizons: Sequence[int] = (5, 10, 20),
     negatives_per_pos: int = 1,
+    max_samples: int = 16_384,
     device: Optional[torch.device | str] = None,
 ) -> Dict[str, torch.Tensor]:
     """Constructs Hindsight Experience Replay (HER) training pairs.
@@ -116,6 +117,7 @@ def build_her_batch(
             'z' [T, 128], 'h' [T, 256], 'actions' (or 'a') [T]
         horizons: look-ahead steps for positive future goals.
         negatives_per_pos: number of cross-episode negative goals per positive.
+        max_samples: maximum number of transitions to build when episode count is large.
         device: destination torch device.
 
     Returns:
@@ -142,8 +144,9 @@ def build_her_batch(
         if isinstance(a, torch.Tensor):
             a = a.detach().cpu().numpy()
         T = len(z)
-        s = np.concatenate([z, h], axis=-1)
-        parsed_eps.append({"z": z, "s": s, "a": a, "T": T})
+        if T >= 2:
+            s = np.concatenate([z, h], axis=-1)
+            parsed_eps.append({"z": z, "s": s, "a": a, "T": T})
 
     s_pos_list: List[np.ndarray] = []
     g_pos_list: List[np.ndarray] = []
@@ -155,40 +158,67 @@ def build_her_batch(
 
     num_eps = len(parsed_eps)
 
-    for ep_idx, ep in enumerate(parsed_eps):
-        T = ep["T"]
-        if T < 2:
-            continue
-        for k in horizons:
-            if k >= T:
+    if num_eps > 50:
+        # Sample across episodes to stay fast and avoid O(N*T*K) explosion
+        samples_per_ep = max(1, min(10, max_samples // num_eps))
+        for ep_idx, ep in enumerate(parsed_eps):
+            T = ep["T"]
+            valid_ks = [k for k in horizons if k < T]
+            if not valid_ks:
                 continue
-            for t in range(0, T - k):
+            for _ in range(samples_per_ep):
+                k = int(np.random.choice(valid_ks))
+                t = int(np.random.randint(0, T - k))
                 goal = ep["z"][t + k]
-                for tau in range(t, t + k):
-                    s_pos_list.append(ep["s"][tau])
-                    g_pos_list.append(goal)
-                    a_pos_list.append(int(ep["a"][tau]))
 
-                    # Reachability positive
-                    s_reach_list.append(ep["s"][tau])
-                    g_reach_list.append(goal)
-                    reach_label_list.append(1.0)
+                s_pos_list.append(ep["s"][t])
+                g_pos_list.append(goal)
+                a_pos_list.append(int(ep["a"][t]))
 
-                    # Reachability negative (cross-episode or distant temporal shift)
-                    for _ in range(negatives_per_pos):
-                        if num_eps > 1:
-                            other_idx = (ep_idx + np.random.randint(1, num_eps)) % num_eps
-                            other_ep = parsed_eps[other_idx]
-                            neg_u = np.random.randint(0, other_ep["T"])
-                            neg_g = other_ep["z"][neg_u]
-                        else:
-                            # Single-episode fallback: sample far-away or rolled latent
-                            neg_u = (tau + T // 2) % T
-                            neg_g = ep["z"][neg_u]
+                s_reach_list.append(ep["s"][t])
+                g_reach_list.append(goal)
+                reach_label_list.append(1.0)
 
+                for _ in range(negatives_per_pos):
+                    other_idx = (ep_idx + int(np.random.randint(1, num_eps))) % num_eps
+                    other_ep = parsed_eps[other_idx]
+                    neg_u = int(np.random.randint(0, other_ep["T"]))
+                    neg_g = other_ep["z"][neg_u]
+                    s_reach_list.append(ep["s"][t])
+                    g_reach_list.append(neg_g)
+                    reach_label_list.append(0.0)
+    else:
+        # Small episode batches (e.g. unit tests or local smoke)
+        for ep_idx, ep in enumerate(parsed_eps):
+            T = ep["T"]
+            for k in horizons:
+                if k >= T:
+                    continue
+                for t in range(0, T - k):
+                    goal = ep["z"][t + k]
+                    for tau in range(t, t + k):
+                        s_pos_list.append(ep["s"][tau])
+                        g_pos_list.append(goal)
+                        a_pos_list.append(int(ep["a"][tau]))
+
+                        # Reachability positive
                         s_reach_list.append(ep["s"][tau])
-                        g_reach_list.append(neg_g)
-                        reach_label_list.append(0.0)
+                        g_reach_list.append(goal)
+                        reach_label_list.append(1.0)
+
+                        for _ in range(negatives_per_pos):
+                            if num_eps > 1:
+                                other_idx = (ep_idx + int(np.random.randint(1, num_eps))) % num_eps
+                                other_ep = parsed_eps[other_idx]
+                                neg_u = int(np.random.randint(0, other_ep["T"]))
+                                neg_g = other_ep["z"][neg_u]
+                            else:
+                                neg_u = (tau + T // 2) % T
+                                neg_g = ep["z"][neg_u]
+
+                            s_reach_list.append(ep["s"][tau])
+                            g_reach_list.append(neg_g)
+                            reach_label_list.append(0.0)
 
     if not s_pos_list:
         # Fallback empty tensors
