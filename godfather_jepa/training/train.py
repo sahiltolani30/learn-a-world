@@ -372,10 +372,12 @@ class GodfatherJEPAPipeline:
             visual_darkness = compute_visual_darkness(obs)
 
             # 6. Homeostatic arbitration (relying on learned continuation probability and visual darkness)
+            can_sleep = (vitals.get("energy", 9.0) <= 8.0) and (visual_darkness >= 0.4)
             final_action, mode = self.arbiter.arbitrate(
                 vitals=vitals,
                 step=step,
                 teleological_action=teleo_action,
+                can_sleep=can_sleep,
                 continuation_prob=contin_prob,
                 visual_darkness=visual_darkness,
             )

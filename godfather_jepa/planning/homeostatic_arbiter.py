@@ -150,7 +150,7 @@ class HomeostaticArbiter:
         # 3. Nightfall sleep reflex (Skip dangerous night hours if possible)
         is_night = (urgency["dusk_factor"] >= 0.5) or (urgency["imminent_threat"] >= 0.5)
         if can_sleep and is_night:
-            return self.get_action("wake_up", fallback=6), "homeostatic_sleep"
+            return self.get_action("sleep", fallback=6), "homeostatic_sleep"
 
         # 4. Safe: Teleological Drive active
         if urgency["total_urgency"] < 0.5:

@@ -123,8 +123,14 @@ class LatentMPCPlanner:
 
         if subgoal != "explore" and determined_action != 0 and is_assembly_or_placement:
             if target_card and target_card.catalyst_needed and target_card.catalyst_needed in workstations:
-                landmark_key = target_card.catalyst_needed.replace("_placed", "").replace("place_", "")
-                return_act = anchor_graph.get_return_action(landmark_key) or anchor_graph.get_return_action(target_card.catalyst_needed)
+                cat = target_card.catalyst_needed
+                landmark_key = cat.replace("_placed", "").replace("place_", "")
+                return_act = (
+                    anchor_graph.get_return_action(cat)
+                    or anchor_graph.get_return_action(f"place_{landmark_key}")
+                    or anchor_graph.get_return_action(f"{landmark_key}_placed")
+                    or anchor_graph.get_return_action(landmark_key)
+                )
                 if return_act is not None and return_act != 0:
                     return return_act, {
                         "subgoal": f"return_to_{landmark_key}",
