@@ -28,6 +28,12 @@ class AchievementBelief:
         self.m_soft: np.ndarray = np.zeros(NUM_ACHIEVEMENTS, dtype=np.float32)
         self.last_fallback: List[int] = []
 
+    def has(self, dim: int) -> bool:
+        """Returns True if achievement dim has been unlocked this episode (V2.2 F11)."""
+        if 0 <= dim < NUM_ACHIEVEMENTS:
+            return bool(self.m_bin[dim] > 0.5)
+        return False
+
     @classmethod
     def from_config(cls, cfg: Optional[BeliefConfig] = None) -> AchievementBelief:
         cfg = cfg or BeliefConfig()

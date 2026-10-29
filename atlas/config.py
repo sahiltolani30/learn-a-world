@@ -168,6 +168,10 @@ class GoalsConfig:
     # V2.2 F3 Selection rotation:
     selection_rotate_share: float = 0.25
     selection_frontier_share: float = 0.10
+    # V2.2 F10 & F11:
+    episode_scope_frequency: float = 0.30     # below this -> episode-scoped goal (F10)
+    readout_in_goal_gating: bool = True       # learned material gating (F11)
+    prerequisite_routing: bool = True         # route to prerequisite before target (F11)
 
 
 @dataclass

@@ -204,6 +204,7 @@ def screen_agent(
         "privileged_inventory_used": False,
         "privileged_achievements_used_for_action": False,
         "achievements_used_for_scoring_only": True,
+        "readout_in_goal_gating": getattr(agent.cfg.goals, "readout_in_goal_gating", True),
         "seeds": seed_list,
         "num_episodes": num_eps,
         "crafter_score": float(crafter_metrics["score"]),

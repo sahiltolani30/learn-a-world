@@ -131,6 +131,24 @@ class TopoMap:
             return kf, sim
         return None
 
+    def match_episode(self, z: np.ndarray, threshold: float = 0.90) -> Optional[Tuple[Keyframe, float]]:
+        """Returns the nearest keyframe from current episode if cosine similarity >= threshold (V2.2 F10)."""
+        if not self.episode_keyframes:
+            return None
+        z = np.asarray(z, dtype=np.float32).reshape(-1)
+        norm_z = np.linalg.norm(z)
+        unit_z = z / norm_z if norm_z > 1e-8 else z
+        best_sim = -1.0
+        best_kf = None
+        for kf in self.episode_keyframes:
+            sim = _cosine_similarity(unit_z, kf.normed_z)
+            if sim > best_sim:
+                best_sim = sim
+                best_kf = kf
+        if best_kf is not None and best_sim >= threshold:
+            return best_kf, best_sim
+        return None
+
     def save(self, path: Union[str, Path]) -> None:
         """Saves persistent keyframes to npz archive."""
         p = Path(path)

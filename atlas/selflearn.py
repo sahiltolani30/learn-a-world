@@ -216,6 +216,23 @@ def mine_goals_and_lift(
             )
             agent.goals.add(entry)
 
+    # 3) Update world_frequency for all goals across processed episodes (V2.2 F10)
+    all_z_episodes = [ep["z"] for ep in cached_episodes if len(ep["z"]) > 0]
+    num_total_eps = len(all_z_episodes)
+    if num_total_eps > 0 and len(agent.goals.entries) > 0:
+        normed_eps = []
+        for z_ep in all_z_episodes:
+            z_norm = z_ep / (np.linalg.norm(z_ep, axis=-1, keepdims=True) + 1e-8)
+            normed_eps.append(z_norm)
+
+        for entry in agent.goals.entries:
+            key_norm = entry.key / (np.linalg.norm(entry.key) + 1e-8)
+            match_count = 0
+            for z_norm in normed_eps:
+                if float(np.max(np.dot(z_norm, key_norm))) >= 0.85:
+                    match_count += 1
+            entry.world_frequency = float(match_count / num_total_eps)
+
 
 class SelfLearnLoop:
     """Orchestrates bootstrap, iterative collection, head training, and screening."""

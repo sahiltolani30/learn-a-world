@@ -46,6 +46,7 @@ class GoalEntry:
     n_succ: int = 0
     born_iter: int = 0
     last_used_iter: int = 0
+    world_frequency: float = 1.0       # V2.2 F10: fraction of historical episodes containing this view
 
     def __post_init__(self):
         self.key = np.asarray(self.key, dtype=np.float32).reshape(-1)
@@ -257,6 +258,17 @@ class GoalBank:
                     self.rejected_frontier_overflow += 1
                     return None
 
+            # V2.2 F10: Never evict episode-scoped goals via rotation while their dim has no other active goal
+            freq_thresh = getattr(self.cfg, "episode_scope_frequency", 0.30)
+            protected = {
+                g for g in candidates
+                if getattr(g, "world_frequency", 1.0) < freq_thresh
+                and any(self._dim_counts.get(d, 0) <= 1 for d in g.event_dims)
+            }
+            unprotected = [g for g in candidates if g not in protected]
+            if unprotected:
+                candidates = unprotected
+
             def evidence_fn(g: GoalEntry) -> float:
                 age = max(0, cur_iter - g.born_iter)
                 return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
@@ -354,9 +366,35 @@ class GoalBank:
         lift: Optional[PredecessorLift] = None,
         current_iter: int = 0,
         beta_t: float = 1.0,
+        topomap: Optional[Any] = None,
+        belief: Optional[Any] = None,
+        episode_artifact_views: Optional[Dict[int, np.ndarray]] = None,
     ) -> Tuple[Optional[GoalEntry], float]:
-        """Selects a goal entry with statistical rotation to break selection monopoly (V2.2 F3)."""
+        """Selects a goal entry with statistical rotation (F3) and episode-scope gating (F10)."""
         if not self.entries:
+            self.last_selection_mode = "none"
+            return None, 0.0
+
+        # V2.2 F10: Episode-scope gating for self-built-context goals
+        freq_threshold = getattr(self.cfg, "episode_scope_frequency", 0.30)
+        dedupe_thresh = getattr(self.cfg, "same_kind_dedupe", 0.90)
+
+        def _is_selectable(g: GoalEntry) -> bool:
+            w_freq = getattr(g, "world_frequency", 1.0)
+            if w_freq >= freq_threshold:
+                return True
+            if topomap is not None:
+                if hasattr(topomap, "match_episode"):
+                    return topomap.match_episode(g.key, threshold=dedupe_thresh) is not None
+                elif hasattr(topomap, "episode_keyframes"):
+                    for kf in topomap.episode_keyframes:
+                        sim = float(np.dot(_unit_vector(g.key), _unit_vector(kf.z)))
+                        if sim >= dedupe_thresh:
+                            return True
+            return False
+
+        selectable = [g for g in self.entries if _is_selectable(g)]
+        if not selectable:
             self.last_selection_mode = "none"
             return None, 0.0
 
@@ -364,7 +402,7 @@ class GoalBank:
         m_soft = np.asarray(m_soft, dtype=np.float32).reshape(-1)
         locked_dims = [i for i in range(NUM_ACHIEVEMENTS) if m_soft[i] < 0.5]
 
-        frontier_goals = [g for g in self.entries if g.kind == "frontier"]
+        frontier_goals = [g for g in selectable if g.kind == "frontier"]
         u = float(np.random.rand())
 
         frontier_share = getattr(self.cfg, "selection_frontier_share", 0.10)
@@ -377,7 +415,7 @@ class GoalBank:
                 chosen_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
             )
         elif u < (frontier_share + rotate_share):
-            event_vital = [g for g in self.entries if g.kind in ("event", "vital")]
+            event_vital = [g for g in selectable if g.kind in ("event", "vital")]
             if len(event_vital) > 0:
                 mode = "rotate"
                 scored_candidates = [
@@ -401,7 +439,7 @@ class GoalBank:
                             g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
                         ),
                     )
-                    for g in self.entries
+                    for g in selectable
                 ]
                 chosen_g, chosen_score = max(scored_all, key=lambda item: item[1])
         else:
@@ -413,9 +451,80 @@ class GoalBank:
                         g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
                     ),
                 )
-                for g in self.entries
+                for g in selectable
             ]
             chosen_g, chosen_score = max(scored_all, key=lambda item: item[1])
+
+        # V2.2 F11: Episode build-registry: artifact tagging + prerequisite routing
+        if (
+            chosen_g is not None
+            and lift is not None
+            and getattr(self.cfg, "prerequisite_routing", True)
+        ):
+            current_g = chosen_g
+            for _ in range(5):
+                routed = False
+                target_dims = list(current_g.event_dims)
+                locked_targets = [
+                    d for d in target_dims
+                    if (m_soft[d] < 0.5 and (belief is None or not belief.has(d)))
+                ]
+                if not locked_targets:
+                    break
+                pred_candidates = []
+                for d in locked_targets:
+                    for p in range(NUM_ACHIEVEMENTS):
+                        if p != d and lift.ci_low[p, d] > 1.2:
+                            pred_candidates.append((p, float(lift.ci_low[p, d]), d))
+                if not pred_candidates:
+                    break
+                # Weight routing by ci_low descending
+                pred_candidates.sort(key=lambda item: item[1], reverse=True)
+                for p, ci_val, d in pred_candidates:
+                    p_unlocked = (
+                        belief.has(p)
+                        if belief is not None
+                        else (m_soft[p] >= 0.5)
+                    )
+                    if not p_unlocked:
+                        p_goals = [g for g in selectable if p in g.event_dims]
+                        if p_goals:
+                            best_p = max(
+                                p_goals,
+                                key=lambda g: self._compute_goal_score(
+                                    g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                                ),
+                            )
+                            current_g = best_p
+                            chosen_score = self._compute_goal_score(
+                                current_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                            )
+                            mode = "prereq_route"
+                            routed = True
+                            break
+                    else:
+                        if (
+                            episode_artifact_views is not None
+                            and p in episode_artifact_views
+                        ):
+                            tagged_z = episode_artifact_views[p]
+                            sim = float(np.dot(_unit_vector(z), _unit_vector(tagged_z)))
+                            if sim < dedupe_thresh:
+                                tagged_g = GoalEntry(
+                                    key=tagged_z.copy(),
+                                    context=h.copy(),
+                                    action_profile=np.zeros((NUM_ACTIONS, NUM_ACHIEVEMENTS), dtype=np.float32),
+                                    event_dims=[p],
+                                    kind="event",
+                                )
+                                current_g = tagged_g
+                                chosen_score = max(chosen_score, 1.0)
+                                mode = "tagged_route"
+                                routed = False  # Destination reached
+                                break
+                if not routed:
+                    break
+            chosen_g = current_g
 
         self.last_selection_mode = mode
         return chosen_g, chosen_score
@@ -441,6 +550,7 @@ class GoalBank:
                 "n_succ": g.n_succ,
                 "born_iter": g.born_iter,
                 "last_used_iter": g.last_used_iter,
+                "world_frequency": getattr(g, "world_frequency", 1.0),
             }
             for g in self.entries
         ]
@@ -476,6 +586,7 @@ class GoalBank:
                 n_succ=m["n_succ"],
                 born_iter=m["born_iter"],
                 last_used_iter=m["last_used_iter"],
+                world_frequency=float(m.get("world_frequency", 1.0)),
             )
             self.entries.append(entry)
         self._rebuild_dim_counts()

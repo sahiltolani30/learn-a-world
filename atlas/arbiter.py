@@ -46,6 +46,21 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a / norm_a, b / norm_b))
 
 
+# Craft action -> required material inventory indices in 16-d readout (V2.2 F11)
+CRAFT_REQUIRED_MATERIALS: Dict[int, List[int]] = {
+    7: [2],          # place_stone -> stone
+    8: [1],          # place_table -> wood
+    9: [2],          # place_furnace -> stone
+    10: [0],         # place_plant -> sapling
+    11: [1],         # make_wood_pickaxe -> wood
+    12: [1, 2],      # make_stone_pickaxe -> wood, stone
+    13: [1, 3, 4],   # make_iron_pickaxe -> wood, coal, iron
+    14: [1],         # make_wood_sword -> wood
+    15: [1, 2],      # make_stone_sword -> wood, stone
+    16: [1, 3, 4],   # make_iron_sword -> wood, coal, iron
+}
+
+
 class AtlasAgent:
     """ATLAS autonomous agent."""
 
@@ -111,6 +126,7 @@ class AtlasAgent:
         self.current_option_budget: int = self.cfg.skills.max_option_steps
         self.current_goal_mode: str = "none"
         self.last_probe_decision: Optional[Dict[str, Any]] = None
+        self.episode_artifact_views: Dict[int, np.ndarray] = {}
 
         # In-progress episode transition buffer for collector
         self.episode_buffer: list[Dict[str, Any]] = []
@@ -141,6 +157,7 @@ class AtlasAgent:
         self.current_option_budget = self.cfg.skills.max_option_steps
         self.current_goal_mode = "none"
         self.last_probe_decision = None
+        self.episode_artifact_views.clear()
         self.episode_buffer.clear()
 
     @torch.no_grad()
@@ -155,6 +172,7 @@ class AtlasAgent:
         Enforces strictness: no info / inventory / cheat inputs allowed in signature.
         """
         # 1) Belief update from previous step's prediction and realized reward
+        newly_unlocked = []
         if step > 0 and self.last_event_probs is not None:
             newly_unlocked = self.belief.update(self.last_event_probs, reward_prev)
             if self.prev_mode == "PROBE" and len(newly_unlocked) > 0:
@@ -172,6 +190,11 @@ class AtlasAgent:
         z_np = z.squeeze(0).cpu().numpy()
         h_np = h.squeeze(0).cpu().numpy()
         s_np = s.squeeze(0).cpu().numpy()
+
+        # Record tagged artifact views for newly unlocked achievements (V2.2 F11)
+        if step > 0 and newly_unlocked:
+            for dim in newly_unlocked:
+                self.episode_artifact_views[dim] = z_np.copy()
 
         # Update TopoMap (gated by frozen_memory)
         if not self.frozen_memory:
@@ -257,6 +280,9 @@ class AtlasAgent:
                 lift=self.lift,
                 current_iter=self.current_iter,
                 beta_t=self.beta_t,
+                topomap=self.topomap,
+                belief=self.belief,
+                episode_artifact_views=self.episode_artifact_views,
             )
             if best_goal is not None and score > 0.0:
                 self.active_goal = best_goal
@@ -294,6 +320,19 @@ class AtlasAgent:
 
             d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
             probe_score = affordance + self.cfg.goals.probe_entropy * F.softmax(d_all, dim=-1)
+
+            # V2.2 F11: Learned material gating
+            if (
+                self.readout_net is not None
+                and getattr(self.cfg.goals, "readout_in_goal_gating", True)
+            ):
+                with torch.no_grad():
+                    mean_x, _ = self.readout_net(s)
+                    mean_np = mean_x.squeeze(0).cpu().numpy()
+                    for act_idx, req_items in CRAFT_REQUIRED_MATERIALS.items():
+                        if any(mean_np[it] <= 0.1 for it in req_items):
+                            probe_score[act_idx] -= 100.0
+
             a_intended = int(torch.argmax(probe_score).item())
 
             self.last_probe_decision = {
