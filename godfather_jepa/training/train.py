@@ -315,6 +315,27 @@ class GodfatherJEPAPipeline:
             inv.update(decode_inventory_from_frame(obs))
             vitals.update(decode_vitals_from_frame(obs))
 
+        # Ground completed milestones in physical inventory possessions decoded from HUD
+        for item, count in inv.items():
+            if count > 0:
+                for c_name, card in self.causal_hypergraph.cards.items():
+                    if card.produces.get(item, 0) > 0:
+                        completed.add(c_name)
+
+        # Check if previous fixture placement action succeeded
+        if prev_act == 8:  # place_table
+            prev_wood = state.get("prev_wood", 0)
+            wood_dropped = (prev_wood - inv.get("wood", 0)) >= 2
+            if wood_dropped or "place_table" in completed:
+                ws.add("table_placed")
+                ws.add("table")
+                ws.add("place_table")
+                completed.add("place_table")
+                if prev_z is not None:
+                    anchor.register_landmark("table_placed", latent_key=prev_z.detach().cpu().numpy())
+                    anchor.register_landmark("place_table", latent_key=prev_z.detach().cpu().numpy())
+                    anchor.register_landmark("table", latent_key=prev_z.detach().cpu().numpy())
+
         self.encoder.eval()
         self.actor.eval()
         self.spatial_projector.eval()
@@ -368,6 +389,11 @@ class GodfatherJEPAPipeline:
                 )
                 teleo_action = determined_action if (determined_action != 0 and subgoal != "explore") else actor_action
 
+            # If previous placement action was attempted but failed (e.g. facing tree trunk or water),
+            # take an evasive motor step (1..4) to face open ground instead of repeating into obstacle
+            if teleo_action == 8 and prev_act == 8 and "table_placed" not in ws and "place_table" not in completed:
+                teleo_action = actor_action if (1 <= actor_action <= 4) else ((step % 4) + 1)
+
             # 5. Visual darkness signal from world view
             visual_darkness = compute_visual_darkness(obs)
 
@@ -382,7 +408,7 @@ class GodfatherJEPAPipeline:
                 visual_darkness=visual_darkness,
             )
 
-            # 7. Register landmark and update active workstations if action places workstation
+            # 7. Register landmark and workstation when placement action is executed with required inputs
             for c_name, card in self.causal_hypergraph.cards.items():
                 if card.action == final_action:
                     is_fixture_action = (
@@ -390,16 +416,15 @@ class GodfatherJEPAPipeline:
                         or (c_name in KNOWN_FIXTURES or c_name in REVERSE_FIXTURES)
                         or any(p in KNOWN_FIXTURES or p in REVERSE_FIXTURES for p in card.produces)
                     )
-                    if is_fixture_action:
+                    has_materials = all(inv.get(res, 0) >= amt for res, amt in card.consumes.items())
+                    if is_fixture_action and has_materials:
                         for prod in card.produces:
                             ws.add(prod)
                             alias = get_fixture_alias(prod)
                             if alias != prod:
                                 ws.add(alias)
                         anchor.register_landmark(c_name, latent_key=z.detach().cpu().numpy())
-                        completed.add(c_name)
-                    elif bool(card.consumes) or bool(card.catalyst_needed):
-                        completed.add(c_name)
+
         next_state = {
             "h_spatial": h_spatial,
             "h_vector": h_vector,
@@ -410,6 +435,7 @@ class GodfatherJEPAPipeline:
             "workstations": ws,
             "completed_milestones": completed,
             "internal_vitals": vitals,
+            "prev_wood": inv.get("wood", 0),
             "step": step + 1,
         }
         return final_action, next_state

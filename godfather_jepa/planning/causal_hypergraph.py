@@ -222,9 +222,9 @@ class CausalHypergraph:
             # 2. Skip if card only produces placed workstations that are already in the world
             is_fixture = (
                 card.is_fixture
-                or name in ws
-                or any(p in ws for p in card.produces)
-                or (bool(card.consumes) and not any(p in current_inventory for p in card.produces))
+                or name.startswith("place_")
+                or name.endswith("_placed")
+                or any(p.endswith("_placed") or "place_" in p for p in card.produces)
             )
             if is_fixture and (name in ws or any(p in ws for p in card.produces)):
                 continue

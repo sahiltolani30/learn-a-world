@@ -116,9 +116,12 @@ class LatentMPCPlanner:
 
         # 2. Executable causal assembly/placement action or topological workstation return
         target_card = self.causal_hypergraph.cards.get(subgoal) if subgoal else None
+        # Discrete crafting and fixture placement primitive actions (actions 7..16: place_*, make_*).
+        # World-gathering and mining (action 5: collect_*, eat_*, defeat_*) require spatial CEM navigation.
         is_assembly_or_placement = (
             target_card is not None
-            and (bool(target_card.consumes) or bool(target_card.catalyst_needed))
+            and determined_action > 5
+            and (bool(target_card.consumes) or target_card.is_fixture or "make_" in subgoal or "place_" in subgoal)
         )
 
         if subgoal != "explore" and determined_action != 0 and is_assembly_or_placement:
