@@ -102,16 +102,6 @@ def consolidate_shards(
                         if diff != 0:
                             item_deltas[item] = diff
 
-                    if unlocked:
-                        if unlocked.startswith("collect_"):
-                            r_name = unlocked[len("collect_"):]
-                            if r_name in c1 and item_deltas.get(r_name, 0) <= 0:
-                                item_deltas[r_name] = 1
-                        elif unlocked.startswith("make_"):
-                            t_name = unlocked[len("make_"):]
-                            if t_name in c1 and item_deltas.get(t_name, 0) <= 0:
-                                item_deltas[t_name] = 1
-
                     # Empirical displacement calculation
                     delta_p = np.zeros(2, dtype=np.float32)
                     if a in (1, 2, 3, 4):

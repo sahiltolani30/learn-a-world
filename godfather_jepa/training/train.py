@@ -347,14 +347,13 @@ class GodfatherJEPAPipeline:
                 visual_darkness=visual_darkness,
             )
 
-            # 7. Register landmark and update active workstations if placing workstation
-            if final_action == 8:
-                ws.add("table_placed")
-                anchor.register_landmark("table", latent_key=z.detach().cpu().numpy())
-            elif final_action == 9:
-                ws.add("furnace_placed")
-                anchor.register_landmark("furnace", latent_key=z.detach().cpu().numpy())
-
+            # 7. Register landmark and update active workstations if action places workstation
+            for c_name, card in self.causal_hypergraph.cards.items():
+                if card.action == final_action:
+                    for prod in card.produces:
+                        if prod.endswith("_placed"):
+                            ws.add(prod)
+                            anchor.register_landmark(prod.replace("_placed", ""), latent_key=z.detach().cpu().numpy())
         next_state = {
             "h_spatial": h_spatial,
             "h_vector": h_vector,
@@ -377,9 +376,6 @@ class GodfatherJEPAPipeline:
         env = CrafterEnvWrapper(seed=env_seed, max_steps=max_steps, training=True)
         res = env.reset()
         obs = res[0] if isinstance(res, tuple) else res
-        initial_info = res[1] if isinstance(res, tuple) and len(res) > 1 else {}
-        prev_inv = dict(initial_info.get("inventory", {}))
-
         obs_list, act_list, rew_list, done_list = [obs], [], [], []
         achievements_dict: Dict[str, List[int]] = {}
 
@@ -406,16 +402,14 @@ class GodfatherJEPAPipeline:
                     unlocked = a_name
                     break
 
-            # Track empirical item deltas directly from environment transitions
-            curr_inv = info.get("inventory", {})
+            # Strict pixel-only empirical visual decoding from observation HUD (rows 49..63)
+            inv_curr = decode_inventory_from_frame(obs)
+            inv_next = decode_inventory_from_frame(obs_next)
             item_deltas = {}
-            for k, v in curr_inv.items():
-                if k in ("health", "food", "drink", "energy"):
-                    continue
-                diff = int(v - prev_inv.get(k, 0))
+            for item_k in set(inv_curr.keys()).union(inv_next.keys()):
+                diff = int(inv_next.get(item_k, 0) - inv_curr.get(item_k, 0))
                 if diff != 0:
-                    item_deltas[k] = diff
-            prev_inv = dict(curr_inv)
+                    item_deltas[item_k] = diff
 
             # Compute true z_next and displacement delta_p via visual odometry
             prev_z = state.get("prev_z")

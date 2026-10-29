@@ -58,24 +58,28 @@ class OfflineConsolidationEngine:
             # Rule 1: Milestone Preservation (Reward >= 0.9 or achievement unlock)
             if step.unlocked_achievement:
                 ach = step.unlocked_achievement
-                if ach.startswith("place_"):
-                    step_produces = {f"{ach[len('place_'):]}_placed": 1}
-                elif ach.startswith("make_"):
-                    step_produces = {ach[len("make_"):]: 1}
-                elif ach.startswith("collect_"):
-                    step_produces = {ach[len("collect_"):]: 1}
-                elif ach.startswith("smelt_"):
-                    step_produces = {ach[len("smelt_"):]: 1}
-                else:
-                    step_produces = {ach: 1}
+                # If visual decoding did not produce an inventory item delta (e.g. world placement or synthetic step),
+                # map milestone to target semantic entity
+                if not step_produces:
+                    if ach.startswith("place_"):
+                        step_produces = {f"{ach[len('place_'):]}_placed": 1}
+                    elif ach.startswith("collect_"):
+                        step_produces = {ach[len("collect_"):]: 1}
+                    elif ach.startswith("make_"):
+                        step_produces = {ach[len("make_"):]: 1}
+                    elif ach.startswith("smelt_"):
+                        step_produces = {ach[len("smelt_"):]: 1}
+                    else:
+                        step_produces = {ach: 1}
 
-                # Only assembly/manufacturing achievements (e.g. make_*, smelt_*) require workstation catalysts.
-                # Primitive collections (collect_*), vitals (drink, eat, wake), and workstation placements (place_*) never require catalysts.
+                # Pearlian Causal Contrast for Catalyst Induction:
+                # A workstation catalyst is bound only if adjacent (<= 1.5) to a previously placed workstation,
+                # and rejected if the action is placing a workstation or has already succeeded in open terrain.
                 catalyst_needed = None
-                if ach.startswith("make_") or ach.startswith("smelt_"):
+                if not ach.startswith("place_"):
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
-                            if station_type in ("table_placed", "furnace_placed") and p_step < step.step_idx:
+                            if p_step < step.step_idx:
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 1.5:
                                     catalyst_needed = station_type
@@ -87,6 +91,10 @@ class OfflineConsolidationEngine:
                         dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
                         if dist <= 1.5:
                             catalyst_needed = "table_placed"
+
+                # If this card has already proven it succeeds in open terrain without a catalyst, preserve independence
+                if ach in self.bank.cards and self.bank.cards[ach].catalyst_needed is None and self.bank.cards[ach].success_count > 0:
+                    catalyst_needed = None
 
                 # Never consume what this step produces
                 for prod in step_produces:
