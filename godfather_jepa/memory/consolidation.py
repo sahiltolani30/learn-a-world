@@ -85,13 +85,6 @@ class OfflineConsolidationEngine:
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 2.2:
                                     nearby_stations[station_type] = p_step
-                    elif (
-                        episodic_store.workstation_placed_step is not None
-                        and episodic_store.workstation_placed_step < step.step_idx
-                    ):
-                        dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
-                        if dist <= 2.2:
-                            nearby_stations["table_placed"] = episodic_store.workstation_placed_step
 
                 # Accumulate co-occurrence counts and temporal lag (steps elapsed since placement)
                 if ach not in self.catalyst_counts:
