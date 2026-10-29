@@ -28,13 +28,7 @@ echo "[Setup] Installing requirements..."
 pip install --quiet --upgrade pip
 pip install --quiet crafter gymnasium pytest stable-baselines3
 
-# 3. Setup repo and local dirs
-REPO_DIR="/content/learn-a-world"
-if [ -d "$REPO_DIR" ]; then
-    cd "$REPO_DIR"
-    pip install --quiet -e .
-fi
-
+# 3. Setup local working dirs
 mkdir -p checkpoints results data/atlas atlas_runs
 
 # 4. Checkpoint sync (copy champion checkpoint if available on Drive)
