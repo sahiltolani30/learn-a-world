@@ -113,7 +113,7 @@ class TestOfflineConsolidationEngine:
 
         engine.consolidate_episode(store)
 
-        assert bank.cards["collect_wood"].produces == {"wood": 1, "collect_wood": 1}
+        assert bank.cards["collect_wood"].produces == {"wood": 1}
         assert bank.cards["place_table"].consumes == {"wood": 2}
         assert bank.cards["place_table"].produces["table_placed"] == 1
         assert "collect_wood" in bank.cards["place_table"].predecessors

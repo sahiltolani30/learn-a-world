@@ -58,9 +58,17 @@ class OfflineConsolidationEngine:
             # Rule 1: Milestone Preservation (Reward >= 0.9 or achievement unlock)
             if step.unlocked_achievement:
                 ach = step.unlocked_achievement
-                step_produces[ach] = 1
+                # Map achievement to clean physical item/entity produced
                 if ach.startswith("place_"):
                     step_produces[f"{ach[len('place_'):]}_placed"] = 1
+                elif ach.startswith("collect_"):
+                    r_name = ach[len("collect_"):]
+                    step_produces[r_name] = max(step_produces.get(r_name, 0), 1)
+                elif ach.startswith("make_"):
+                    tool_name = ach[len("make_"):]
+                    step_produces[tool_name] = max(step_produces.get(tool_name, 0), 1)
+                elif not step_produces:
+                    step_produces[ach] = 1
 
                 # Only assembly/manufacturing achievements (e.g. make_*, smelt_*) require workstation catalysts.
                 # Primitive collections (collect_*), vitals (drink, eat, wake), and workstation placements (place_*) never require catalysts.
