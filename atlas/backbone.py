@@ -127,6 +127,17 @@ class FrozenBackbone:
         return self.model.q_mean(s, action)
 
     @torch.no_grad()
+    def inventory_delta(self, s: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        """LEARNED material costs: frozen StateDeltaHead predicts Δ(16-d state) per (s, a).
+        Only trustworthy when provenance shows the head was actually loaded from the
+        checkpoint (has_learned_delta_head) — a random-init head predicts noise."""
+        return self.model.state_delta_head(s, action)
+
+    @property
+    def has_learned_delta_head(self) -> bool:
+        return "state_delta_head" in getattr(self.model, "loaded_component_keys", set())
+
+    @torch.no_grad()
     def prior_logits(self, s: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """Behavior-cloned policy prior logits [B,17] over composite state s."""
         return self.model.policy_prior(s, mask)

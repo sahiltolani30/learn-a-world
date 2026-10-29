@@ -5,7 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from atlas.arbiter import AtlasAgent, CRAFT_REQUIRED_MATERIALS
+from atlas.arbiter import AtlasAgent
 from atlas.backbone import FrozenBackbone
 from atlas.belief import AchievementBelief
 from atlas.config import (
@@ -409,40 +409,20 @@ def test_f11_fresh_episode_registry_empty_falls_back_to_f10():
     assert np.allclose(chosen.key, z_wood)
 
 
-def test_f11_material_gating_in_probe():
-    """F11: Readout suppresses craft actions during PROBE when estimated material count is 0."""
-    cfg = AtlasConfig()
-    cfg.goals.readout_in_goal_gating = True
-    fb = FrozenBackbone(config=cfg, device="cpu")
-    agent = AtlasAgent(backbone=fb, cfg=cfg)
-    agent.mode = "PROBE"
-    agent.probe_steps_remaining = 3
+def test_f11_material_gating_is_learned_not_recipe():
+    """F11-fix: probe gating must derive from the frozen StateDeltaHead + readout,
+    never from a hardcoded action->material table (which was removed)."""
+    import inspect
+    from atlas import arbiter as arb
+    src_text = inspect.getsource(arb)
+    assert "CRAFT_REQUIRED_MATERIALS" not in src_text
+    # suppression function exists and is driven by learned inputs
+    deltas = np.zeros((17, 16), dtype=np.float32)
+    deltas[8, 1] = -2.0   # learned prediction: this action consumes wood
+    have = np.zeros(16, dtype=np.float32)
+    have[1] = 0.0
+    sup = arb.compute_material_suppression(deltas, have)
+    assert bool(sup[8])
+    have[1] = 3.0
+    assert not bool(arb.compute_material_suppression(deltas, have)[8])
 
-    # Create dummy readout net that returns zero inventory (all <= 0.1)
-    class DummyReadout(nn.Module):
-        def forward(self, s):
-            # 16-d output: all materials 0.0
-            return torch.zeros(1, 16), torch.zeros(1, 16)
-
-    agent.readout_net = DummyReadout()
-
-    obs = np.zeros((64, 64, 3), dtype=np.uint8)
-    action, telemetry = agent.act(obs, reward_prev=0.0, step=1)
-
-    # Action chosen should NOT be any craft action (indices 7..16)
-    craft_actions = set(CRAFT_REQUIRED_MATERIALS.keys())
-    assert action not in craft_actions, f"Craft action {action} was chosen despite 0 material in readout!"
-
-    # Now test with materials present: wood=5.0 (log1p(5) > 0.1)
-    class DummyReadoutWithWood(nn.Module):
-        def forward(self, s):
-            out = torch.zeros(1, 16)
-            out[0, 1] = 2.0  # wood present
-            return out, torch.zeros(1, 16)
-
-    agent.readout_net = DummyReadoutWithWood()
-    # Now place_table (action 8) is NOT suppressed
-    # Disable ablation flag
-    cfg.goals.readout_in_goal_gating = False
-    # Verified gating obeys config flag
-    assert agent.cfg.goals.readout_in_goal_gating is False

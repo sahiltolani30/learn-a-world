@@ -46,19 +46,23 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a / norm_a, b / norm_b))
 
 
-# Craft action -> required material inventory indices in 16-d readout (V2.2 F11)
-CRAFT_REQUIRED_MATERIALS: Dict[int, List[int]] = {
-    7: [2],          # place_stone -> stone
-    8: [1],          # place_table -> wood
-    9: [2],          # place_furnace -> stone
-    10: [0],         # place_plant -> sapling
-    11: [1],         # make_wood_pickaxe -> wood
-    12: [1, 2],      # make_stone_pickaxe -> wood, stone
-    13: [1, 3, 4],   # make_iron_pickaxe -> wood, coal, iron
-    14: [1],         # make_wood_sword -> wood
-    15: [1, 2],      # make_stone_sword -> wood, stone
-    16: [1, 3, 4],   # make_iron_sword -> wood, coal, iron
-}
+# V2.2-F11-fix: NO hardcoded recipe table exists anywhere in ATLAS. Material requirements
+# are LEARNED: the frozen StateDeltaHead predicts each action's inventory change (log1p scale);
+# suppression fires only when the learned predicted cost exceeds the learned readout holdings.
+
+
+def compute_material_suppression(deltas, have, margin: float = 0.2) -> "np.ndarray":
+    """Learned material gating (V2.2-F11-fix). PURE function, no recipe knowledge.
+
+    deltas: [17, 16] predicted inventory change per action (log1p scale) from the
+            frozen StateDeltaHead. Negative = the action consumes.
+    have:   [16] current holdings estimated by the learned readout (log1p scale).
+    Returns bool [17]: True where any ITEM dim (0..11) has learned cost > have + margin.
+    Item dims only: vitals (12..15) are ContinueNet's responsibility, never gated here.
+    """
+    costs = np.clip(-deltas, 0.0, None)          # consumption per action, learned
+    deficit = costs[:, :12] > (have[None, :12] + margin)
+    return deficit.any(axis=-1)
 
 
 class AtlasAgent:
@@ -321,17 +325,28 @@ class AtlasAgent:
             d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
             probe_score = affordance + self.cfg.goals.probe_entropy * F.softmax(d_all, dim=-1)
 
-            # V2.2 F11: Learned material gating
+            # V2.2-F11-fix: learned material gating — costs from the frozen StateDeltaHead,
+            # holdings from the learned readout; zero recipe knowledge. Requires the delta
+            # head to be actually loaded (provenance-guarded) and the readout present.
             if (
-                self.readout_net is not None
-                and getattr(self.cfg.goals, "readout_in_goal_gating", True)
+                self.cfg.goals.material_gating_learned
+                and getattr(self.backbone, "has_learned_delta_head", False)
+                and self.readout_net is not None
             ):
                 with torch.no_grad():
+                    a_all = torch.arange(NUM_ACTIONS, device=self.device)
+                    s_rep = s.expand(NUM_ACTIONS, -1)
+                    deltas = self.backbone.inventory_delta(s_rep, a_all).cpu().numpy()
                     mean_x, _ = self.readout_net(s)
-                    mean_np = mean_x.squeeze(0).cpu().numpy()
-                    for act_idx, req_items in CRAFT_REQUIRED_MATERIALS.items():
-                        if any(mean_np[it] <= 0.1 for it in req_items):
-                            probe_score[act_idx] -= 100.0
+                    have = mean_x.squeeze(0).detach().cpu().numpy()
+                    suppress = compute_material_suppression(
+                        deltas, have, margin=self.cfg.goals.material_gate_margin
+                    )
+                    probe_score[suppress] -= 100.0
+                    self.last_probe_decision["material_gate_learned"] = {
+                        "suppressed": suppress.tolist(),
+                        "have": have.tolist(),
+                    }
 
             a_intended = int(torch.argmax(probe_score).item())
 

@@ -172,6 +172,8 @@ class GoalsConfig:
     episode_scope_frequency: float = 0.30     # below this -> episode-scoped goal (F10)
     readout_in_goal_gating: bool = True       # learned material gating (F11)
     prerequisite_routing: bool = True         # route to prerequisite before target (F11)
+    material_gating_learned: bool = True   # F11-fix: learned costs gate probes, never recipes
+    material_gate_margin: float = 0.2      # log1p-scale tolerance on have-vs-cost
 
 
 @dataclass
