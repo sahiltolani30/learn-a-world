@@ -31,7 +31,7 @@ class OfflineConsolidationEngine:
 
     def __init__(self, semantic_bank: Optional[SemanticConsolidatedBank] = None):
         self.bank = semantic_bank or SemanticConsolidatedBank()
-        self.candidate_catalysts: Dict[str, Set[str]] = {}
+        self.catalyst_counts: Dict[str, Dict[str, int]] = {}
 
     def consolidate_episode(self, episodic_store: OnlineEpisodicStore) -> Dict[str, Any]:
         """
@@ -74,36 +74,28 @@ class OfflineConsolidationEngine:
                         step_produces = {ach: 1}
 
                 # Pearlian Causal Contrast for Catalyst Induction:
-                # Identify all workstations adjacent (<= 1.5) to the agent at this milestone.
-                # Only entities with "_placed" designation are valid spatial structures.
+                # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone.
                 nearby_stations: Set[str] = set()
                 if not ach.startswith("place_"):
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
                             if p_step < step.step_idx and station_type in ("table_placed", "furnace_placed"):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
-                                if dist <= 1.5:
+                                if dist <= 2.2:
                                     nearby_stations.add(station_type)
                     elif (
                         episodic_store.workstation_placed_step is not None
                         and episodic_store.workstation_placed_step < step.step_idx
                     ):
                         dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
-                        if dist <= 1.5:
+                        if dist <= 2.2:
                             nearby_stations.add("table_placed")
 
-                # Causal Contrast: Intersect candidate catalysts across all successful executions of this milestone.
-                # If an action succeeds even once without station S nearby, S is ruled out as a necessary catalyst.
-                if ach not in self.candidate_catalysts:
-                    self.candidate_catalysts[ach] = set(nearby_stations)
-                else:
-                    self.candidate_catalysts[ach] = self.candidate_catalysts[ach].intersection(nearby_stations)
-
-                catalyst_needed = (
-                    next(iter(self.candidate_catalysts[ach]))
-                    if len(self.candidate_catalysts[ach]) == 1
-                    else None
-                )
+                # Accumulate co-occurrence counts
+                if ach not in self.catalyst_counts:
+                    self.catalyst_counts[ach] = {}
+                for s in nearby_stations:
+                    self.catalyst_counts[ach][s] = self.catalyst_counts[ach].get(s, 0) + 1
 
                 # Never consume what this step produces
                 for prod in step_produces:
@@ -116,23 +108,31 @@ class OfflineConsolidationEngine:
                         card.consumes[k] = max(card.consumes.get(k, 0), v)
                     for k, v in step_produces.items():
                         card.produces[k] = max(card.produces.get(k, 0), v)
-                    if catalyst_needed and not card.catalyst_needed:
-                        card.catalyst_needed = catalyst_needed
                     for prod in card.produces:
                         card.consumes.pop(prod, None)
+                    # Causal binding: catalyst must be present in majority (>= 50%) of successes
+                    card_catalyst = None
+                    if ach in self.catalyst_counts:
+                        for s, count in self.catalyst_counts[ach].items():
+                            if count / card.success_count >= 0.5:
+                                card_catalyst = s
+                                break
+                    card.catalyst_needed = card_catalyst
                     updated_cards.append(ach)
                 else:
+                    card_catalyst = next(iter(nearby_stations)) if len(nearby_stations) == 1 else None
                     new_card = CausalCard(
                         action=step.action,
                         name=ach,
                         consumes=step_consumes,
                         produces=step_produces,
-                        catalyst_needed=catalyst_needed,
+                        catalyst_needed=card_catalyst,
                         success_count=1,
                     )
                     for prod in new_card.produces:
                         new_card.consumes.pop(prod, None)
                     self.bank.cards[ach] = new_card
+                    promoted_cards.append(ach)
                     promoted_cards.append(ach)
 
             # Also reward-bearing empirical production without formal achievement flag
