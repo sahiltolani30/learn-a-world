@@ -16,7 +16,7 @@ import numpy as np
 from atlas.config import LATENT_DIM, RECURRENT_DIM, TopoMapConfig
 
 
-@dataclass
+@dataclass(eq=False)
 class Keyframe:
     z: np.ndarray          # shape (128,)
     context: np.ndarray    # shape (256,)

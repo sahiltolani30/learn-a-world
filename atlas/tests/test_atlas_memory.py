@@ -172,3 +172,27 @@ def test_predecessor_lift_mining():
     assert lift.lift[0, 1] > 2.0, f"Expected lift > 2.0, got {lift.lift[0, 1]}"
     assert lift.ci_low[0, 1] <= lift.lift[0, 1] * 1.01 + 1e-6
     lift.assert_consistent()
+
+
+def test_goalbank_eviction_when_full():
+    """Verify that GoalBank eviction at capacity works without numpy array equality ambiguity."""
+    cfg = GoalsConfig(max_goals=10, max_goals_per_dim=50)
+    bank = GoalBank(cfg)
+    rng = np.random.RandomState(123)
+
+    for i in range(25):
+        key = rng.randn(128).astype(np.float32)
+        entry = GoalEntry(
+            key=key,
+            context=rng.randn(256).astype(np.float32),
+            action_profile=np.zeros((17, 22), dtype=np.float32),
+            event_dims=[i % 22],
+            kind="event",
+            n_try=i,
+            n_succ=0,
+            born_iter=i,
+        )
+        bank.add(entry)
+
+    assert len(bank.entries) == 10
+

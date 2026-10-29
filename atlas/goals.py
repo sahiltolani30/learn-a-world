@@ -35,7 +35,7 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(_unit_vector(a), _unit_vector(b)))
 
 
-@dataclass
+@dataclass(eq=False)
 class GoalEntry:
     key: np.ndarray                    # shape (128,) visual key (z)
     context: np.ndarray                # shape (256,) belief (h)
@@ -228,7 +228,7 @@ class GoalBank:
                     return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
 
                 evict_target = min(candidates, key=evidence_fn)
-                self.entries.remove(evict_target)
+                self.entries = [g for g in self.entries if g is not evict_target]
                 if evict_target.kind == "event":
                     for d in evict_target.event_dims:
                         self._dim_counts[d] = max(0, self._dim_counts.get(d, 0) - 1)
@@ -237,7 +237,7 @@ class GoalBank:
                     age = max(0, cur_iter - g.born_iter)
                     return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
                 evict_target = min(self.entries, key=evidence_fn)
-                self.entries.remove(evict_target)
+                self.entries = [g for g in self.entries if g is not evict_target]
 
         self.entries.append(entry)
         if entry.kind == "event":
