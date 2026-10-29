@@ -95,11 +95,22 @@ class OfflineConsolidationEngine:
                 # 2. Portable tools in inventory (held with count > 0 and NOT consumed in this step)
                 present_entities: Dict[str, float] = {}
                 if not is_fixture:
-                    if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
+                    # Check placed workstations in the world
+                    all_placements = getattr(episodic_store, "placed_workstations_history", None)
+                    if all_placements:
+                        for station_type, p_step, p_pos in all_placements:
+                            if p_step < step.step_idx and station_type != ach and station_type != get_fixture_alias(ach):
+                                dist = float(np.linalg.norm(step.displacement - p_pos))
+                                if dist <= 2.5:
+                                    canonical_station = get_fixture_alias(station_type)
+                                    lag = float(step.step_idx - p_step)
+                                    if canonical_station not in present_entities or lag < present_entities[canonical_station]:
+                                        present_entities[canonical_station] = lag
+                    elif hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
                             if p_step < step.step_idx and station_type != ach and station_type != get_fixture_alias(ach):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
-                                if dist <= 2.2:
+                                if dist <= 2.5:
                                     canonical_station = get_fixture_alias(station_type)
                                     present_entities[canonical_station] = float(step.step_idx - p_step)
 
@@ -140,13 +151,14 @@ class OfflineConsolidationEngine:
                 for prod in step_produces:
                     step_consumes.pop(prod, None)
 
-                # Strict Popperian Necessity Criterion:
-                # An entity is a necessary catalyst if and only if it was present in 100% of successes:
-                # supp == total_successes
+                # Robust Empirical Necessity Criterion:
+                # In large empirical datasets with visual odometry drift, an entity is a necessary catalyst
+                # if present in >= 85% of successes (and 100% for small sample sizes <= 3).
+                min_supp = total_successes if total_successes <= 3 else int(np.ceil(0.85 * total_successes))
                 card_catalyst = None
                 candidates = [
                     s for s, supp in self.catalyst_support[ach].items()
-                    if supp == total_successes and supp >= 2
+                    if supp >= min_supp and supp >= 2
                 ]
                 if not candidates and total_successes == 1:
                     candidates = [

@@ -50,6 +50,7 @@ class OnlineEpisodicStore:
         self.workstation_placed_step: Optional[int] = None
         self.workstation_pos: np.ndarray = np.zeros(2, dtype=np.float32)
         self.placed_workstations: Dict[str, Tuple[int, np.ndarray]] = {}
+        self.placed_workstations_history: List[Tuple[str, int, np.ndarray]] = []
         self.current_displacement: np.ndarray = np.zeros(2, dtype=np.float32)
         self.current_inventory: Dict[str, int] = {}
         self.milestones_unlocked: List[str] = []
@@ -90,9 +91,11 @@ class OnlineEpisodicStore:
             if is_fixture_ach:
                 station_key = unlocked_achievement
                 self.placed_workstations[station_key] = (step_idx, self.current_displacement.copy())
+                self.placed_workstations_history.append((station_key, step_idx, self.current_displacement.copy()))
                 alias = get_fixture_alias(unlocked_achievement)
                 if alias != station_key:
                     self.placed_workstations[alias] = (step_idx, self.current_displacement.copy())
+                    self.placed_workstations_history.append((alias, step_idx, self.current_displacement.copy()))
                 self.workstation_placed_step = step_idx
                 self.workstation_pos = self.current_displacement.copy()
                 self.subgoal_state = "IMMEDIATE_ASSEMBLY"
@@ -111,23 +114,26 @@ class OnlineEpisodicStore:
         self.steps.append(trans)
 
     def is_adjacent_to_workstation(
-        self, workstation_type: Optional[str] = None, threshold: float = 1.5
+        self, workstation_type: Optional[str] = None, threshold: float = 2.5
     ) -> bool:
         """
         Verifies physical spatial proximity to placed workstation.
-        Prevents workstation affordance amnesia.
+        Checks all placements in history so earlier workstations are not lost when multiple are placed.
         """
         if workstation_type is not None:
             alias = get_fixture_alias(workstation_type)
-            target_key = None
-            if workstation_type in self.placed_workstations:
-                target_key = workstation_type
+            if hasattr(self, "placed_workstations_history") and self.placed_workstations_history:
+                for s_type, _, s_pos in self.placed_workstations_history:
+                    if s_type == workstation_type or s_type == alias or get_fixture_alias(s_type) == alias:
+                        dist = float(np.linalg.norm(self.current_displacement - s_pos))
+                        if dist <= threshold:
+                            return True
+            elif workstation_type in self.placed_workstations:
+                pos = self.placed_workstations[workstation_type][1]
+                return float(np.linalg.norm(self.current_displacement - pos)) <= threshold
             elif alias in self.placed_workstations:
-                target_key = alias
-            if target_key is not None:
-                pos = self.placed_workstations[target_key][1]
-                dist = float(np.linalg.norm(self.current_displacement - pos))
-                return dist <= threshold
+                pos = self.placed_workstations[alias][1]
+                return float(np.linalg.norm(self.current_displacement - pos)) <= threshold
 
         if self.workstation_placed_step is None:
             return False
