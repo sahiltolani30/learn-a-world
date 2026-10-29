@@ -55,6 +55,9 @@ def _hash_heads_state(agent: AtlasAgent) -> str:
     return h.hexdigest()
 
 
+_DEFAULT_PROVENANCE = object()
+
+
 def screen_agent(
     agent: AtlasAgent,
     seeds: Optional[Union[Sequence[int], Tuple[int, int]]] = None,
@@ -62,6 +65,9 @@ def screen_agent(
     max_steps: int = 1000,
     tag: str = "atlas_v1",
     out_dir: Optional[Union[str, Path]] = None,
+    resumed_from: Any = _DEFAULT_PROVENANCE,
+    memory_source: Any = _DEFAULT_PROVENANCE,
+    remine: Any = _DEFAULT_PROVENANCE,
 ) -> Dict[str, Any]:
     """Runs strict visual evaluation and writes protocol screening JSON."""
     results_dir = Path(out_dir or (REPO_ROOT / "results"))
@@ -159,6 +165,22 @@ def screen_agent(
     if prior_weight != 0.0:
         raise ValueError(f"Screening refused: prior_weight={prior_weight} != 0.0 violates pure scratch training invariant")
 
+    resumed_from_val = (
+        getattr(agent, "resumed_from", {"run_id": "atlas_v2_scratch", "iteration": 39})
+        if resumed_from is _DEFAULT_PROVENANCE
+        else resumed_from
+    )
+    memory_source_val = (
+        getattr(agent, "memory_source", "own_play_v2")
+        if memory_source is _DEFAULT_PROVENANCE
+        else memory_source
+    )
+    remine_val = (
+        getattr(agent, "remine", True)
+        if remine is _DEFAULT_PROVENANCE
+        else remine
+    )
+
     # Strict provenance record
     report = {
         "protocol_id": "strict_visual_atlas_clean_v1",
@@ -168,6 +190,9 @@ def screen_agent(
         "prior_weight": prior_weight,
         "train_from_scratch": True,
         "run_line": "atlas_v2",
+        "resumed_from": resumed_from_val,
+        "memory_source": memory_source_val,
+        "remine": remine_val,
         "backbone": {
             "path": agent.backbone.checkpoint_path,
             "sha256": str(agent.backbone.provenance.get("checkpoint_sha256", "")),
@@ -204,6 +229,11 @@ def screen_agent(
                 f"Screening report missing or invalid provenance field '{req_field}': "
                 f"got {report.get(req_field)}, expected {expected_val}"
             )
+
+    # Refuse to write without all required provenance fields
+    for field in ["resumed_from", "memory_source", "remine"]:
+        if field not in report or report[field] is None:
+            raise ValueError(f"Screening report refuses to write without provenance field '{field}'")
 
     out_path = results_dir / f"atlas_screen_{tag}.json"
     with open(out_path, "w") as f:

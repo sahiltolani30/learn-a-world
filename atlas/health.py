@@ -20,6 +20,10 @@ class HealthMonitor:
         self.progress_history: List[tuple[int, float]] = []  # (iter_idx, ach_per_ep)
         self.alarms_so_far: List[Dict[str, Any]] = []
 
+        self.last_best_iter: int = 0
+        self.best_ach_per_ep: float = 0.0
+        self.probe_fraction: float = 0.0
+
         self.boost_steps_left: int = 0
         self.epsilon_boost_active: bool = False
 
@@ -33,7 +37,19 @@ class HealthMonitor:
 
     def observe_progress(self, iter_idx: int, ach_per_ep: float) -> None:
         """Push dev screen achievements per episode."""
-        self.progress_history.append((int(iter_idx), float(ach_per_ep)))
+        ach = float(ach_per_ep)
+        self.progress_history.append((int(iter_idx), ach))
+        if len(self.progress_history) == 1:
+            self.best_ach_per_ep = ach
+            self.last_best_iter = int(iter_idx)
+        else:
+            if ach >= self.best_ach_per_ep * (1.0 + self.cfg.flatline_improvement) and ach > self.best_ach_per_ep:
+                self.best_ach_per_ep = ach
+                self.last_best_iter = int(iter_idx)
+
+    def observe_probe_fraction(self, frac: float) -> None:
+        """Passive metric updated from dev screen or train log."""
+        self.probe_fraction = float(frac)
 
     def notify_step(self) -> None:
         """Called on each environment step during collection to decrement boost_steps_left."""
@@ -69,20 +85,13 @@ class HealthMonitor:
                 f"A2_CONFIDENCE: OptionNet confidence {latest_conf:.3f} > {self.cfg.confidence_alarm:.2f}"
             )
 
-        # Alarm A3: Progress flatline
-        # best ach_per_ep not improved by >= 10% within last flatline_iters (15) observations
-        if len(self.progress_history) >= self.cfg.flatline_iters:
-            recent_progress = [p for _, p in self.progress_history[-self.cfg.flatline_iters:]]
-            prior_progress = [p for _, p in self.progress_history[:-self.cfg.flatline_iters]]
-            baseline_val = max(prior_progress) if prior_progress else recent_progress[0]
-            recent_best = max(recent_progress)
-
-            threshold = baseline_val * (1.0 + self.cfg.flatline_improvement)
-            if recent_best < threshold:
-                active_alarms.append(
-                    f"A3_FLATLINE: Progress {recent_best:.3f} not improved by >={self.cfg.flatline_improvement:.0%} over baseline {baseline_val:.3f}"
-                )
-                beta_reset = True
+        # Alarm A3: Progress flatline in iterations
+        # best ach_per_ep not improved within last flatline_iters (15) iterations
+        if len(self.progress_history) > 0 and (iter_idx - self.last_best_iter >= self.cfg.flatline_iters):
+            active_alarms.append(
+                f"A3_FLATLINE: Progress {self.best_ach_per_ep:.3f} flatlined for {iter_idx - self.last_best_iter} iters (>= {self.cfg.flatline_iters})"
+            )
+            beta_reset = True
 
         for alarm in active_alarms:
             alarm_record = {"iter": iter_idx, "alarm": alarm}
@@ -102,6 +111,7 @@ class HealthMonitor:
             "beta_reset": beta_reset,
             "top_action_share": top_action_share,
             "latest_confidence": latest_conf,
+            "probe_fraction": self.probe_fraction,
         }
 
     def generate_report_card(

@@ -58,6 +58,9 @@ def test_screen_provenance_json_schema():
         assert data["prior_weight"] == 0.0
         assert data["train_from_scratch"] is True
         assert data["run_line"] == "atlas_v2"
+        assert data["resumed_from"] == {"run_id": "atlas_v2_scratch", "iteration": 39}
+        assert data["memory_source"] == "own_play_v2"
+        assert data["remine"] is True
 
 
 def test_screen_refuses_nonzero_prior_weight():
@@ -79,3 +82,25 @@ def test_screen_refuses_nonzero_prior_weight():
                 tag="test_reject",
                 out_dir=tmp_dir,
             )
+
+
+def test_screen_refuses_missing_provenance():
+    """Screening raises ValueError if resumed_from, memory_source, or remine is missing/None."""
+    import pytest
+
+    cfg = AtlasConfig()
+    fb = FrozenBackbone(config=cfg, device="cpu")
+    agent = AtlasAgent(backbone=fb, cfg=cfg)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with pytest.raises(ValueError, match="Screening report refuses to write without provenance field 'remine'"):
+            screen_agent(
+                agent=agent,
+                seeds=[2050],
+                num_episodes=1,
+                max_steps=5,
+                tag="test_reject_remine",
+                out_dir=tmp_dir,
+                remine=None,
+            )
+

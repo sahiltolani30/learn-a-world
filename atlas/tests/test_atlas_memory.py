@@ -196,3 +196,52 @@ def test_goalbank_eviction_when_full():
 
     assert len(bank.entries) == 10
 
+
+def test_eviction_balance():
+    """Reproduce E2 scenario: unconstrained frontier adds flood the bank and starve event goals."""
+    cfg = GoalsConfig(max_goals=80, max_goals_per_dim=25)
+    bank = GoalBank(cfg)
+    rng = np.random.RandomState(42)
+
+    base_wakeup = rng.randn(128).astype(np.float32)
+    base_wakeup /= np.linalg.norm(base_wakeup)
+    base_sapling = rng.randn(128).astype(np.float32)
+    base_sapling /= np.linalg.norm(base_sapling)
+
+    for it in range(40):
+        # 16 frontier goals with diverse keys
+        for _ in range(16):
+            k = rng.randn(128).astype(np.float32)
+            bank.add(GoalEntry(
+                key=k, context=np.zeros(256, dtype=np.float32),
+                action_profile=np.zeros((17, 22), dtype=np.float32),
+                event_dims=[], kind="frontier", born_iter=it
+            ), current_iter=it)
+
+        # 8 wake_up (dim 21) event attempts (near-identical, with small perturbations)
+        for _ in range(8):
+            k = base_wakeup + rng.randn(128).astype(np.float32) * 0.15
+            bank.add(GoalEntry(
+                key=k, context=np.zeros(256, dtype=np.float32),
+                action_profile=np.zeros((17, 22), dtype=np.float32),
+                event_dims=[21], kind="event", born_iter=it
+            ), current_iter=it)
+
+        # 30 sapling (dim 4) event attempts (near-identical, with small perturbations)
+        for _ in range(30):
+            k = base_sapling + rng.randn(128).astype(np.float32) * 0.15
+            bank.add(GoalEntry(
+                key=k, context=np.zeros(256, dtype=np.float32),
+                action_profile=np.zeros((17, 22), dtype=np.float32),
+                event_dims=[4], kind="event", born_iter=it
+            ), current_iter=it)
+
+    event_count = sum(1 for g in bank.entries if g.kind == "event")
+    frontier_count = sum(1 for g in bank.entries if g.kind == "frontier")
+    frontier_share = frontier_count / len(bank.entries) if bank.entries else 0.0
+
+    assert event_count >= 40, f"Expected event count >= 40, got {event_count}"
+    assert frontier_share <= 0.45, f"Expected frontier share <= 0.45, got {frontier_share}"
+    assert getattr(bank, "rejected_frontier_overflow", 0) > 0, "Expected frontier overflow rejections"
+
+

@@ -50,13 +50,48 @@ def test_alarm_a3_flatline_triggers_beta_reset():
     cfg = HealthConfig(flatline_iters=15, flatline_improvement=0.10)
     monitor = HealthMonitor(cfg)
 
-    # Feed 15 flat progress readings
-    for i in range(15):
-        monitor.observe_progress(iter_idx=i, ach_per_ep=1.0)
+    # Feed progress at iter 0
+    monitor.observe_progress(iter_idx=0, ach_per_ep=1.0)
 
+    # Check at iter 14: no alarm
+    res_14 = monitor.check(iter_idx=14)
+    assert not any("A3_FLATLINE" in a for a in res_14["alarms"])
+
+    # Check at iter 15 (0 + 15): alarm fires
     res = monitor.check(iter_idx=15)
     assert any("A3_FLATLINE" in a for a in res["alarms"])
     assert res["beta_reset"] is True
+
+
+def test_alarm_a3_flatline_iteration_based():
+    """Verification F4: feed progress at iters 0, 5, 10, then flat series -> alarm fires at last_best_iter + 15."""
+    cfg = HealthConfig(flatline_iters=15, flatline_improvement=0.10)
+    monitor = HealthMonitor(cfg)
+
+    monitor.observe_progress(iter_idx=0, ach_per_ep=1.0)
+    monitor.observe_progress(iter_idx=5, ach_per_ep=1.5)
+    monitor.observe_progress(iter_idx=10, ach_per_ep=2.0)
+    assert monitor.last_best_iter == 10
+
+    # It 15: flat progress (2.0)
+    monitor.observe_progress(iter_idx=15, ach_per_ep=2.0)
+    res_15 = monitor.check(iter_idx=15)
+    assert not any("A3_FLATLINE" in a for a in res_15["alarms"])
+
+    # It 20: flat progress (2.0)
+    monitor.observe_progress(iter_idx=20, ach_per_ep=2.0)
+    res_20 = monitor.check(iter_idx=20)
+    assert not any("A3_FLATLINE" in a for a in res_20["alarms"])
+
+    # It 24: still < last_best_iter + 15
+    res_24 = monitor.check(iter_idx=24)
+    assert not any("A3_FLATLINE" in a for a in res_24["alarms"])
+
+    # It 25 (last_best_iter + 15): alarm fires exactly here!
+    monitor.observe_progress(iter_idx=25, ach_per_ep=2.0)
+    res_25 = monitor.check(iter_idx=25)
+    assert any("A3_FLATLINE" in a for a in res_25["alarms"])
+    assert res_25["beta_reset"] is True
 
 
 def test_report_card_schema():

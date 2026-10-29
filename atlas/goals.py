@@ -182,6 +182,7 @@ class GoalBank:
         self.cfg = cfg or GoalsConfig()
         self.entries: List[GoalEntry] = []
         self.rejected_same_kind: int = 0
+        self.rejected_frontier_overflow: int = 0
         self._dim_counts: Dict[int, int] = {i: 0 for i in range(NUM_ACHIEVEMENTS)}
 
     def _rebuild_dim_counts(self) -> None:
@@ -217,27 +218,53 @@ class GoalBank:
             if (frontier_count / bank_size) < self.cfg.frontier_min_share:
                 return None
 
-        # Eviction when full: evict entry with lowest evidence = (n_succ / max(1, n_try)) * (1 / (1 + 0.1 * age))
-        # among "event"/"vital" kinds; NEVER evict frontier goals below the 20% quota.
+        # Eviction when full (bank_size >= max_goals): balanced eviction
         cur_iter = current_iter if current_iter is not None else entry.born_iter
         if bank_size >= self.cfg.max_goals:
-            candidates = [g for g in self.entries if g.kind in ("event", "vital")]
-            if candidates:
-                def evidence_fn(g: GoalEntry) -> float:
-                    age = max(0, cur_iter - g.born_iter)
-                    return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
+            # 1. Compute current shares over the bank
+            n_frontier = sum(1 for g in self.entries if g.kind == "frontier")
+            n_vital = sum(1 for g in self.entries if g.kind == "vital")
+            n_event = sum(1 for g in self.entries if g.kind == "event")
+            s_frontier = n_frontier / bank_size
+            s_vital = n_vital / bank_size
+            s_event = n_event / bank_size
 
-                evict_target = min(candidates, key=evidence_fn)
-                self.entries = [g for g in self.entries if g is not evict_target]
-                if evict_target.kind == "event":
-                    for d in evict_target.event_dims:
-                        self._dim_counts[d] = max(0, self._dim_counts.get(d, 0) - 1)
+            t_frontier = self.cfg.frontier_target_share
+            t_vital = self.cfg.vital_target_share
+            t_event = max(0.0, 1.0 - t_frontier - t_vital)
+
+            targets = {"frontier": t_frontier, "vital": t_vital, "event": t_event}
+            shares = {"frontier": s_frontier, "vital": s_vital, "event": s_event}
+
+            # 2. Over-represented kinds = those with share > target + 0.05
+            over_rep = [k for k in ("frontier", "vital", "event") if shares[k] > targets[k] + 0.05]
+
+            # 3. If any over-represented: lowest-evidence among MOST over-represented kind
+            if over_rep:
+                most_over_kind = max(over_rep, key=lambda k: shares[k] - targets[k])
+                candidates = [g for g in self.entries if g.kind == most_over_kind]
+            # 4. If none over-represented: lowest-evidence among event ∪ vital
             else:
-                def evidence_fn(g: GoalEntry) -> float:
-                    age = max(0, cur_iter - g.born_iter)
-                    return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
-                evict_target = min(self.entries, key=evidence_fn)
-                self.entries = [g for g in self.entries if g is not evict_target]
+                candidates = [g for g in self.entries if g.kind in ("event", "vital")]
+                if not candidates:
+                    candidates = list(self.entries)
+
+            # 5. NEVER evict an event/vital entry to admit a frontier goal
+            if entry.kind == "frontier":
+                candidate_kinds = set(g.kind for g in candidates)
+                if candidate_kinds.issubset({"event", "vital"}):
+                    self.rejected_frontier_overflow += 1
+                    return None
+
+            def evidence_fn(g: GoalEntry) -> float:
+                age = max(0, cur_iter - g.born_iter)
+                return (g.n_succ / max(1, g.n_try)) * (1.0 / (1.0 + 0.1 * age))
+
+            evict_target = min(candidates, key=evidence_fn)
+            self.entries = [g for g in self.entries if g is not evict_target]
+            if evict_target.kind == "event":
+                for d in evict_target.event_dims:
+                    self._dim_counts[d] = max(0, self._dim_counts.get(d, 0) - 1)
 
         self.entries.append(entry)
         if entry.kind == "event":

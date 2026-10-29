@@ -107,17 +107,22 @@ def build_her_batch(
     episodes: Sequence[Dict[str, Union[np.ndarray, torch.Tensor]]],
     horizons: Sequence[int] = (5, 10, 20),
     negatives_per_pos: int = 1,
-    max_samples: int = 16_384,
+    max_samples: int = 32_768,
+    her_reward_weight_max: float = 4.0,
+    her_unlock_weight: float = 2.0,
     device: Optional[torch.device | str] = None,
 ) -> Dict[str, torch.Tensor]:
     """Constructs Hindsight Experience Replay (HER) training pairs.
 
     Args:
         episodes: list of episode dicts containing keys:
-            'z' [T, 128], 'h' [T, 256], 'actions' (or 'a') [T]
+            'z' [T, 128], 'h' [T, 256], 'actions' (or 'a') [T],
+            'rewards' (or 'r') [T], 'events' [T, 22]
         horizons: look-ahead steps for positive future goals.
         negatives_per_pos: number of cross-episode negative goals per positive.
         max_samples: maximum number of transitions to build when episode count is large.
+        her_reward_weight_max: cap on return-based imitation weight.
+        her_unlock_weight: multiplier for segments containing event unlocks.
         device: destination torch device.
 
     Returns:
@@ -125,6 +130,8 @@ def build_her_batch(
             's_pos': [N_pos, 384]
             'g_pos': [N_pos, 128]
             'actions_pos': [N_pos] int64
+            'weights_pos': [N_pos] float32
+            'is_unlock_pos': [N_pos] bool
             's_reach': [N_reach, 384]
             'g_reach': [N_reach, 128]
             'reach_labels': [N_reach] float32
@@ -134,33 +141,48 @@ def build_her_batch(
 
     parsed_eps = []
     for ep in episodes:
+        assert ("rewards" in ep or "r" in ep), "episodes must contain rewards ('rewards' or 'r')"
+        assert "events" in ep, "episodes must contain events"
+
         z = ep["z"]
         h = ep["h"]
         a = ep["actions"] if "actions" in ep else ep["a"]
+        r = ep["rewards"] if "rewards" in ep else ep["r"]
+        events = ep["events"]
+
         if isinstance(z, torch.Tensor):
             z = z.detach().cpu().numpy()
         if isinstance(h, torch.Tensor):
             h = h.detach().cpu().numpy()
         if isinstance(a, torch.Tensor):
             a = a.detach().cpu().numpy()
+        if isinstance(r, torch.Tensor):
+            r = r.detach().cpu().numpy()
+        if isinstance(events, torch.Tensor):
+            events = events.detach().cpu().numpy()
+
         T = len(z)
         if T >= 2:
             s = np.concatenate([z, h], axis=-1)
-            parsed_eps.append({"z": z, "s": s, "a": a, "T": T})
+            parsed_eps.append({"z": z, "s": s, "a": a, "r": r, "events": events, "T": T})
 
     s_pos_list: List[np.ndarray] = []
     g_pos_list: List[np.ndarray] = []
     a_pos_list: List[int] = []
+    w_pos_list: List[float] = []
+    unlock_pos_list: List[bool] = []
 
     s_reach_list: List[np.ndarray] = []
     g_reach_list: List[np.ndarray] = []
     reach_label_list: List[float] = []
 
     num_eps = len(parsed_eps)
+    max_h = max(horizons)
+    far_threshold = 2 * max_h
 
     if num_eps > 50:
-        # Sample across episodes to stay fast and avoid O(N*T*K) explosion
-        samples_per_ep = max(1, min(10, max_samples // num_eps))
+        mean_k = max(1, int(np.mean(horizons)))
+        samples_per_ep = max(2, min(50, (max_samples * 2) // (num_eps * mean_k)))
         for ep_idx, ep in enumerate(parsed_eps):
             T = ep["T"]
             valid_ks = [k for k in horizons if k < T]
@@ -170,23 +192,32 @@ def build_her_batch(
                 k = int(np.random.choice(valid_ks))
                 t = int(np.random.randint(0, T - k))
                 goal = ep["z"][t + k]
+                seg_return = float(np.sum(ep["r"][t:t + k]))
+                w_reward = 1.0 + min(max(seg_return, 0.0), her_reward_weight_max)
+                is_unlock = bool(np.any(ep["events"][t:t + k]))
+                if is_unlock:
+                    w_reward *= her_unlock_weight
 
-                s_pos_list.append(ep["s"][t])
-                g_pos_list.append(goal)
-                a_pos_list.append(int(ep["a"][t]))
+                for tau in range(t, t + k):
+                    s_pos_list.append(ep["s"][tau])
+                    g_pos_list.append(goal)
+                    a_pos_list.append(int(ep["a"][tau]))
+                    w_pos_list.append(w_reward)
+                    unlock_pos_list.append(is_unlock)
 
-                s_reach_list.append(ep["s"][t])
-                g_reach_list.append(goal)
-                reach_label_list.append(1.0)
+                    # Reachability positive
+                    s_reach_list.append(ep["s"][tau])
+                    g_reach_list.append(goal)
+                    reach_label_list.append(1.0)
 
-                for _ in range(negatives_per_pos):
-                    other_idx = (ep_idx + int(np.random.randint(1, num_eps))) % num_eps
-                    other_ep = parsed_eps[other_idx]
-                    neg_u = int(np.random.randint(0, other_ep["T"]))
-                    neg_g = other_ep["z"][neg_u]
-                    s_reach_list.append(ep["s"][t])
-                    g_reach_list.append(neg_g)
-                    reach_label_list.append(0.0)
+                    for _ in range(negatives_per_pos):
+                        other_idx = (ep_idx + int(np.random.randint(1, num_eps))) % num_eps
+                        other_ep = parsed_eps[other_idx]
+                        neg_u = int(np.random.randint(0, other_ep["T"]))
+                        neg_g = other_ep["z"][neg_u]
+                        s_reach_list.append(ep["s"][tau])
+                        g_reach_list.append(neg_g)
+                        reach_label_list.append(0.0)
     else:
         # Small episode batches (e.g. unit tests or local smoke)
         for ep_idx, ep in enumerate(parsed_eps):
@@ -196,10 +227,18 @@ def build_her_batch(
                     continue
                 for t in range(0, T - k):
                     goal = ep["z"][t + k]
+                    seg_return = float(np.sum(ep["r"][t:t + k]))
+                    w_reward = 1.0 + min(max(seg_return, 0.0), her_reward_weight_max)
+                    is_unlock = bool(np.any(ep["events"][t:t + k]))
+                    if is_unlock:
+                        w_reward *= her_unlock_weight
+
                     for tau in range(t, t + k):
                         s_pos_list.append(ep["s"][tau])
                         g_pos_list.append(goal)
                         a_pos_list.append(int(ep["a"][tau]))
+                        w_pos_list.append(w_reward)
+                        unlock_pos_list.append(is_unlock)
 
                         # Reachability positive
                         s_reach_list.append(ep["s"][tau])
@@ -215,10 +254,27 @@ def build_her_batch(
                             else:
                                 neg_u = (tau + T // 2) % T
                                 neg_g = ep["z"][neg_u]
-
                             s_reach_list.append(ep["s"][tau])
                             g_reach_list.append(neg_g)
                             reach_label_list.append(0.0)
+
+    n_pairs = len(s_pos_list)
+    reach_stride = 1 + negatives_per_pos
+    if n_pairs > max_samples:
+        keep_idx = np.random.choice(n_pairs, size=max_samples, replace=False)
+        s_pos_list = [s_pos_list[i] for i in keep_idx]
+        g_pos_list = [g_pos_list[i] for i in keep_idx]
+        a_pos_list = [a_pos_list[i] for i in keep_idx]
+        w_pos_list = [w_pos_list[i] for i in keep_idx]
+        unlock_pos_list = [unlock_pos_list[i] for i in keep_idx]
+
+        reach_keep_idx = []
+        for i in keep_idx:
+            for j in range(reach_stride):
+                reach_keep_idx.append(reach_stride * i + j)
+        s_reach_list = [s_reach_list[j] for j in reach_keep_idx]
+        g_reach_list = [g_reach_list[j] for j in reach_keep_idx]
+        reach_label_list = [reach_label_list[j] for j in reach_keep_idx]
 
     if not s_pos_list:
         # Fallback empty tensors
@@ -226,6 +282,8 @@ def build_her_batch(
             "s_pos": torch.zeros((0, STATE_DIM), dtype=torch.float32, device=device),
             "g_pos": torch.zeros((0, LATENT_DIM), dtype=torch.float32, device=device),
             "actions_pos": torch.zeros((0,), dtype=torch.int64, device=device),
+            "weights_pos": torch.zeros((0,), dtype=torch.float32, device=device),
+            "is_unlock_pos": torch.zeros((0,), dtype=torch.bool, device=device),
             "s_reach": torch.zeros((0, STATE_DIM), dtype=torch.float32, device=device),
             "g_reach": torch.zeros((0, LATENT_DIM), dtype=torch.float32, device=device),
             "reach_labels": torch.zeros((0,), dtype=torch.float32, device=device),
@@ -235,6 +293,8 @@ def build_her_batch(
         "s_pos": torch.from_numpy(np.stack(s_pos_list, axis=0)).float().to(device),
         "g_pos": torch.from_numpy(np.stack(g_pos_list, axis=0)).float().to(device),
         "actions_pos": torch.from_numpy(np.array(a_pos_list, dtype=np.int64)).to(device),
+        "weights_pos": torch.from_numpy(np.array(w_pos_list, dtype=np.float32)).to(device),
+        "is_unlock_pos": torch.from_numpy(np.array(unlock_pos_list, dtype=bool)).to(device),
         "s_reach": torch.from_numpy(np.stack(s_reach_list, axis=0)).float().to(device),
         "g_reach": torch.from_numpy(np.stack(g_reach_list, axis=0)).float().to(device),
         "reach_labels": torch.from_numpy(np.array(reach_label_list, dtype=np.float32)).to(device),
@@ -405,9 +465,19 @@ def compute_her_loss(
 
     policy_logits = option_net.logits(s_pos, g_pos)
     counts = torch.bincount(a_pos, minlength=NUM_ACTIONS).clamp_min(1)
-    w = (1.0 / counts[a_pos].float())            # per-sample weight = inverse action frequency
-    w = w * (len(a_pos) / w.sum())               # normalize mean weight to 1.0
-    w = w.clamp(max=cfg_clip)                    # 50.0, from SkillsConfig
+    freq_weight = (1.0 / counts[a_pos].float())
+
+    if "weights_pos" in her_batch_data and her_batch_data["weights_pos"].shape[0] == a_pos.shape[0]:
+        w_reward = her_batch_data["weights_pos"].float()
+        w = freq_weight * w_reward
+    else:
+        w = freq_weight
+
+    # Renormalize to mean 1.0
+    w = w * (len(a_pos) / max(w.sum(), 1e-8))
+    # Clip at cfg_clip (50.0)
+    w = w.clamp(max=cfg_clip)
+
     per_sample_ce = F.cross_entropy(
         policy_logits, a_pos, weight=None, label_smoothing=cfg_smoothing, reduction="none"
     )
@@ -417,9 +487,20 @@ def compute_her_loss(
     bce_loss = F.binary_cross_entropy_with_logits(reach_logits, labels_reach)
 
     total_loss = ce_weight * ce_loss + bce_weight * bce_loss
+
+    w_mean = float(w.mean().detach().item())
+    w_p95 = float(np.percentile(w.detach().cpu().numpy(), 95))
+    if "is_unlock_pos" in her_batch_data and len(her_batch_data["is_unlock_pos"]) > 0:
+        unlock_frac = float(her_batch_data["is_unlock_pos"].float().mean().item())
+    else:
+        unlock_frac = 0.0
+
     metrics = {
         "ce_loss": float(ce_loss.detach().item()),
         "bce_loss": float(bce_loss.detach().item()),
         "total_loss": float(total_loss.detach().item()),
+        "her_weight_mean": w_mean,
+        "her_weight_p95": w_p95,
+        "her_unlock_pair_fraction": unlock_frac,
     }
     return total_loss, metrics

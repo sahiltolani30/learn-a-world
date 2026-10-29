@@ -171,6 +171,7 @@ class HeadTrainer:
         train_eps: List[Dict[str, Any]],
         val_eps: List[Dict[str, Any]],
         iter_idx: int,
+        extra_log: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Runs one training iteration over cached episodes and evaluates quality gates."""
         # Setup optimizers
@@ -184,8 +185,28 @@ class HeadTrainer:
             opt_readout = optim.Adam(self.readout_net.parameters(), lr=3e-4)
 
         # Build HER batch
-        her_train = build_her_batch(train_eps, device=self.device)
-        her_val = build_her_batch(val_eps, device=self.device) if val_eps else None
+        max_her = getattr(self.cfg, "her_max_pairs", 32_768)
+        skills_cfg = getattr(self.option_net, "cfg", None)
+        r_max = getattr(skills_cfg, "her_reward_weight_max", 4.0)
+        u_weight = getattr(skills_cfg, "her_unlock_weight", 2.0)
+        her_train = build_her_batch(
+            train_eps,
+            max_samples=max_her,
+            her_reward_weight_max=r_max,
+            her_unlock_weight=u_weight,
+            device=self.device,
+        )
+        her_val = (
+            build_her_batch(
+                val_eps,
+                max_samples=max_her,
+                her_reward_weight_max=r_max,
+                her_unlock_weight=u_weight,
+                device=self.device,
+            )
+            if val_eps
+            else None
+        )
 
         # Build flat transition tensors for EpistemicNet and ContinueNet
         z_train = np.concatenate([ep["z"] for ep in train_eps], axis=0)
@@ -207,6 +228,7 @@ class HeadTrainer:
 
         initial_ce_loss = 0.0
         final_ce_loss = 0.0
+        last_skills_metrics: Dict[str, float] = {}
 
         n_her = her_train["s_pos"].shape[0] if her_train is not None else 0
         print(f"  [Train] HER batch: {n_her} pairs | Transitions: {N} | Epochs: {self.cfg.epochs_per_iter}")
@@ -222,6 +244,7 @@ class HeadTrainer:
                 loss_skills.backward()
                 nn.utils.clip_grad_norm_(params_skills, 1.0)
                 opt_skills.step()
+                last_skills_metrics = metrics_skills
                 if epoch == 0:
                     initial_ce_loss = metrics_skills["ce_loss"]
                 final_ce_loss = metrics_skills["ce_loss"]
@@ -336,8 +359,13 @@ class HeadTrainer:
             "reach_auroc": float(reach_auroc_hard),
             "death_recall": death_recall,
             "her_action_histogram": her_action_histogram,
+            "her_weight_mean": float(last_skills_metrics.get("her_weight_mean", 1.0)),
+            "her_weight_p95": float(last_skills_metrics.get("her_weight_p95", 1.0)),
+            "her_unlock_pair_fraction": float(last_skills_metrics.get("her_unlock_pair_fraction", 0.0)),
             "gates": gates,
         }
+        if extra_log:
+            log_entry.update(extra_log)
         with open(self.log_file, "a") as f:
             f.write(json.dumps(log_entry) + "\n")
 

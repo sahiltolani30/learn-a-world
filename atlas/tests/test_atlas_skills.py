@@ -15,6 +15,8 @@ def test_her_batch_shapes():
         "z": np.random.randn(T, 128).astype(np.float32),
         "h": np.random.randn(T, 256).astype(np.float32),
         "actions": np.random.randint(0, 17, size=(T,), dtype=np.int64),
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
     }
 
     batch = build_her_batch([ep], horizons=(5, 10))
@@ -41,7 +43,11 @@ def test_her_training_decreases_ce():
         h[t, t % 256] = 1.0
         actions[t] = t % 17
 
-    ep = {"z": z, "h": h, "actions": actions}
+    ep = {
+        "z": z, "h": h, "actions": actions,
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
+    }
     batch = build_her_batch([ep], horizons=(5,))
 
     option_net = OptionNet()
@@ -75,11 +81,15 @@ def test_reachability_discrimination():
         "z": np.ones((T, 128), dtype=np.float32),
         "h": np.zeros((T, 256), dtype=np.float32),
         "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
     }
     ep2 = {
         "z": -np.ones((T, 128), dtype=np.float32),
         "h": np.zeros((T, 256), dtype=np.float32),
         "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
     }
 
     batch = build_her_batch([ep1, ep2], horizons=(5,))
@@ -199,3 +209,92 @@ def test_frequency_balanced_her_loss():
         assert maj_contrib <= 2.0 * min_contrib, (
             f"Majority action CE contribution {maj_contrib:.4f} > 2x minority action {a} {min_contrib:.4f}"
         )
+
+
+def test_her_imitation_volume_full_tau():
+    """Verification F2: 3-episode synthetic batch produces >= 500 pairs and full tau coverage."""
+    T = 30
+    eps = []
+    for _ in range(3):
+        eps.append({
+            "z": np.random.randn(T, 128).astype(np.float32),
+            "h": np.random.randn(T, 256).astype(np.float32),
+            "actions": np.random.randint(0, 17, size=(T,), dtype=np.int64),
+            "rewards": np.zeros(T, dtype=np.float32),
+            "events": np.zeros((T, 22), dtype=bool),
+        })
+
+    batch = build_her_batch(eps, horizons=(5, 10, 20), max_samples=32768)
+    n_pos = len(batch["s_pos"])
+    assert n_pos >= 500, f"Expected >= 500 pairs, got {n_pos}"
+
+    # Single segment check: k=5 yields 5 positive pairs sharing the same goal
+    single_ep = [{
+        "z": np.arange(6 * 128, dtype=np.float32).reshape(6, 128),
+        "h": np.zeros((6, 256), dtype=np.float32),
+        "actions": np.arange(6, dtype=np.int64),
+        "rewards": np.zeros(6, dtype=np.float32),
+        "events": np.zeros((6, 22), dtype=bool),
+    }]
+    single_batch = build_her_batch(single_ep, horizons=(5,))
+    assert len(single_batch["s_pos"]) == 5, f"Expected 5 pairs for k=5, got {len(single_batch['s_pos'])}"
+    # All 5 pairs must share the same goal (z[0 + 5] = z[5])
+    expected_goal = single_ep[0]["z"][5]
+    for g in single_batch["g_pos"].cpu().numpy():
+        assert np.allclose(g, expected_goal)
+
+
+def test_reward_anchored_imitation_weights():
+    """Verification F3: reward weighting scales ~2x on +1 reward and return 9 clips to weight 5.0."""
+    T = 15
+    # Episode 1: unrewarded (rewards = 0)
+    ep_unrewarded = {
+        "z": np.random.randn(T, 128).astype(np.float32),
+        "h": np.random.randn(T, 256).astype(np.float32),
+        "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
+    }
+    # Episode 2: rewarded (+1 on step)
+    ep_rewarded = {
+        "z": np.random.randn(T, 128).astype(np.float32),
+        "h": np.random.randn(T, 256).astype(np.float32),
+        "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.ones(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
+    }
+
+    batch_unrew = build_her_batch([ep_unrewarded], horizons=(5,))
+    batch_rew = build_her_batch([ep_rewarded], horizons=(5,))
+
+    # Unrewarded return 0 -> weight = 1.0 + 0 = 1.0
+    # Rewarded return (k * 1 = 5) -> weight = 1.0 + min(5, 4.0) = 5.0, or with return 1: 1.0 + 1 = 2.0
+    ep_rew1 = {
+        "z": np.random.randn(T, 128).astype(np.float32),
+        "h": np.random.randn(T, 256).astype(np.float32),
+        "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.zeros(T, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
+    }
+    ep_rew1["rewards"][2] = 1.0  # single reward of 1 in segment
+    batch_rew1 = build_her_batch([ep_rew1], horizons=(5,))
+
+    # A segment with return 9 clips to weight 1.0 + min(9.0, 4.0) = 5.0
+    ep_clip = {
+        "z": np.random.randn(T, 128).astype(np.float32),
+        "h": np.random.randn(T, 256).astype(np.float32),
+        "actions": np.zeros(T, dtype=np.int64),
+        "rewards": np.full(T, 9.0, dtype=np.float32),
+        "events": np.zeros((T, 22), dtype=bool),
+    }
+    batch_clip = build_her_batch([ep_clip], horizons=(5,))
+    w_clip = batch_clip["weights_pos"].cpu().numpy()
+    assert np.allclose(w_clip, 5.0), f"Expected return 9 to clip to weight 5.0, got {w_clip}"
+
+    # Mean weight comparison: +1 reward gives 2.0 vs 1.0 (2x)
+    w_unrew = batch_unrew["weights_pos"].cpu().numpy()
+    w_rew1 = batch_rew1["weights_pos"].cpu().numpy()
+    # segments covering step 2 have weight 2.0; unrewarded segments have weight 1.0
+    assert np.isclose(w_unrew.mean(), 1.0)
+    assert w_rew1.max() == 2.0, f"Expected rewarded segment to have weight 2.0, got {w_rew1.max()}"
+

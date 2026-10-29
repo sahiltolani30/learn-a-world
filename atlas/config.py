@@ -112,6 +112,8 @@ class SkillsConfig:
     label_smoothing: float = 0.05  # policy CE label smoothing
     max_action_share: float = 0.25  # not used for subsampling; kept for reference/tests
     weight_clip: float = 50.0  # max per-sample imitation weight
+    her_reward_weight_max: float = 4.0
+    her_unlock_weight: float = 2.0
 
 
 @dataclass
@@ -154,6 +156,8 @@ class GoalsConfig:
     max_goals_per_dim: int = 15      # cap per achievement-dimension among "event" goals
     same_kind_dedupe: float = 0.90   # cos threshold to reject near-duplicate same-kind goals
     frontier_min_share: float = 0.20 # bank must keep >= 20% frontier goals
+    frontier_target_share: float = 0.35   # album share frontier may occupy at steady state
+    vital_target_share: float = 0.15
     lift_cap: float = 10.0
     lift_min_base_count: int = 20    # min firings of d to mine edge (d,e)
     lift_min_pair_support: int = 3   # min co-occurrence count k
@@ -178,6 +182,7 @@ class TrainConfig:
     epochs_per_iter: int = 6
     device: str = "auto"
     cache_latents: bool = True
+    her_max_pairs: int = 32_768
 
 
 @dataclass

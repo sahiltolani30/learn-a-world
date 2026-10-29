@@ -84,6 +84,12 @@ def parse_args():
     parser.add_argument("--checkpoint", type=str, default=None, help="Explicit backbone checkpoint path")
     parser.add_argument("--device", type=str, default="auto", help="Compute device (cuda | mps | cpu | auto)")
     parser.add_argument("--smoke", action="store_true", help="Quick smoke verification pass")
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        default=False,
+        help="Skip load_state, skip re-mine, start with empty banks from iteration 0",
+    )
     return parser.parse_args()
 
 
@@ -196,7 +202,24 @@ def main():
             print(f"Wall-clock budget: {args.minutes} minutes")
         print("=" * 70)
 
-        loop.run_iterations(num_iters=args.iters, minutes_budget=args.minutes)
+        marker_file = paths["runs_dir"] / "REMINED"
+        if args.fresh:
+            print("[SelfLearnLoop] Starting fresh (--fresh flag active). Skipping load_state and re-mine.")
+            loop.start_iter = 0
+            agent.resumed_from = {"run_id": "fresh", "iteration": 0}
+            agent.memory_source = "scratch"
+            agent.remine = False
+        else:
+            resume_iter = loop.load_state()
+            if resume_iter >= 39 and not marker_file.exists():
+                print(f"[SelfLearnLoop] Performing one-time memory repair pass (re-mine) at iteration {resume_iter}...")
+                remine_stats = loop.remine_shards()
+                print(f"[SelfLearnLoop] Re-mine complete: {remine_stats}")
+            agent.resumed_from = {"run_id": "atlas_v2_scratch", "iteration": 39}
+            agent.memory_source = "own_play_v2"
+            agent.remine = True
+
+        loop.run_iterations(num_iters=args.iters, minutes_budget=args.minutes, fresh=args.fresh)
         sync_results_to_repo(paths["results_dir"], drive_root=paths.get("drive_root"), runs_dir=paths.get("runs_dir"))
 
     elif args.phase == "screen":
@@ -207,6 +230,10 @@ def main():
         print("=" * 70)
 
         loop.load_state()
+        agent.resumed_from = {"run_id": "atlas_v2_scratch", "iteration": 39}
+        agent.memory_source = "own_play_v2"
+        agent.remine = True
+
         report = screen_agent(
             agent=agent,
             seeds=cfg.screen.seeds,
