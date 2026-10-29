@@ -58,17 +58,16 @@ class OfflineConsolidationEngine:
             # Rule 1: Milestone Preservation (Reward >= 0.9 or achievement unlock)
             if step.unlocked_achievement:
                 ach = step.unlocked_achievement
-                # Map achievement to clean physical item/entity produced
                 if ach.startswith("place_"):
-                    step_produces[f"{ach[len('place_'):]}_placed"] = 1
-                elif ach.startswith("collect_"):
-                    r_name = ach[len("collect_"):]
-                    step_produces[r_name] = max(step_produces.get(r_name, 0), 1)
+                    step_produces = {f"{ach[len('place_'):]}_placed": 1}
                 elif ach.startswith("make_"):
-                    tool_name = ach[len("make_"):]
-                    step_produces[tool_name] = max(step_produces.get(tool_name, 0), 1)
-                elif not step_produces:
-                    step_produces[ach] = 1
+                    step_produces = {ach[len("make_"):]: 1}
+                elif ach.startswith("collect_"):
+                    step_produces = {ach[len("collect_"):]: 1}
+                elif ach.startswith("smelt_"):
+                    step_produces = {ach[len("smelt_"):]: 1}
+                else:
+                    step_produces = {ach: 1}
 
                 # Only assembly/manufacturing achievements (e.g. make_*, smelt_*) require workstation catalysts.
                 # Primitive collections (collect_*), vitals (drink, eat, wake), and workstation placements (place_*) never require catalysts.
@@ -88,12 +87,6 @@ class OfflineConsolidationEngine:
                         dist = float(np.linalg.norm(step.displacement - episodic_store.workstation_pos))
                         if dist <= 1.5:
                             catalyst_needed = "table_placed"
-
-                # If achievement is collecting a resource, ensure it's not marked as consumed
-                if ach.startswith("collect_"):
-                    r_name = ach[len("collect_"):]
-                    step_produces[r_name] = max(step_produces.get(r_name, 0), 1)
-                    step_consumes.pop(r_name, None)
 
                 # Never consume what this step produces
                 for prod in step_produces:
