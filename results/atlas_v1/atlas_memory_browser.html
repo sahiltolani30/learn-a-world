@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ATLAS Proper Memory Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --gold: #d29922;
+      --red: #f85149;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+    }
+    h1 { color: #ffffff; margin-bottom: 6px; }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .stat-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-number { font-size: 32px; font-weight: bold; color: var(--blue); }
+    .stat-desc { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+    .section-title {
+      font-size: 20px;
+      color: #ffffff;
+      margin-top: 32px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .rule-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-green { background: rgba(63, 185, 80, 0.2); color: var(--green); }
+    .badge-gold { background: rgba(210, 153, 34, 0.2); color: var(--gold); }
+    .badge-red { background: rgba(248, 81, 73, 0.2); color: var(--red); }
+    .badge-blue { background: rgba(88, 166, 255, 0.2); color: var(--blue); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th { background: #21262d; color: #ffffff; }
+    input {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 6px;
+      width: 280px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 ATLAS Memory Browser</h1>
+  <p style="color: var(--text-dim);">Inspection of the 3 interconnected memory systems constructed by the agent across 99 iterations.</p>
+
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-number">21</div>
+      <div class="stat-desc">Learned Causal Rules (PredecessorLift)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-number">256</div>
+      <div class="stat-desc">Visual Goal Landmarks (GoalBank)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-number">4096</div>
+      <div class="stat-desc">Spatial Keyframe Nodes (TopoMap)</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-number">36</div>
+      <div class="stat-desc">Peak Landmark Visits</div>
+    </div>
+  </div>
+
+  <div class="section-title">🔗 1. Causal Memory (PredecessorLift): Cause & Effect Relationships</div>
+  <p style="color: var(--text-dim);">Statistical causality mined by ATLAS: Performing Event A increases probability of Event B.</p>
+  <div class="card-grid" id="causalGrid"></div>
+
+  <div class="section-title">🎯 2. Visual Goal Memory (GoalBank): Stored Visual Targets</div>
+  <p style="color: var(--text-dim);">128-d visual latent vectors stored in memory that the agent navigates toward.</p>
+  <input type="text" id="goalSearch" placeholder="Search by achievement (e.g. wood, cow)..." oninput="renderGoals()">
+  <table id="goalsTable">
+    <thead>
+      <tr>
+        <th>Goal ID</th>
+        <th>Associated Milestone / Item</th>
+        <th>Discovered Iteration</th>
+        <th>Navigation Attempts</th>
+        <th>Success Rate</th>
+      </tr>
+    </thead>
+    <tbody id="goalsBody"></tbody>
+  </table>
+
+  <script>
+    const rules = [{"from": "defeat_zombie", "to": "collect_drink", "lift": 50.0}, {"from": "defeat_zombie", "to": "collect_wood", "lift": 50.0}, {"from": "eat_cow", "to": "collect_wood", "lift": 50.0}, {"from": "place_plant", "to": "collect_wood", "lift": 50.0}, {"from": "place_plant", "to": "wake_up", "lift": 50.0}, {"from": "eat_cow", "to": "defeat_zombie", "lift": 49.3}, {"from": "eat_cow", "to": "collect_sapling", "lift": 32.6}, {"from": "collect_wood", "to": "collect_sapling", "lift": 30.5}, {"from": "place_plant", "to": "eat_cow", "lift": 29.4}, {"from": "defeat_zombie", "to": "collect_sapling", "lift": 27.7}, {"from": "place_plant", "to": "collect_sapling", "lift": 18.1}, {"from": "eat_cow", "to": "place_plant", "lift": 17.9}, {"from": "collect_sapling", "to": "place_plant", "lift": 14.5}, {"from": "collect_sapling", "to": "collect_wood", "lift": 12.4}, {"from": "collect_sapling", "to": "eat_cow", "lift": 11.5}, {"from": "collect_wood", "to": "place_plant", "lift": 10.9}, {"from": "collect_sapling", "to": "defeat_zombie", "lift": 9.9}, {"from": "collect_sapling", "to": "collect_drink", "lift": 8.9}, {"from": "place_plant", "to": "defeat_zombie", "lift": 8.8}, {"from": "defeat_zombie", "to": "eat_cow", "lift": 8.2}, {"from": "defeat_zombie", "to": "place_plant", "lift": 6.6}];
+    const goals = [{"id": 0, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 1, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 2, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 3, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 4, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 5, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 6, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 7, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 8, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 9, "achievements": ["collect_drink"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 10, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 11, "achievements": ["collect_sapling", "place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 12, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 13, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 14, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 15, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 16, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 17, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 18, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 19, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 20, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 21, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 22, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 23, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 24, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 25, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 26, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 27, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 28, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 29, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 30, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 31, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 32, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 33, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 34, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 35, "achievements": ["defeat_zombie"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 36, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 37, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 38, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 39, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 40, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 41, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 42, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 43, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 44, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 45, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 46, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 47, "achievements": ["collect_sapling", "place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 48, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 49, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 50, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 51, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 52, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 53, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 54, "achievements": ["eat_cow"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 55, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 56, "achievements": ["place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 57, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 58, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 59, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 60, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 61, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 62, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 63, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 64, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 65, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 66, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 67, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 68, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 69, "achievements": ["place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 70, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 71, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 72, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 73, "achievements": ["collect_sapling", "eat_cow"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 74, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 75, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 76, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 77, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 78, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 79, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 80, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 81, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 82, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 83, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 84, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 85, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 86, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 87, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 88, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 89, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 90, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 91, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 92, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 93, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 94, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 95, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 96, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 97, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 98, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 99, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 100, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 101, "achievements": ["collect_sapling", "place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 102, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 103, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 104, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 105, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 106, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 107, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 108, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 109, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 110, "achievements": ["collect_sapling"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 111, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 112, "achievements": ["collect_sapling", "place_plant"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 113, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}, {"id": 114, "achievements": ["collect_sapling"], "tries": 4307, "successes": 60, "born_iter": 7}, {"id": 115, "achievements": ["eat_cow", "place_plant", "collect_sapling"], "tries": 323, "successes": 5, "born_iter": 26}, {"id": 116, "achievements": ["eat_cow"], "tries": 155, "successes": 6, "born_iter": 51}, {"id": 117, "achievements": ["eat_cow", "collect_sapling"], "tries": 180, "successes": 7, "born_iter": 49}, {"id": 118, "achievements": ["collect_sapling"], "tries": 19, "successes": 1, "born_iter": 19}, {"id": 119, "achievements": ["collect_sapling"], "tries": 31, "successes": 2, "born_iter": 41}, {"id": 120, "achievements": ["eat_cow"], "tries": 223, "successes": 15, "born_iter": 74}, {"id": 121, "achievements": ["collect_sapling"], "tries": 44, "successes": 3, "born_iter": 17}, {"id": 122, "achievements": ["collect_sapling"], "tries": 131, "successes": 9, "born_iter": 73}, {"id": 123, "achievements": ["collect_sapling", "place_plant"], "tries": 537, "successes": 40, "born_iter": 21}, {"id": 124, "achievements": ["collect_sapling"], "tries": 65, "successes": 5, "born_iter": 44}, {"id": 125, "achievements": ["collect_sapling", "place_plant"], "tries": 13, "successes": 1, "born_iter": 59}, {"id": 126, "achievements": ["collect_sapling"], "tries": 24, "successes": 2, "born_iter": 28}, {"id": 127, "achievements": ["collect_sapling"], "tries": 24, "successes": 2, "born_iter": 36}, {"id": 128, "achievements": ["collect_sapling"], "tries": 187, "successes": 16, "born_iter": 29}, {"id": 129, "achievements": ["defeat_zombie"], "tries": 10, "successes": 1, "born_iter": 24}, {"id": 130, "achievements": ["defeat_zombie"], "tries": 34, "successes": 4, "born_iter": 58}, {"id": 131, "achievements": ["collect_sapling"], "tries": 8, "successes": 1, "born_iter": 20}, {"id": 132, "achievements": ["collect_sapling"], "tries": 8, "successes": 1, "born_iter": 57}, {"id": 133, "achievements": ["collect_sapling", "place_plant"], "tries": 105, "successes": 14, "born_iter": 3}, {"id": 134, "achievements": ["collect_sapling", "place_plant"], "tries": 130, "successes": 18, "born_iter": 14}, {"id": 135, "achievements": ["collect_sapling", "place_plant"], "tries": 14, "successes": 2, "born_iter": 42}, {"id": 136, "achievements": ["collect_sapling"], "tries": 7, "successes": 1, "born_iter": 59}, {"id": 137, "achievements": ["collect_sapling"], "tries": 21, "successes": 3, "born_iter": 69}, {"id": 138, "achievements": ["collect_sapling"], "tries": 13, "successes": 2, "born_iter": 38}, {"id": 139, "achievements": ["eat_cow", "place_plant"], "tries": 57, "successes": 9, "born_iter": 18}, {"id": 140, "achievements": ["collect_sapling"], "tries": 6, "successes": 1, "born_iter": 17}, {"id": 141, "achievements": ["place_plant", "collect_sapling"], "tries": 12, "successes": 2, "born_iter": 45}, {"id": 142, "achievements": ["defeat_zombie", "collect_sapling"], "tries": 77, "successes": 13, "born_iter": 62}, {"id": 143, "achievements": ["collect_sapling", "defeat_zombie"], "tries": 89, "successes": 16, "born_iter": 53}, {"id": 144, "achievements": ["defeat_zombie", "collect_sapling"], "tries": 11, "successes": 2, "born_iter": 2}, {"id": 145, "achievements": ["collect_sapling"], "tries": 49, "successes": 9, "born_iter": 44}, {"id": 146, "achievements": ["collect_sapling"], "tries": 40, "successes": 8, "born_iter": 3}, {"id": 147, "achievements": ["General Landmark"], "tries": 15, "successes": 3, "born_iter": 16}, {"id": 148, "achievements": ["collect_sapling"], "tries": 5, "successes": 1, "born_iter": 18}, {"id": 149, "achievements": ["collect_sapling"], "tries": 44, "successes": 9, "born_iter": 18}, {"id": 150, "achievements": ["collect_sapling"], "tries": 125, "successes": 27, "born_iter": 38}, {"id": 151, "achievements": ["place_plant", "collect_sapling"], "tries": 46, "successes": 10, "born_iter": 36}, {"id": 152, "achievements": ["collect_sapling", "place_plant"], "tries": 9, "successes": 2, "born_iter": 10}, {"id": 153, "achievements": ["collect_sapling"], "tries": 9, "successes": 2, "born_iter": 18}, {"id": 154, "achievements": ["place_plant"], "tries": 9, "successes": 2, "born_iter": 90}, {"id": 155, "achievements": ["place_plant", "collect_sapling"], "tries": 25, "successes": 6, "born_iter": 4}, {"id": 156, "achievements": ["collect_sapling", "place_plant"], "tries": 33, "successes": 8, "born_iter": 8}, {"id": 157, "achievements": ["collect_sapling"], "tries": 131, "successes": 32, "born_iter": 32}, {"id": 158, "achievements": ["General Landmark"], "tries": 4, "successes": 1, "born_iter": 15}, {"id": 159, "achievements": ["place_plant", "collect_sapling"], "tries": 24, "successes": 6, "born_iter": 38}, {"id": 160, "achievements": ["collect_sapling"], "tries": 16, "successes": 4, "born_iter": 43}, {"id": 161, "achievements": ["collect_sapling"], "tries": 16, "successes": 4, "born_iter": 47}, {"id": 162, "achievements": ["collect_sapling"], "tries": 4, "successes": 1, "born_iter": 98}, {"id": 163, "achievements": ["collect_sapling", "place_plant"], "tries": 48, "successes": 13, "born_iter": 24}, {"id": 164, "achievements": ["place_plant", "collect_sapling"], "tries": 103, "successes": 28, "born_iter": 22}, {"id": 165, "achievements": ["collect_sapling", "place_plant"], "tries": 7, "successes": 2, "born_iter": 9}, {"id": 166, "achievements": ["collect_sapling"], "tries": 7, "successes": 2, "born_iter": 34}, {"id": 167, "achievements": ["collect_sapling"], "tries": 28, "successes": 8, "born_iter": 48}, {"id": 168, "achievements": ["collect_sapling"], "tries": 286, "successes": 82, "born_iter": 3}, {"id": 169, "achievements": ["collect_sapling", "place_plant"], "tries": 62, "successes": 18, "born_iter": 2}, {"id": 170, "achievements": ["place_plant"], "tries": 41, "successes": 12, "born_iter": 29}, {"id": 171, "achievements": ["place_plant", "collect_sapling"], "tries": 203, "successes": 61, "born_iter": 65}, {"id": 172, "achievements": ["collect_sapling"], "tries": 19, "successes": 6, "born_iter": 79}, {"id": 173, "achievements": ["place_plant"], "tries": 6, "successes": 2, "born_iter": 9}, {"id": 174, "achievements": ["collect_sapling"], "tries": 6, "successes": 2, "born_iter": 24}, {"id": 175, "achievements": ["collect_sapling"], "tries": 3, "successes": 1, "born_iter": 39}, {"id": 176, "achievements": ["collect_sapling"], "tries": 3, "successes": 1, "born_iter": 40}, {"id": 177, "achievements": ["collect_sapling", "defeat_zombie"], "tries": 117, "successes": 40, "born_iter": 50}, {"id": 178, "achievements": ["collect_sapling"], "tries": 96, "successes": 33, "born_iter": 15}, {"id": 179, "achievements": ["collect_sapling"], "tries": 14, "successes": 5, "born_iter": 26}, {"id": 180, "achievements": ["collect_sapling", "place_plant"], "tries": 8, "successes": 3, "born_iter": 6}, {"id": 181, "achievements": ["collect_sapling"], "tries": 8, "successes": 3, "born_iter": 15}, {"id": 182, "achievements": ["collect_sapling", "place_plant"], "tries": 34, "successes": 13, "born_iter": 16}, {"id": 183, "achievements": ["collect_sapling"], "tries": 5, "successes": 2, "born_iter": 34}, {"id": 184, "achievements": ["collect_sapling"], "tries": 5, "successes": 2, "born_iter": 76}, {"id": 185, "achievements": ["collect_sapling", "place_plant"], "tries": 24, "successes": 10, "born_iter": 34}, {"id": 186, "achievements": ["collect_sapling", "place_plant"], "tries": 50, "successes": 21, "born_iter": 10}, {"id": 187, "achievements": ["collect_sapling", "place_plant"], "tries": 7, "successes": 3, "born_iter": 86}, {"id": 188, "achievements": ["place_plant", "collect_sapling"], "tries": 15, "successes": 7, "born_iter": 37}, {"id": 189, "achievements": ["collect_sapling", "place_plant"], "tries": 21, "successes": 10, "born_iter": 81}, {"id": 190, "achievements": ["collect_sapling"], "tries": 2, "successes": 1, "born_iter": 9}, {"id": 191, "achievements": ["collect_sapling"], "tries": 2, "successes": 1, "born_iter": 12}, {"id": 192, "achievements": ["collect_sapling"], "tries": 12, "successes": 6, "born_iter": 34}, {"id": 193, "achievements": ["place_plant", "collect_sapling"], "tries": 2, "successes": 1, "born_iter": 36}, {"id": 194, "achievements": ["collect_sapling", "place_plant"], "tries": 2, "successes": 1, "born_iter": 37}, {"id": 195, "achievements": ["collect_sapling", "place_plant"], "tries": 4, "successes": 2, "born_iter": 39}, {"id": 196, "achievements": ["collect_sapling"], "tries": 2, "successes": 1, "born_iter": 39}, {"id": 197, "achievements": ["collect_sapling", "place_plant"], "tries": 2, "successes": 1, "born_iter": 49}, {"id": 198, "achievements": ["collect_sapling"], "tries": 2, "successes": 1, "born_iter": 54}, {"id": 199, "achievements": ["collect_sapling", "place_plant"], "tries": 2, "successes": 1, "born_iter": 59}, {"id": 200, "achievements": ["collect_sapling"], "tries": 4, "successes": 2, "born_iter": 64}, {"id": 201, "achievements": ["collect_sapling", "defeat_zombie"], "tries": 6, "successes": 3, "born_iter": 97}, {"id": 202, "achievements": ["collect_sapling", "place_plant"], "tries": 83, "successes": 43, "born_iter": 63}, {"id": 203, "achievements": ["collect_sapling", "place_plant"], "tries": 23, "successes": 13, "born_iter": 0}, {"id": 204, "achievements": ["collect_sapling", "place_plant"], "tries": 97, "successes": 55, "born_iter": 51}, {"id": 205, "achievements": ["collect_sapling", "place_plant"], "tries": 14, "successes": 8, "born_iter": 7}, {"id": 206, "achievements": ["collect_sapling", "place_plant"], "tries": 7, "successes": 4, "born_iter": 30}, {"id": 207, "achievements": ["collect_sapling", "place_plant"], "tries": 19, "successes": 11, "born_iter": 28}, {"id": 208, "achievements": ["place_plant", "collect_sapling"], "tries": 38, "successes": 22, "born_iter": 60}, {"id": 209, "achievements": ["collect_sapling", "place_plant"], "tries": 15, "successes": 9, "born_iter": 3}, {"id": 210, "achievements": ["collect_sapling", "place_plant"], "tries": 10, "successes": 6, "born_iter": 16}, {"id": 211, "achievements": ["collect_sapling", "place_plant"], "tries": 13, "successes": 8, "born_iter": 8}, {"id": 212, "achievements": ["collect_sapling", "place_plant"], "tries": 94, "successes": 58, "born_iter": 47}, {"id": 213, "achievements": ["collect_sapling", "place_plant"], "tries": 61, "successes": 38, "born_iter": 23}, {"id": 214, "achievements": ["collect_sapling", "place_plant"], "tries": 8, "successes": 5, "born_iter": 23}, {"id": 215, "achievements": ["collect_sapling", "place_plant"], "tries": 27, "successes": 17, "born_iter": 2}, {"id": 216, "achievements": ["collect_sapling", "place_plant"], "tries": 25, "successes": 16, "born_iter": 18}, {"id": 217, "achievements": ["collect_sapling", "place_plant"], "tries": 118, "successes": 76, "born_iter": 3}, {"id": 218, "achievements": ["collect_sapling"], "tries": 3, "successes": 2, "born_iter": 10}, {"id": 219, "achievements": ["collect_sapling"], "tries": 3, "successes": 2, "born_iter": 36}, {"id": 220, "achievements": ["collect_sapling", "place_plant"], "tries": 69, "successes": 49, "born_iter": 73}, {"id": 221, "achievements": ["collect_sapling"], "tries": 15, "successes": 11, "born_iter": 60}, {"id": 222, "achievements": ["collect_sapling", "place_plant"], "tries": 4, "successes": 3, "born_iter": 18}, {"id": 223, "achievements": ["place_plant", "collect_sapling"], "tries": 8, "successes": 6, "born_iter": 24}, {"id": 224, "achievements": ["collect_sapling"], "tries": 12, "successes": 9, "born_iter": 25}, {"id": 225, "achievements": ["place_plant", "collect_sapling"], "tries": 4, "successes": 3, "born_iter": 49}, {"id": 226, "achievements": ["eat_cow", "collect_sapling"], "tries": 4, "successes": 3, "born_iter": 58}, {"id": 227, "achievements": ["defeat_zombie", "collect_sapling"], "tries": 8, "successes": 6, "born_iter": 60}, {"id": 228, "achievements": ["collect_sapling"], "tries": 4, "successes": 3, "born_iter": 78}, {"id": 229, "achievements": ["place_plant", "collect_sapling"], "tries": 21, "successes": 16, "born_iter": 47}, {"id": 230, "achievements": ["collect_sapling", "place_plant"], "tries": 5, "successes": 4, "born_iter": 2}, {"id": 231, "achievements": ["collect_sapling", "place_plant"], "tries": 6, "successes": 5, "born_iter": 63}, {"id": 232, "achievements": ["collect_sapling", "place_plant"], "tries": 8, "successes": 7, "born_iter": 10}, {"id": 233, "achievements": ["place_plant", "collect_sapling"], "tries": 24, "successes": 21, "born_iter": 64}, {"id": 234, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 13}, {"id": 235, "achievements": ["collect_sapling", "place_plant"], "tries": 3, "successes": 3, "born_iter": 14}, {"id": 236, "achievements": ["General Landmark"], "tries": 1, "successes": 1, "born_iter": 18}, {"id": 237, "achievements": ["collect_sapling", "place_plant"], "tries": 5, "successes": 5, "born_iter": 21}, {"id": 238, "achievements": ["collect_sapling", "place_plant"], "tries": 1, "successes": 1, "born_iter": 21}, {"id": 239, "achievements": ["collect_sapling"], "tries": 3, "successes": 3, "born_iter": 26}, {"id": 240, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 29}, {"id": 241, "achievements": ["place_plant", "collect_sapling"], "tries": 11, "successes": 11, "born_iter": 31}, {"id": 242, "achievements": ["collect_sapling", "place_plant"], "tries": 1, "successes": 1, "born_iter": 33}, {"id": 243, "achievements": ["collect_sapling", "place_plant"], "tries": 1, "successes": 1, "born_iter": 34}, {"id": 244, "achievements": ["place_plant", "collect_sapling"], "tries": 1, "successes": 1, "born_iter": 39}, {"id": 245, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 40}, {"id": 246, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 42}, {"id": 247, "achievements": ["collect_sapling", "place_plant"], "tries": 7, "successes": 7, "born_iter": 43}, {"id": 248, "achievements": ["place_plant"], "tries": 1, "successes": 1, "born_iter": 61}, {"id": 249, "achievements": ["place_plant"], "tries": 1, "successes": 1, "born_iter": 78}, {"id": 250, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 79}, {"id": 251, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 82}, {"id": 252, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 84}, {"id": 253, "achievements": ["collect_sapling", "place_plant"], "tries": 2, "successes": 2, "born_iter": 85}, {"id": 254, "achievements": ["collect_sapling"], "tries": 1, "successes": 1, "born_iter": 93}, {"id": 255, "achievements": ["General Landmark"], "tries": 0, "successes": 0, "born_iter": 101}];
+
+    function renderCausal() {
+      const grid = document.getElementById('causalGrid');
+      grid.innerHTML = '';
+      rules.slice(0, 12).forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'rule-card';
+        card.innerHTML = `
+          <div>
+            <span class="badge badge-green">${r.from}</span>
+            <span style="margin: 0 8px; color: var(--text-dim);">──▶</span>
+            <span class="badge badge-gold">${r.to}</span>
+          </div>
+          <div style="font-weight: bold; color: var(--gold); font-size: 15px;">+${r.lift}x</div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderGoals() {
+      const q = document.getElementById('goalSearch').value.toLowerCase();
+      const body = document.getElementById('goalsBody');
+      body.innerHTML = '';
+
+      const filtered = goals.filter(g => g.achievements.join(' ').toLowerCase().includes(q));
+      filtered.slice(0, 50).forEach(g => {
+        const tr = document.createElement('tr');
+        const achs = g.achievements.map(a => `<span class="badge badge-blue">${a}</span>`).join(' ');
+        const rate = g.tries > 0 ? ((g.successes / g.tries) * 100).toFixed(0) + '%' : '0%';
+        tr.innerHTML = `
+          <td><strong>Goal #${g.id}</strong></td>
+          <td>${achs}</td>
+          <td>Iter ${g.born_iter}</td>
+          <td>${g.tries} times</td>
+          <td>${g.successes} / ${g.tries} (${rate})</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    renderCausal();
+    renderGoals();
+  </script>
+</body>
+</html>

@@ -1,0 +1,2608 @@
+[
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      2
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      8
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      9
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4,
+      9
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 4307,
+    "n_succ": 60,
+    "born_iter": 7,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      9,
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 323,
+    "n_succ": 5,
+    "born_iter": 26,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      9
+    ],
+    "kind": "event",
+    "n_try": 155,
+    "n_succ": 6,
+    "born_iter": 51,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      9,
+      4
+    ],
+    "kind": "event",
+    "n_try": 180,
+    "n_succ": 7,
+    "born_iter": 49,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 19,
+    "n_succ": 1,
+    "born_iter": 19,
+    "last_used_iter": 85
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 31,
+    "n_succ": 2,
+    "born_iter": 41,
+    "last_used_iter": 53
+  },
+  {
+    "event_dims": [
+      9
+    ],
+    "kind": "event",
+    "n_try": 223,
+    "n_succ": 15,
+    "born_iter": 74,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 44,
+    "n_succ": 3,
+    "born_iter": 17,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 131,
+    "n_succ": 9,
+    "born_iter": 73,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 537,
+    "n_succ": 40,
+    "born_iter": 21,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 65,
+    "n_succ": 5,
+    "born_iter": 44,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 13,
+    "n_succ": 1,
+    "born_iter": 59,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 24,
+    "n_succ": 2,
+    "born_iter": 28,
+    "last_used_iter": 98
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 24,
+    "n_succ": 2,
+    "born_iter": 36,
+    "last_used_iter": 42
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 187,
+    "n_succ": 16,
+    "born_iter": 29,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      8
+    ],
+    "kind": "frontier",
+    "n_try": 10,
+    "n_succ": 1,
+    "born_iter": 24,
+    "last_used_iter": 36
+  },
+  {
+    "event_dims": [
+      8
+    ],
+    "kind": "event",
+    "n_try": 34,
+    "n_succ": 4,
+    "born_iter": 58,
+    "last_used_iter": 72
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 1,
+    "born_iter": 20,
+    "last_used_iter": 74
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 1,
+    "born_iter": 57,
+    "last_used_iter": 62
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "frontier",
+    "n_try": 105,
+    "n_succ": 14,
+    "born_iter": 3,
+    "last_used_iter": 29
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 130,
+    "n_succ": 18,
+    "born_iter": 14,
+    "last_used_iter": 84
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 14,
+    "n_succ": 2,
+    "born_iter": 42,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 1,
+    "born_iter": 59,
+    "last_used_iter": 92
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 21,
+    "n_succ": 3,
+    "born_iter": 69,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 13,
+    "n_succ": 2,
+    "born_iter": 38,
+    "last_used_iter": 94
+  },
+  {
+    "event_dims": [
+      9,
+      18
+    ],
+    "kind": "event",
+    "n_try": 57,
+    "n_succ": 9,
+    "born_iter": 18,
+    "last_used_iter": 90
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 6,
+    "n_succ": 1,
+    "born_iter": 17,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 12,
+    "n_succ": 2,
+    "born_iter": 45,
+    "last_used_iter": 77
+  },
+  {
+    "event_dims": [
+      8,
+      4
+    ],
+    "kind": "event",
+    "n_try": 77,
+    "n_succ": 13,
+    "born_iter": 62,
+    "last_used_iter": 97
+  },
+  {
+    "event_dims": [
+      4,
+      8
+    ],
+    "kind": "event",
+    "n_try": 89,
+    "n_succ": 16,
+    "born_iter": 53,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      8,
+      4
+    ],
+    "kind": "event",
+    "n_try": 11,
+    "n_succ": 2,
+    "born_iter": 2,
+    "last_used_iter": 4
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 49,
+    "n_succ": 9,
+    "born_iter": 44,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 40,
+    "n_succ": 8,
+    "born_iter": 3,
+    "last_used_iter": 48
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 15,
+    "n_succ": 3,
+    "born_iter": 16,
+    "last_used_iter": 20
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 5,
+    "n_succ": 1,
+    "born_iter": 18,
+    "last_used_iter": 34
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 44,
+    "n_succ": 9,
+    "born_iter": 18,
+    "last_used_iter": 95
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 125,
+    "n_succ": 27,
+    "born_iter": 38,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 46,
+    "n_succ": 10,
+    "born_iter": 36,
+    "last_used_iter": 97
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 9,
+    "n_succ": 2,
+    "born_iter": 10,
+    "last_used_iter": 39
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 9,
+    "n_succ": 2,
+    "born_iter": 18,
+    "last_used_iter": 84
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 9,
+    "n_succ": 2,
+    "born_iter": 90,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 25,
+    "n_succ": 6,
+    "born_iter": 4,
+    "last_used_iter": 5
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "frontier",
+    "n_try": 33,
+    "n_succ": 8,
+    "born_iter": 8,
+    "last_used_iter": 17
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 131,
+    "n_succ": 32,
+    "born_iter": 32,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 4,
+    "n_succ": 1,
+    "born_iter": 15,
+    "last_used_iter": 17
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 24,
+    "n_succ": 6,
+    "born_iter": 38,
+    "last_used_iter": 80
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 16,
+    "n_succ": 4,
+    "born_iter": 43,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 16,
+    "n_succ": 4,
+    "born_iter": 47,
+    "last_used_iter": 81
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 1,
+    "born_iter": 98,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 48,
+    "n_succ": 13,
+    "born_iter": 24,
+    "last_used_iter": 96
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 103,
+    "n_succ": 28,
+    "born_iter": 22,
+    "last_used_iter": 94
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 2,
+    "born_iter": 9,
+    "last_used_iter": 65
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 2,
+    "born_iter": 34,
+    "last_used_iter": 81
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 28,
+    "n_succ": 8,
+    "born_iter": 48,
+    "last_used_iter": 97
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 286,
+    "n_succ": 82,
+    "born_iter": 3,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 62,
+    "n_succ": 18,
+    "born_iter": 2,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 41,
+    "n_succ": 12,
+    "born_iter": 29,
+    "last_used_iter": 67
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 203,
+    "n_succ": 61,
+    "born_iter": 65,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 19,
+    "n_succ": 6,
+    "born_iter": 79,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 6,
+    "n_succ": 2,
+    "born_iter": 9,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 6,
+    "n_succ": 2,
+    "born_iter": 24,
+    "last_used_iter": 32
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 3,
+    "n_succ": 1,
+    "born_iter": 39,
+    "last_used_iter": 83
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 3,
+    "n_succ": 1,
+    "born_iter": 40,
+    "last_used_iter": 46
+  },
+  {
+    "event_dims": [
+      4,
+      8
+    ],
+    "kind": "event",
+    "n_try": 117,
+    "n_succ": 40,
+    "born_iter": 50,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 96,
+    "n_succ": 33,
+    "born_iter": 15,
+    "last_used_iter": 97
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 14,
+    "n_succ": 5,
+    "born_iter": 26,
+    "last_used_iter": 35
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 3,
+    "born_iter": 6,
+    "last_used_iter": 14
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 3,
+    "born_iter": 15,
+    "last_used_iter": 93
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 34,
+    "n_succ": 13,
+    "born_iter": 16,
+    "last_used_iter": 81
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 5,
+    "n_succ": 2,
+    "born_iter": 34,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 5,
+    "n_succ": 2,
+    "born_iter": 76,
+    "last_used_iter": 94
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 24,
+    "n_succ": 10,
+    "born_iter": 34,
+    "last_used_iter": 91
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 50,
+    "n_succ": 21,
+    "born_iter": 10,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 3,
+    "born_iter": 86,
+    "last_used_iter": 89
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 15,
+    "n_succ": 7,
+    "born_iter": 37,
+    "last_used_iter": 91
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 21,
+    "n_succ": 10,
+    "born_iter": 81,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 9,
+    "last_used_iter": 18
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 12,
+    "last_used_iter": 14
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 12,
+    "n_succ": 6,
+    "born_iter": 34,
+    "last_used_iter": 68
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 36,
+    "last_used_iter": 37
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 37,
+    "last_used_iter": 38
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 2,
+    "born_iter": 39,
+    "last_used_iter": 40
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 39,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 49,
+    "last_used_iter": 54
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 54,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 1,
+    "born_iter": 59,
+    "last_used_iter": 60
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 2,
+    "born_iter": 64,
+    "last_used_iter": 66
+  },
+  {
+    "event_dims": [
+      4,
+      8
+    ],
+    "kind": "event",
+    "n_try": 6,
+    "n_succ": 3,
+    "born_iter": 97,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 83,
+    "n_succ": 43,
+    "born_iter": 63,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 23,
+    "n_succ": 13,
+    "born_iter": 0,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 97,
+    "n_succ": 55,
+    "born_iter": 51,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "frontier",
+    "n_try": 14,
+    "n_succ": 8,
+    "born_iter": 7,
+    "last_used_iter": 68
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 4,
+    "born_iter": 30,
+    "last_used_iter": 40
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 19,
+    "n_succ": 11,
+    "born_iter": 28,
+    "last_used_iter": 31
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 38,
+    "n_succ": 22,
+    "born_iter": 60,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 15,
+    "n_succ": 9,
+    "born_iter": 3,
+    "last_used_iter": 87
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "frontier",
+    "n_try": 10,
+    "n_succ": 6,
+    "born_iter": 16,
+    "last_used_iter": 98
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 13,
+    "n_succ": 8,
+    "born_iter": 8,
+    "last_used_iter": 93
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 94,
+    "n_succ": 58,
+    "born_iter": 47,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 61,
+    "n_succ": 38,
+    "born_iter": 23,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 5,
+    "born_iter": 23,
+    "last_used_iter": 25
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 27,
+    "n_succ": 17,
+    "born_iter": 2,
+    "last_used_iter": 93
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 25,
+    "n_succ": 16,
+    "born_iter": 18,
+    "last_used_iter": 100
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 118,
+    "n_succ": 76,
+    "born_iter": 3,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "frontier",
+    "n_try": 3,
+    "n_succ": 2,
+    "born_iter": 10,
+    "last_used_iter": 13
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 3,
+    "n_succ": 2,
+    "born_iter": 36,
+    "last_used_iter": 59
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 69,
+    "n_succ": 49,
+    "born_iter": 73,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 15,
+    "n_succ": 11,
+    "born_iter": 60,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "frontier",
+    "n_try": 4,
+    "n_succ": 3,
+    "born_iter": 18,
+    "last_used_iter": 22
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 6,
+    "born_iter": 24,
+    "last_used_iter": 78
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 12,
+    "n_succ": 9,
+    "born_iter": 25,
+    "last_used_iter": 89
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 3,
+    "born_iter": 49,
+    "last_used_iter": 59
+  },
+  {
+    "event_dims": [
+      9,
+      4
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 3,
+    "born_iter": 58,
+    "last_used_iter": 62
+  },
+  {
+    "event_dims": [
+      8,
+      4
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 6,
+    "born_iter": 60,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 4,
+    "n_succ": 3,
+    "born_iter": 78,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 21,
+    "n_succ": 16,
+    "born_iter": 47,
+    "last_used_iter": 101
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 5,
+    "n_succ": 4,
+    "born_iter": 2,
+    "last_used_iter": 78
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 6,
+    "n_succ": 5,
+    "born_iter": 63,
+    "last_used_iter": 86
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 8,
+    "n_succ": 7,
+    "born_iter": 10,
+    "last_used_iter": 77
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 24,
+    "n_succ": 21,
+    "born_iter": 64,
+    "last_used_iter": 99
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 13,
+    "last_used_iter": 14
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 3,
+    "n_succ": 3,
+    "born_iter": 14,
+    "last_used_iter": 34
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 18,
+    "last_used_iter": 19
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 5,
+    "n_succ": 5,
+    "born_iter": 21,
+    "last_used_iter": 78
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 21,
+    "last_used_iter": 22
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 3,
+    "n_succ": 3,
+    "born_iter": 26,
+    "last_used_iter": 29
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 29,
+    "last_used_iter": 29
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 11,
+    "n_succ": 11,
+    "born_iter": 31,
+    "last_used_iter": 35
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 33,
+    "last_used_iter": 34
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 34,
+    "last_used_iter": 36
+  },
+  {
+    "event_dims": [
+      18,
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 39,
+    "last_used_iter": 39
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 40,
+    "last_used_iter": 41
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 42,
+    "last_used_iter": 43
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 7,
+    "n_succ": 7,
+    "born_iter": 43,
+    "last_used_iter": 73
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 61,
+    "last_used_iter": 62
+  },
+  {
+    "event_dims": [
+      18
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 78,
+    "last_used_iter": 79
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 79,
+    "last_used_iter": 80
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 82,
+    "last_used_iter": 83
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 84,
+    "last_used_iter": 85
+  },
+  {
+    "event_dims": [
+      4,
+      18
+    ],
+    "kind": "event",
+    "n_try": 2,
+    "n_succ": 2,
+    "born_iter": 85,
+    "last_used_iter": 88
+  },
+  {
+    "event_dims": [
+      4
+    ],
+    "kind": "event",
+    "n_try": 1,
+    "n_succ": 1,
+    "born_iter": 93,
+    "last_used_iter": 94
+  },
+  {
+    "event_dims": [],
+    "kind": "frontier",
+    "n_try": 0,
+    "n_succ": 0,
+    "born_iter": 101,
+    "last_used_iter": 0
+  }
+]

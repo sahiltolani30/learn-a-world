@@ -1,0 +1,297 @@
+{
+  "iter": 95,
+  "seed": 19503,
+  "game_id": "it95_seed19503",
+  "length": 30,
+  "total_reward": 0.1,
+  "died": true,
+  "achievements": [
+    "collect_sapling"
+  ],
+  "num_achievements": 1,
+  "mode_counts": {
+    "NAVIGATE": 30
+  },
+  "overrides_count": 1,
+  "steps": [
+    {
+      "t": 0,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.68, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 1,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.68, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 2,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.68, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 3,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.69, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 4,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.65, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 5,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.58, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 6,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.56, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 7,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.57, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 8,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #449 (arrival_cos: 0.58, goal_score: 2.56, risk: 0.00)."
+    },
+    {
+      "t": 9,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.50, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 10,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.48, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 11,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.49, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 12,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.44, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 13,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.44, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 14,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 1.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.33, goal_score: 2.54, risk: 0.00).",
+      "unlocked": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "t": 15,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": -0.2,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.67, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 16,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.53, goal_score: 2.54, risk: 0.00)."
+    },
+    {
+      "t": 17,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #488 (arrival_cos: 0.44, goal_score: 2.54, risk: 0.00).",
+      "unlocked": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "t": 18,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.33, goal_score: 2.05, risk: 0.00).",
+      "unlocked": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "t": 19,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": -0.2,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.23, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 20,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.48, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 21,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.23, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 22,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.07, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 23,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": -0.2,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.02, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 24,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.002,
+      "override": false,
+      "r": -0.2,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.12, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 25,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.0,
+      "override": false,
+      "r": 0.1,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.18, goal_score: 2.05, risk: 0.00)."
+    },
+    {
+      "t": 26,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.033,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.04, goal_score: 2.05, risk: 0.03)."
+    },
+    {
+      "t": 27,
+      "a": "place_table",
+      "mode": "NAVIGATE",
+      "risk": 0.655,
+      "override": true,
+      "r": 0.0,
+      "reason": "SAFETY OVERRIDE: Intended 'do' had high risk (0.66 > 0.50). Safest action 'place_table' chosen instead (risk: 0.14)."
+    },
+    {
+      "t": 28,
+      "a": "move_down",
+      "mode": "NAVIGATE",
+      "risk": 0.981,
+      "override": false,
+      "r": 0.0,
+      "reason": "NAVIGATE: OptionNet chose 'move_down' pursuing Goal key #452 (arrival_cos: -0.04, goal_score: 1.66, risk: 0.98)."
+    },
+    {
+      "t": 29,
+      "a": "do",
+      "mode": "NAVIGATE",
+      "risk": 0.388,
+      "override": false,
+      "r": -0.2,
+      "reason": "NAVIGATE: OptionNet chose 'do' pursuing Goal key #452 (arrival_cos: 0.04, goal_score: 1.66, risk: 0.39)."
+    }
+  ]
+}
