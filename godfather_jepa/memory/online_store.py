@@ -86,7 +86,8 @@ class OnlineEpisodicStore:
 
         if unlocked_achievement:
             self.milestones_unlocked.append(unlocked_achievement)
-            if is_mass_deposition or unlocked_achievement in KNOWN_FIXTURES or unlocked_achievement in REVERSE_FIXTURES:
+            is_fixture_ach = is_mass_deposition or (unlocked_achievement in KNOWN_FIXTURES) or (unlocked_achievement in REVERSE_FIXTURES)
+            if is_fixture_ach:
                 station_key = unlocked_achievement
                 self.placed_workstations[station_key] = (step_idx, self.current_displacement.copy())
                 alias = get_fixture_alias(unlocked_achievement)

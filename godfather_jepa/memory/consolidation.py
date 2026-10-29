@@ -37,8 +37,10 @@ class OfflineConsolidationEngine:
 
     def __init__(self, semantic_bank: Optional[SemanticConsolidatedBank] = None):
         self.bank = semantic_bank or SemanticConsolidatedBank()
-        self.catalyst_counts: Dict[str, Dict[str, int]] = {}
+        self.catalyst_support: Dict[str, Dict[str, int]] = {}
+        self.catalyst_falsified: Dict[str, Dict[str, int]] = {}
         self.catalyst_lags: Dict[str, Dict[str, float]] = {}
+        self.all_known_entities: Set[str] = set()
 
     def consolidate_episode(self, episodic_store: OnlineEpisodicStore) -> Dict[str, Any]:
         """
@@ -71,14 +73,15 @@ class OfflineConsolidationEngine:
                 phi_plus = sum(step_produces.values())
                 is_fixture = (phi_minus > 0 and phi_plus == 0) or (ach in KNOWN_FIXTURES) or (ach in REVERSE_FIXTURES)
 
-                # If visual decoding did not produce an inventory item delta (e.g. world placement or synthetic step),
-                # map milestone to target semantic entity
                 if not step_produces:
                     if ach in SEMANTIC_MILESTONE_PRODUCTS:
                         prod_item = SEMANTIC_MILESTONE_PRODUCTS[ach]
                         step_produces = {prod_item: 1}
-                        if ach in KNOWN_FIXTURES:
+                        if is_fixture:
+                            alias = get_fixture_alias(ach)
                             step_produces[ach] = 1
+                            if alias != ach:
+                                step_produces[alias] = 1
                     elif is_fixture:
                         alias = get_fixture_alias(ach)
                         step_produces = {ach: 1}
@@ -87,10 +90,11 @@ class OfflineConsolidationEngine:
                     else:
                         step_produces = {ach: 1}
 
-                # Pearlian Causal Contrast for Catalyst Induction:
-                # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone,
-                # as well as portable tool catalysts held in inventory (e.g. pickaxes, swords).
-                nearby_stations: Dict[str, int] = {}
+                # Popperian Falsification Tracker for Catalyst Induction:
+                # Identify all candidate entities present at this transition:
+                # 1. Workstations placed in the world within player interaction radius (<= 2.2 tiles)
+                # 2. Portable tools in inventory (held with count > 0 and NOT consumed in this step)
+                present_entities: Dict[str, float] = {}
                 if not is_fixture:
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
@@ -98,25 +102,54 @@ class OfflineConsolidationEngine:
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 2.2:
                                     canonical_station = get_fixture_alias(station_type)
-                                    nearby_stations[canonical_station] = p_step
+                                    present_entities[canonical_station] = float(step.step_idx - p_step)
 
-                    # Portable tools in inventory (e.g. wood_pickaxe for mining stone/coal)
                     for item_name, count in inv.items():
-                        if count > 0 and ("pickaxe" in item_name or "sword" in item_name):
-                            nearby_stations[item_name] = step.step_idx
+                        if count > 0 and step.item_deltas.get(item_name, 0) >= 0 and item_name != ach:
+                            present_entities[item_name] = 0.0
 
-                # Accumulate co-occurrence counts and temporal lag (steps elapsed since placement)
-                if ach not in self.catalyst_counts:
-                    self.catalyst_counts[ach] = {}
+                self.all_known_entities.update(present_entities.keys())
+
+                if ach not in self.catalyst_support:
+                    self.catalyst_support[ach] = {}
+                    self.catalyst_falsified[ach] = {}
                     self.catalyst_lags[ach] = {}
-                for s, p_step in nearby_stations.items():
-                    self.catalyst_counts[ach][s] = self.catalyst_counts[ach].get(s, 0) + 1
-                    lag = float(step.step_idx - p_step)
+
+                for s, lag in present_entities.items():
+                    self.catalyst_support[ach][s] = self.catalyst_support[ach].get(s, 0) + 1
                     self.catalyst_lags[ach][s] = self.catalyst_lags[ach].get(s, 0.0) + lag
+
+                # Any known entity absent during this milestone success is definitively falsified!
+                for entity in self.all_known_entities:
+                    if entity not in present_entities and entity != ach:
+                        self.catalyst_falsified[ach][entity] = self.catalyst_falsified[ach].get(entity, 0) + 1
 
                 # Never consume what this step produces
                 for prod in step_produces:
                     step_consumes.pop(prod, None)
+
+                # Determine best catalyst candidate satisfying strict necessity (zero falsifications)
+                card_catalyst = None
+                if ach in self.catalyst_support:
+                    candidates = [
+                        s for s, supp in self.catalyst_support[ach].items()
+                        if self.catalyst_falsified[ach].get(s, 0) == 0 and supp >= 2
+                    ]
+                    if not candidates:
+                        # Allow single-observation hypothesis for rare first-time milestones if zero falsifications
+                        candidates = [
+                            s for s, supp in self.catalyst_support[ach].items()
+                            if self.catalyst_falsified[ach].get(s, 0) == 0 and supp >= 1
+                        ]
+                    if candidates:
+                        candidates.sort(
+                            key=lambda s: (
+                                self.catalyst_support[ach][s],
+                                -self.catalyst_lags[ach].get(s, 0.0) / (self.catalyst_support[ach][s] + 1e-5),
+                            ),
+                            reverse=True,
+                        )
+                        card_catalyst = candidates[0]
 
                 if ach in self.bank.cards:
                     card = self.bank.cards[ach]
@@ -129,36 +162,9 @@ class OfflineConsolidationEngine:
                         card.produces[k] = max(card.produces.get(k, 0), v)
                     for prod in card.produces:
                         card.consumes.pop(prod, None)
-
-                    # Causal binding: catalyst must be present in majority (>= 50%) of successes.
-                    # Best candidate selected by maximum empirical frequency; ties broken by minimal temporal lag.
-                    card_catalyst = None
-                    if ach in self.catalyst_counts:
-                        candidates = [
-                            s for s, count in self.catalyst_counts[ach].items()
-                            if (count / card.success_count) >= 0.5
-                        ]
-                        if candidates:
-                            candidates.sort(
-                                key=lambda s: (
-                                    self.catalyst_counts[ach][s],
-                                    -self.catalyst_lags[ach].get(s, 0.0) / (self.catalyst_counts[ach][s] + 1e-5),
-                                ),
-                                reverse=True,
-                            )
-                            card_catalyst = candidates[0]
                     card.catalyst_needed = card_catalyst
                     updated_cards.append(ach)
                 else:
-                    if nearby_stations:
-                        sorted_stations = sorted(
-                            nearby_stations.keys(),
-                            key=lambda s: step.step_idx - nearby_stations[s],
-                        )
-                        card_catalyst = sorted_stations[0]
-                    else:
-                        card_catalyst = None
-
                     new_card = CausalCard(
                         action=step.action,
                         name=ach,

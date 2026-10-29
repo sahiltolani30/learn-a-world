@@ -97,24 +97,73 @@ class SemanticConsolidatedBank:
     def load(self, filepath: Optional[str] = None) -> bool:
         """
         Loads semantic memory bank from disk or Google Drive.
+        Supports both PyTorch (.pt) and JSON formats, and seamlessly falls back
+        to or merges with the git-tracked canonical bank.
         """
         target_path = filepath or self.persistence_path or "checkpoints/godfather_memory_bank.pt"
-        if not os.path.exists(target_path):
+        canonical_path = str(Path(__file__).resolve().parent / "consolidated_bank.json")
+
+        loaded = False
+        data: Dict[str, Any] = {}
+
+        # 1. Try loading from target path if it exists
+        if os.path.exists(target_path):
+            try:
+                if str(target_path).endswith(".json"):
+                    with open(target_path, "r") as f:
+                        data = json.load(f)
+                else:
+                    loaded_torch = torch.load(target_path, map_location="cpu")
+                    if isinstance(loaded_torch, dict):
+                        data = loaded_torch.get("cards", loaded_torch)
+                loaded = True
+            except Exception:
+                pass
+
+        # 2. Try JSON mirror if .pt was not found or failed
+        if not data:
+            json_mirror = str(Path(target_path).with_suffix(".json"))
+            if os.path.exists(json_mirror):
+                try:
+                    with open(json_mirror, "r") as f:
+                        data = json.load(f)
+                    loaded = True
+                except Exception:
+                    pass
+
+        # 3. Seamlessly merge or fall back to git-tracked canonical bank
+        if os.path.exists(canonical_path):
+            try:
+                with open(canonical_path, "r") as f:
+                    canonical_data = json.load(f)
+                if not data:
+                    data = canonical_data
+                    loaded = True
+                else:
+                    # Merge any missing cards from canonical bank
+                    for c_name, c_dict in canonical_data.items():
+                        if c_name not in data and isinstance(c_dict, dict):
+                            data[c_name] = c_dict
+            except Exception:
+                pass
+
+        if not loaded or not data:
             return False
 
         try:
-            data = torch.load(target_path, map_location="cpu")
             for card_name, card_dict in data.items():
-                self.cards[card_name] = CausalCard(
-                    action=card_dict["action"],
-                    name=card_dict["name"],
-                    consumes=card_dict.get("consumes", {}),
-                    produces=card_dict.get("produces", {}),
-                    catalyst_needed=card_dict.get("catalyst_needed"),
-                    predecessors=card_dict.get("predecessors", []),
-                    success_count=card_dict.get("success_count", 0),
-                    failure_count=card_dict.get("failure_count", 0),
-                )
+                if isinstance(card_dict, dict) and "action" in card_dict:
+                    self.cards[card_name] = CausalCard(
+                        action=int(card_dict["action"]),
+                        name=card_dict.get("name", card_name),
+                        consumes=card_dict.get("consumes", {}),
+                        produces=card_dict.get("produces", {}),
+                        catalyst_needed=card_dict.get("catalyst_needed"),
+                        predecessors=card_dict.get("predecessors", []),
+                        success_count=card_dict.get("success_count", 0),
+                        failure_count=card_dict.get("failure_count", 0),
+                        is_fixture=card_dict.get("is_fixture", False),
+                    )
             return True
         except Exception:
             return False

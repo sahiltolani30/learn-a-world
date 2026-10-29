@@ -380,8 +380,10 @@ class GodfatherJEPAPipeline:
             # 7. Register landmark and update active workstations if action places workstation
             for c_name, card in self.causal_hypergraph.cards.items():
                 if card.action == final_action:
-                    is_fixture_action = card.is_fixture or any(
-                        p in KNOWN_FIXTURES or p in REVERSE_FIXTURES for p in card.produces
+                    is_fixture_action = (
+                        card.is_fixture
+                        or (c_name in KNOWN_FIXTURES or c_name in REVERSE_FIXTURES)
+                        or any(p in KNOWN_FIXTURES or p in REVERSE_FIXTURES for p in card.produces)
                     )
                     if is_fixture_action:
                         for prod in card.produces:
@@ -815,11 +817,13 @@ def main():
     pipeline = GodfatherJEPAPipeline(device=device, checkpoint_init=args.checkpoint)
 
     # Automatically resolve and load pre-consolidated memory bank
+    canonical_bank_json = str(REPO_ROOT / "godfather_jepa" / "memory" / "consolidated_bank.json")
     bank_candidates = [
         args.memory_bank,
         str(out_dir / "godfather_memory_bank.pt"),
         "/content/drive/MyDrive/learn-a-world/checkpoints/godfather_memory_bank.pt",
         "checkpoints/godfather_memory_bank.pt",
+        canonical_bank_json,
     ]
     resolved_bank = None
     for b in bank_candidates:

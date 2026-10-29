@@ -142,7 +142,7 @@ class CausalHypergraph:
             # in current_inventory or workstations_present, stop traversing upstream
             if card_name != target_goal:
                 for prod in card.produces:
-                    if prod in ws or inv.get(prod, 0) > 0:
+                    if prod in ws or get_fixture_alias(prod) in ws or inv.get(prod, 0) > 0:
                         return
 
             # Add direct consumption
@@ -202,10 +202,7 @@ class CausalHypergraph:
                 producer = self.find_producer(c.catalyst_needed)
                 is_cat_fixture = (
                     c.catalyst_needed in ws
-                    or get_fixture_alias(c.catalyst_needed) in ws
                     or (producer is not None and producer in self.cards and self.cards[producer].is_fixture)
-                    or c.catalyst_needed in KNOWN_FIXTURES
-                    or c.catalyst_needed in REVERSE_FIXTURES
                 )
                 if not is_cat_fixture:
                     catalyst_tools.add(c.catalyst_needed)
@@ -219,16 +216,10 @@ class CausalHypergraph:
             produces_fixture = False
             fixture_already_placed = True
             for prod in card.produces:
-                is_prod_fixture = (
-                    card.is_fixture
-                    or prod in KNOWN_FIXTURES
-                    or prod in REVERSE_FIXTURES
-                    or prod in ws
-                    or get_fixture_alias(prod) in ws
-                )
+                is_prod_fixture = (card.is_fixture or prod in ws)
                 if is_prod_fixture:
                     produces_fixture = True
-                    if prod not in ws and get_fixture_alias(prod) not in ws:
+                    if prod not in ws:
                         fixture_already_placed = False
             if produces_fixture and fixture_already_placed:
                 continue
@@ -330,28 +321,28 @@ class CausalHypergraph:
         card = self.cards[target_goal]
 
         cat_needed = card.catalyst_needed
-        if not cat_needed:
-            if "make_" in card.name or card.action in (11, 12, 13, 14, 15, 16):
-                cat_needed = "table_placed"
-            elif card.name in ("collect_stone", "collect_coal"):
-                cat_needed = "wood_pickaxe"
 
         # 1. Check if catalyst is satisfied (either in workstations_present or in current_inventory)
         if cat_needed:
             catalyst_satisfied = (
                 cat_needed in workstations_present
+                or get_fixture_alias(cat_needed) in workstations_present
                 or current_inventory.get(cat_needed, 0) > 0
+                or current_inventory.get(get_fixture_alias(cat_needed), 0) > 0
             )
             if not catalyst_satisfied:
                 # Need to satisfy catalyst first. Locate producer card.
                 producer = None
                 for pred in card.predecessors:
                     pred_card = self.cards.get(pred)
-                    if pred_card and pred_card.produces.get(cat_needed, 0) > 0:
+                    if pred_card and (
+                        pred_card.produces.get(cat_needed, 0) > 0
+                        or pred_card.produces.get(get_fixture_alias(cat_needed), 0) > 0
+                    ):
                         producer = pred
                         break
                 if producer is None:
-                    producer = self.find_producer(cat_needed)
+                    producer = self.find_producer(cat_needed) or self.find_producer(get_fixture_alias(cat_needed))
 
                 if producer:
                     # Check upstream budget for target_goal taking present workstations into account
