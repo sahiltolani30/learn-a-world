@@ -158,8 +158,13 @@ class CausalHypergraph:
         }
 
         for name, card in self.cards.items():
-            # 1. Skip if card produces a catalyst tool that the agent already possesses
-            if any(prod in catalyst_tools and current_inventory.get(prod, 0) > 0 for prod in card.produces):
+            # 1. Skip if card crafts an equipment item or produces a catalyst that the agent already possesses
+            is_crafted_item = (
+                name.startswith("make_")
+                or name.startswith("craft_")
+                or any(prod in catalyst_tools for prod in card.produces)
+            )
+            if is_crafted_item and card.produces and all(current_inventory.get(prod, 0) > 0 for prod in card.produces):
                 continue
 
             # 2. Skip if card only produces placed workstations that are already in the world
