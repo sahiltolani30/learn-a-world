@@ -21,6 +21,49 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 
 
+KNOWN_FIXTURES: Dict[str, str] = {
+    "place_table": "table_placed",
+    "place_furnace": "furnace_placed",
+    "place_plant": "plant_placed",
+    "place_stone": "stone_placed",
+}
+REVERSE_FIXTURES: Dict[str, str] = {v: k for k, v in KNOWN_FIXTURES.items()}
+
+SEMANTIC_MILESTONE_PRODUCTS: Dict[str, str] = {
+    # World Fixtures
+    "place_table": "table_placed",
+    "place_furnace": "furnace_placed",
+    "place_plant": "plant_placed",
+    "place_stone": "stone_placed",
+    # Tools & Weapons
+    "make_wood_pickaxe": "wood_pickaxe",
+    "make_stone_pickaxe": "stone_pickaxe",
+    "make_iron_pickaxe": "iron_pickaxe",
+    "make_wood_sword": "wood_sword",
+    "make_stone_sword": "stone_sword",
+    "make_iron_sword": "iron_sword",
+    # Resources
+    "collect_wood": "wood",
+    "collect_stone": "stone",
+    "collect_coal": "coal",
+    "collect_iron": "iron",
+    "collect_diamond": "diamond",
+    "collect_drink": "drink",
+    "collect_sapling": "sapling",
+    "eat_cow": "food",
+    "eat_plant": "food",
+}
+
+
+def get_fixture_alias(name: str) -> str:
+    """Returns canonical alias for known spatial fixtures, or the name itself."""
+    if name in KNOWN_FIXTURES:
+        return KNOWN_FIXTURES[name]
+    if name in REVERSE_FIXTURES:
+        return REVERSE_FIXTURES[name]
+    return name
+
+
 @dataclass
 class CausalCard:
     """
@@ -34,6 +77,7 @@ class CausalCard:
     predecessors: List[str] = field(default_factory=list)
     success_count: int = 0
     failure_count: int = 0
+    is_fixture: bool = False
 
     @property
     def confidence(self) -> float:
@@ -152,10 +196,19 @@ class CausalHypergraph:
         candidates: List[Tuple[float, str]] = []
 
         # Derived catalyst tools from hypergraph (items required as catalysts, not placed fixtures)
-        catalyst_tools = {
-            c.catalyst_needed for c in self.cards.values()
-            if c.catalyst_needed and not c.catalyst_needed.endswith("_placed")
-        }
+        catalyst_tools = set()
+        for c in self.cards.values():
+            if c.catalyst_needed:
+                producer = self.find_producer(c.catalyst_needed)
+                is_cat_fixture = (
+                    c.catalyst_needed in ws
+                    or get_fixture_alias(c.catalyst_needed) in ws
+                    or (producer is not None and producer in self.cards and self.cards[producer].is_fixture)
+                    or c.catalyst_needed in KNOWN_FIXTURES
+                    or c.catalyst_needed in REVERSE_FIXTURES
+                )
+                if not is_cat_fixture:
+                    catalyst_tools.add(c.catalyst_needed)
 
         for name, card in self.cards.items():
             # 1. Skip if card produces a catalyst tool that the agent already possesses
@@ -166,9 +219,16 @@ class CausalHypergraph:
             produces_fixture = False
             fixture_already_placed = True
             for prod in card.produces:
-                if prod.endswith("_placed"):
+                is_prod_fixture = (
+                    card.is_fixture
+                    or prod in KNOWN_FIXTURES
+                    or prod in REVERSE_FIXTURES
+                    or prod in ws
+                    or get_fixture_alias(prod) in ws
+                )
+                if is_prod_fixture:
                     produces_fixture = True
-                    if prod not in ws:
+                    if prod not in ws and get_fixture_alias(prod) not in ws:
                         fixture_already_placed = False
             if produces_fixture and fixture_already_placed:
                 continue

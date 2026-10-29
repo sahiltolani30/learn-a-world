@@ -56,7 +56,12 @@ from godfather_jepa.memory import (
     SemanticConsolidatedBank,
     OfflineConsolidationEngine,
 )
-from godfather_jepa.planning.causal_hypergraph import CausalHypergraph
+from godfather_jepa.planning.causal_hypergraph import (
+    CausalHypergraph,
+    KNOWN_FIXTURES,
+    REVERSE_FIXTURES,
+    get_fixture_alias,
+)
 from godfather_jepa.planning.homeostatic_arbiter import HomeostaticArbiter
 from godfather_jepa.planning.latent_mpc_planner import LatentMPCPlanner
 from godfather_jepa.training.checkpoint_adapter import audit_and_adapt_checkpoint
@@ -358,10 +363,16 @@ class GodfatherJEPAPipeline:
             # 7. Register landmark and update active workstations if action places workstation
             for c_name, card in self.causal_hypergraph.cards.items():
                 if card.action == final_action:
-                    for prod in card.produces:
-                        if prod.endswith("_placed"):
+                    is_fixture_action = card.is_fixture or any(
+                        p in KNOWN_FIXTURES or p in REVERSE_FIXTURES for p in card.produces
+                    )
+                    if is_fixture_action:
+                        for prod in card.produces:
                             ws.add(prod)
-                            anchor.register_landmark(prod.replace("_placed", ""), latent_key=z.detach().cpu().numpy())
+                            alias = get_fixture_alias(prod)
+                            if alias != prod:
+                                ws.add(alias)
+                        anchor.register_landmark(c_name, latent_key=z.detach().cpu().numpy())
         next_state = {
             "h_spatial": h_spatial,
             "h_vector": h_vector,
@@ -434,14 +445,6 @@ class GodfatherJEPAPipeline:
             z_next_np = z_next_t.detach().cpu().numpy().squeeze(0)
             delta_p_np = delta_p_t.detach().cpu().numpy().squeeze(0)
 
-            # Update state inventory and milestones for online step continuity
-            if state is not None:
-                if "inventory" in state:
-                    for k, v in item_deltas.items():
-                        state["inventory"][k] = max(0, state["inventory"].get(k, 0) + v)
-                if "workstations" in state and unlocked and unlocked.startswith("place_"):
-                    state["workstations"].add(f"{unlocked[len('place_'):]}_placed")
-
             # Record transition into online episodic working memory
             online_store.record_step(
                 step_idx=steps,
@@ -454,6 +457,15 @@ class GodfatherJEPAPipeline:
                 unlocked_achievement=unlocked,
                 delta_p=delta_p_np,
             )
+
+            # Update state inventory and milestones for online step continuity
+            if state is not None:
+                if "inventory" in state:
+                    for k, v in item_deltas.items():
+                        state["inventory"][k] = max(0, state["inventory"].get(k, 0) + v)
+                if "workstations" in state:
+                    for ws_name in online_store.placed_workstations:
+                        state["workstations"].add(ws_name)
 
             obs_list.append(obs_next)
             act_list.append(act)

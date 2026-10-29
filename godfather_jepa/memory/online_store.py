@@ -16,6 +16,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
+from godfather_jepa.planning.causal_hypergraph import (
+    KNOWN_FIXTURES,
+    REVERSE_FIXTURES,
+    get_fixture_alias,
+)
+
 
 @dataclass
 class TransitionStep:
@@ -74,11 +80,18 @@ class OnlineEpisodicStore:
             for item, delta in item_deltas.items():
                 self.current_inventory[item] = max(0, self.current_inventory.get(item, 0) + delta)
 
+        phi_minus = sum(-d for d in item_deltas.values() if d < 0) if item_deltas else 0
+        phi_plus = sum(d for d in item_deltas.values() if d > 0) if item_deltas else 0
+        is_mass_deposition = (phi_minus > 0 and phi_plus == 0)
+
         if unlocked_achievement:
             self.milestones_unlocked.append(unlocked_achievement)
-            if unlocked_achievement.startswith("place_"):
-                station_key = unlocked_achievement[len("place_") :] + "_placed"
+            if is_mass_deposition or unlocked_achievement in KNOWN_FIXTURES or unlocked_achievement in REVERSE_FIXTURES:
+                station_key = unlocked_achievement
                 self.placed_workstations[station_key] = (step_idx, self.current_displacement.copy())
+                alias = get_fixture_alias(unlocked_achievement)
+                if alias != station_key:
+                    self.placed_workstations[alias] = (step_idx, self.current_displacement.copy())
                 self.workstation_placed_step = step_idx
                 self.workstation_pos = self.current_displacement.copy()
                 self.subgoal_state = "IMMEDIATE_ASSEMBLY"
@@ -103,10 +116,17 @@ class OnlineEpisodicStore:
         Verifies physical spatial proximity to placed workstation.
         Prevents workstation affordance amnesia.
         """
-        if workstation_type is not None and workstation_type in self.placed_workstations:
-            pos = self.placed_workstations[workstation_type][1]
-            dist = float(np.linalg.norm(self.current_displacement - pos))
-            return dist <= threshold
+        if workstation_type is not None:
+            alias = get_fixture_alias(workstation_type)
+            target_key = None
+            if workstation_type in self.placed_workstations:
+                target_key = workstation_type
+            elif alias in self.placed_workstations:
+                target_key = alias
+            if target_key is not None:
+                pos = self.placed_workstations[target_key][1]
+                dist = float(np.linalg.norm(self.current_displacement - pos))
+                return dist <= threshold
 
         if self.workstation_placed_step is None:
             return False
@@ -117,9 +137,16 @@ class OnlineEpisodicStore:
         """
         Returns displacement vector pointing back to placed workstation.
         """
-        if workstation_type is not None and workstation_type in self.placed_workstations:
-            pos = self.placed_workstations[workstation_type][1]
-            return pos - self.current_displacement
+        if workstation_type is not None:
+            alias = get_fixture_alias(workstation_type)
+            target_key = None
+            if workstation_type in self.placed_workstations:
+                target_key = workstation_type
+            elif alias in self.placed_workstations:
+                target_key = alias
+            if target_key is not None:
+                pos = self.placed_workstations[target_key][1]
+                return pos - self.current_displacement
 
         if self.workstation_placed_step is None:
             return None

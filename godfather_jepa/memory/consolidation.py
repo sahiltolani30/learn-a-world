@@ -21,7 +21,13 @@ import numpy as np
 
 from godfather_jepa.memory.online_store import OnlineEpisodicStore, TransitionStep
 from godfather_jepa.memory.semantic_bank import SemanticConsolidatedBank
-from godfather_jepa.planning.causal_hypergraph import CausalCard
+from godfather_jepa.planning.causal_hypergraph import (
+    CausalCard,
+    KNOWN_FIXTURES,
+    REVERSE_FIXTURES,
+    SEMANTIC_MILESTONE_PRODUCTS,
+    get_fixture_alias,
+)
 
 
 class OfflineConsolidationEngine:
@@ -60,17 +66,24 @@ class OfflineConsolidationEngine:
             # Rule 1: Milestone Preservation (Reward >= 0.9 or achievement unlock)
             if step.unlocked_achievement:
                 ach = step.unlocked_achievement
+
+                phi_minus = sum(step_consumes.values())
+                phi_plus = sum(step_produces.values())
+                is_fixture = (phi_minus > 0 and phi_plus == 0) or (ach in KNOWN_FIXTURES) or (ach in REVERSE_FIXTURES)
+
                 # If visual decoding did not produce an inventory item delta (e.g. world placement or synthetic step),
                 # map milestone to target semantic entity
                 if not step_produces:
-                    if ach.startswith("place_"):
-                        step_produces = {f"{ach[len('place_'):]}_placed": 1}
-                    elif ach.startswith("collect_"):
-                        step_produces = {ach[len("collect_"):]: 1}
-                    elif ach.startswith("make_"):
-                        step_produces = {ach[len("make_"):]: 1}
-                    elif ach.startswith("smelt_"):
-                        step_produces = {ach[len("smelt_"):]: 1}
+                    if ach in SEMANTIC_MILESTONE_PRODUCTS:
+                        prod_item = SEMANTIC_MILESTONE_PRODUCTS[ach]
+                        step_produces = {prod_item: 1}
+                        if ach in KNOWN_FIXTURES:
+                            step_produces[ach] = 1
+                    elif is_fixture:
+                        alias = get_fixture_alias(ach)
+                        step_produces = {ach: 1}
+                        if alias != ach:
+                            step_produces[alias] = 1
                     else:
                         step_produces = {ach: 1}
 
@@ -78,13 +91,14 @@ class OfflineConsolidationEngine:
                 # Identify all workstations adjacent (player reach <= 2.2 tiles) to the agent at this milestone,
                 # tracking the step index when each workstation was placed for temporal precedence.
                 nearby_stations: Dict[str, int] = {}
-                if not ach.startswith("place_"):
+                if not is_fixture:
                     if hasattr(episodic_store, "placed_workstations") and episodic_store.placed_workstations:
                         for station_type, (p_step, p_pos) in episodic_store.placed_workstations.items():
-                            if p_step < step.step_idx and station_type.endswith("_placed"):
+                            if p_step < step.step_idx and station_type != ach and station_type != get_fixture_alias(ach):
                                 dist = float(np.linalg.norm(step.displacement - p_pos))
                                 if dist <= 2.2:
-                                    nearby_stations[station_type] = p_step
+                                    canonical_station = get_fixture_alias(station_type)
+                                    nearby_stations[canonical_station] = p_step
 
                 # Accumulate co-occurrence counts and temporal lag (steps elapsed since placement)
                 if ach not in self.catalyst_counts:
@@ -102,6 +116,8 @@ class OfflineConsolidationEngine:
                 if ach in self.bank.cards:
                     card = self.bank.cards[ach]
                     card.success_count += 1
+                    if is_fixture:
+                        card.is_fixture = True
                     for k, v in step_consumes.items():
                         card.consumes[k] = max(card.consumes.get(k, 0), v)
                     for k, v in step_produces.items():
@@ -145,6 +161,7 @@ class OfflineConsolidationEngine:
                         produces=step_produces,
                         catalyst_needed=card_catalyst,
                         success_count=1,
+                        is_fixture=is_fixture,
                     )
                     for prod in new_card.produces:
                         new_card.consumes.pop(prod, None)
@@ -193,10 +210,13 @@ class OfflineConsolidationEngine:
                         if other_name not in new_preds:
                             new_preds.append(other_name)
             if c_card.catalyst_needed:
+                cat = c_card.catalyst_needed
+                cat_alias = get_fixture_alias(cat)
                 for other_name, other_card in self.bank.cards.items():
                     if other_name != c_name and (
-                        other_name == c_card.catalyst_needed
-                        or other_card.produces.get(c_card.catalyst_needed, 0) > 0
+                        other_name in (cat, cat_alias)
+                        or other_card.produces.get(cat, 0) > 0
+                        or other_card.produces.get(cat_alias, 0) > 0
                     ):
                         if other_name not in new_preds:
                             new_preds.append(other_name)
