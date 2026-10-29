@@ -44,6 +44,7 @@ if "eval.metrics" not in sys.modules:
             _spec.loader.exec_module(_mod)
 
 import numpy as np
+import torch
 
 from atlas.arbiter import AtlasAgent
 from atlas.backbone import FrozenBackbone
