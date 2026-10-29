@@ -20,11 +20,27 @@ from __future__ import annotations
 
 import argparse
 import glob
+import importlib.util
 import os
 import shutil
+import sys
 import time
 from pathlib import Path
 from typing import List, Optional
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+# Safe pre-registration of eval.metrics to avoid pulling unused stable_baselines3 from eval/__init__.py
+if "eval.metrics" not in sys.modules:
+    _metrics_p = _REPO_ROOT / "eval" / "metrics.py"
+    if _metrics_p.exists():
+        _spec = importlib.util.spec_from_file_location("eval.metrics", str(_metrics_p))
+        if _spec and _spec.loader:
+            _mod = importlib.util.module_from_spec(_spec)
+            sys.modules["eval.metrics"] = _mod
+            _spec.loader.exec_module(_mod)
 
 import numpy as np
 

@@ -22,6 +22,18 @@ import torch
 
 from atlas.arbiter import AtlasAgent
 from atlas.config import REPO_ROOT, ScreenConfig
+# Safe pre-registration of eval.metrics to avoid pulling unused stable_baselines3 from eval/__init__.py
+import importlib.util
+import sys
+if "eval.metrics" not in sys.modules:
+    _metrics_p = Path(__file__).resolve().parent.parent / "eval" / "metrics.py"
+    if _metrics_p.exists():
+        _spec = importlib.util.spec_from_file_location("eval.metrics", str(_metrics_p))
+        if _spec and _spec.loader:
+            _mod = importlib.util.module_from_spec(_spec)
+            sys.modules["eval.metrics"] = _mod
+            _spec.loader.exec_module(_mod)
+
 from envs.crafter_wrapper import CrafterEnv
 from eval.metrics import compute_crafter_score
 

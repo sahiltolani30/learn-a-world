@@ -26,7 +26,7 @@ fi
 # 2. Dependencies
 echo "[Setup] Installing requirements..."
 pip install --quiet --upgrade pip
-pip install --quiet crafter gymnasium pytest
+pip install --quiet crafter gymnasium pytest stable-baselines3
 
 # 3. Setup repo and local dirs
 REPO_DIR="/content/learn-a-world"
