@@ -27,6 +27,7 @@ class HomeostaticArbiter:
         dusk_step_threshold: Optional[int] = None,
         night_end_step: Optional[int] = None,
         combat_cadence: int = 3,
+        causal_hypergraph: Optional[Any] = None,
     ):
         self.thirst_threshold = thirst_threshold
         self.hunger_threshold = hunger_threshold
@@ -34,6 +35,15 @@ class HomeostaticArbiter:
         self.dusk_step_threshold = dusk_step_threshold
         self.night_end_step = night_end_step
         self.combat_cadence = combat_cadence
+        self.causal_hypergraph = causal_hypergraph
+
+    def get_action(self, card_name: str, fallback: int = 5) -> int:
+        """Dynamically retrieves action for given vital achievement from learned causal cards."""
+        if self.causal_hypergraph is not None and hasattr(self.causal_hypergraph, "cards"):
+            card = self.causal_hypergraph.cards.get(card_name)
+            if card is not None:
+                return card.action
+        return fallback
 
     def evaluate_urgency(
         self,
@@ -131,30 +141,30 @@ class HomeostaticArbiter:
         # 1. Preemptive opportunistic drinking reflex (Highest vital priority)
         # Triggers whenever adjacent to water and thirst is at or below threshold
         if water_adjacent and (drink <= self.thirst_threshold or urgency["u_thirst"] >= 0.5):
-            return 5, "homeostatic_drink"
+            return self.get_action("collect_drink", fallback=5), "homeostatic_drink"
 
         # 2. Imminent combat defense (Active monster attack in progress)
         if urgency["imminent_threat"] >= 0.8 or monster_adjacent:
-            return 5, "homeostatic_combat"
+            return self.get_action("defeat_zombie", fallback=5), "homeostatic_combat"
 
         # 3. Nightfall sleep reflex (Skip dangerous night hours if possible)
         is_night = (urgency["dusk_factor"] >= 0.5) or (urgency["imminent_threat"] >= 0.5)
         if can_sleep and is_night:
-            return 6, "homeostatic_sleep"
+            return self.get_action("wake_up", fallback=6), "homeostatic_sleep"
 
         # 4. Safe: Teleological Drive active
         if urgency["total_urgency"] < 0.5:
             return teleological_action, "teleological"
 
-        # 5. Urgent hunger override (Action 5: forage / eat plant or cow)
+        # 5. Urgent hunger override (forage / eat plant or cow)
         if urgency["u_hunger"] >= 0.5 and food_adjacent:
-            return 5, "homeostatic_eat"
+            return self.get_action("eat_cow", fallback=5), "homeostatic_eat"
 
         # 6. Active inference survival defense (zero artificial clock cadence modulos)
         # When dusk/darkness is present, defend if threats emerge or continue tactical maneuvering
         if urgency["dusk_factor"] >= 0.5:
             if urgency["imminent_threat"] >= 0.6 or monster_adjacent:
-                return 5, "homeostatic_combat"
+                return self.get_action("defeat_zombie", fallback=5), "homeostatic_combat"
             return teleological_action, "teleological_dusk_maneuver"
 
         # 7. Default fallback to teleological action if maintenance precondition unavailable

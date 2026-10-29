@@ -164,6 +164,7 @@ class GodfatherJEPAPipeline:
             thirst_threshold=3.0,
             hunger_threshold=3.0,
             health_threshold=4.0,
+            causal_hypergraph=self.causal_hypergraph,
         )
 
         # 2. Actor-Critic

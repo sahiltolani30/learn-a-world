@@ -151,16 +151,15 @@ class CausalHypergraph:
         ws = workstations_present or set()
         candidates: List[Tuple[float, str]] = []
 
+        # Derived catalyst tools from hypergraph (items required as catalysts, not placed fixtures)
+        catalyst_tools = {
+            c.catalyst_needed for c in self.cards.values()
+            if c.catalyst_needed and not c.catalyst_needed.endswith("_placed")
+        }
+
         for name, card in self.cards.items():
-            # 1. Skip if card only produces durable tools the agent already holds
-            produces_durable = False
-            already_holds_all = True
-            for prod in card.produces:
-                if any(tool_suffix in prod for tool_suffix in ("pickaxe", "sword")):
-                    produces_durable = True
-                    if current_inventory.get(prod, 0) == 0:
-                        already_holds_all = False
-            if produces_durable and already_holds_all:
+            # 1. Skip if card produces a catalyst tool that the agent already possesses
+            if any(prod in catalyst_tools and current_inventory.get(prod, 0) > 0 for prod in card.produces):
                 continue
 
             # 2. Skip if card only produces placed workstations that are already in the world

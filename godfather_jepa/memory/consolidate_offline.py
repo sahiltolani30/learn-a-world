@@ -74,13 +74,6 @@ def consolidate_shards(
 
                 store = OnlineEpisodicStore()
 
-                craftable_items = [
-                    "health", "food", "drink", "energy",
-                    "sapling", "wood", "stone", "coal", "iron",
-                    "diamond", "wood_pickaxe", "stone_pickaxe", "iron_pickaxe",
-                    "wood_sword", "stone_sword", "iron_sword",
-                ]
-
                 for t_idx in range(len(ep_acts)):
                     a = int(ep_acts[t_idx])
                     r = float(ep_rews[t_idx])
