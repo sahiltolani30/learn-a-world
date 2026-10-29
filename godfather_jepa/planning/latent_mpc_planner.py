@@ -80,6 +80,7 @@ class LatentMPCPlanner:
         workstations: Set[str],
         anchor_graph: TopologicalAnchorGraph,
         target_goal: Optional[str] = None,
+        policy_action: Optional[int] = None,
     ) -> Tuple[int, Dict[str, Any]]:
         """
         Executes latent MPC trajectory search given current latent and recurrent belief.
@@ -92,6 +93,7 @@ class LatentMPCPlanner:
             workstations: Set of placed workstations.
             anchor_graph: TopologicalAnchorGraph holding landmark return paths.
             target_goal: High-level teleological goal (if None, dynamically selected via AAFS).
+            policy_action: Action suggested by policy actor to guide CEM proposal distribution.
 
         Returns:
             (best_action, debug_info)
@@ -109,9 +111,14 @@ class LatentMPCPlanner:
             workstations_present=workstations,
         )
 
-        # 2. Executable causal action or topological workstation return
-        if subgoal != "explore" and determined_action != 0:
-            target_card = self.causal_hypergraph.cards.get(subgoal)
+        # 2. Executable causal assembly/placement action or topological workstation return
+        target_card = self.causal_hypergraph.cards.get(subgoal) if subgoal else None
+        is_assembly_or_placement = (
+            target_card is not None
+            and (bool(target_card.consumes) or bool(target_card.catalyst_needed))
+        )
+
+        if subgoal != "explore" and determined_action != 0 and is_assembly_or_placement:
             if target_card and target_card.catalyst_needed and target_card.catalyst_needed in workstations:
                 landmark_key = target_card.catalyst_needed.replace("_placed", "").replace("place_", "")
                 return_act = anchor_graph.get_return_action(landmark_key) or anchor_graph.get_return_action(target_card.catalyst_needed)
@@ -133,9 +140,11 @@ class LatentMPCPlanner:
         N = self.num_candidates
         N_elite = max(2, int(N * self.elite_ratio))
 
-        # Tabula-rasa uninformative uniform proposal distribution across all actions:
-        # Zero hardcoded movement boosts, zero hardcoded interaction boosts
+        # Proposal distribution seeded with policy action if available
         action_probs = torch.full((H, self.num_actions), 1.0 / self.num_actions, device=self.device)
+        if policy_action is not None and 0 <= policy_action < self.num_actions:
+            action_probs[0, policy_action] += 0.3
+            action_probs[0] /= action_probs[0].sum()
 
         best_action = 0
         best_score = -float("inf")

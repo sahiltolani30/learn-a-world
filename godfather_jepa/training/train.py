@@ -339,6 +339,7 @@ class GodfatherJEPAPipeline:
                     workstations=ws,
                     anchor_graph=anchor,
                     target_goal=target_goal,
+                    policy_action=actor_action,
                 )
             else:
                 subgoal, determined_action = self.causal_hypergraph.determine_subgoal(
