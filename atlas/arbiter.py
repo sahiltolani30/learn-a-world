@@ -328,6 +328,7 @@ class AtlasAgent:
             # V2.2-F11-fix: learned material gating — costs from the frozen StateDeltaHead,
             # holdings from the learned readout; zero recipe knowledge. Requires the delta
             # head to be actually loaded (provenance-guarded) and the readout present.
+            learned_gate_info = None
             if (
                 self.cfg.goals.material_gating_learned
                 and getattr(self.backbone, "has_learned_delta_head", False)
@@ -343,7 +344,7 @@ class AtlasAgent:
                         deltas, have, margin=self.cfg.goals.material_gate_margin
                     )
                     probe_score[suppress] -= 100.0
-                    self.last_probe_decision["material_gate_learned"] = {
+                    learned_gate_info = {
                         "suppressed": suppress.tolist(),
                         "have": have.tolist(),
                     }
@@ -358,6 +359,7 @@ class AtlasAgent:
                 "probe_event_probs": all_event_probs.detach().cpu().to(torch.float16).numpy().tolist(),
                 "arrival_cos": float(arrival_cos),
                 "matched_bank": False,
+                "material_gate_learned": learned_gate_info,
             }
 
             if self.probe_steps_remaining == 0 and self.active_goal is not None:

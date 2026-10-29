@@ -68,3 +68,29 @@ def test_no_recipe_table_in_source():
     # Also: the arbiter must not contain a literal dict of int->list describing crafts
     arb = (atlas_dir / "arbiter.py").read_text()
     assert "CRAFT_REQUIRED_MATERIALS" not in arb
+
+
+def test_probe_act_with_learned_delta_head():
+    """Verify AtlasAgent.act in PROBE mode executes learned gating without NoneType error."""
+    from atlas.arbiter import AtlasAgent
+    from atlas.backbone import FrozenBackbone
+    from atlas.config import AtlasConfig
+
+    cfg = AtlasConfig()
+    cfg.goals.material_gating_learned = True
+    fb = FrozenBackbone(config=cfg, device="cpu")
+    # Simulate that delta head is learned
+    fb.model.loaded_component_keys.add("state_delta_head")
+    assert fb.has_learned_delta_head is True
+
+    agent = AtlasAgent(backbone=fb, cfg=cfg)
+    agent.mode = "PROBE"
+    agent.probe_steps_remaining = 3
+
+    obs = np.zeros((64, 64, 3), dtype=np.uint8)
+    # Step 0 act - should not throw TypeError
+    action, telemetry = agent.act(obs, reward_prev=0.0, step=0)
+    assert 0 <= action < 17
+    assert agent.last_probe_decision is not None
+    assert "material_gate_learned" in agent.last_probe_decision
+
