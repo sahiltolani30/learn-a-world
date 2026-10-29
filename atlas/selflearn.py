@@ -233,6 +233,11 @@ class SelfLearnLoop:
                 iter_idx=it,
             )
 
+            # Remove any stale sidecar from a previously interrupted attempt of this iteration
+            stale_latents = self.shards_dir / f"{shard_path.stem}.latents.npz"
+            if stale_latents.exists() and stale_latents.stat().st_mtime < shard_path.stat().st_mtime:
+                stale_latents.unlink(missing_ok=True)
+
             # 2. Latent caching
             latents_path = self.trainer.cache_latents(shard_path, cache_dir=self.shards_dir)
 
@@ -242,6 +247,11 @@ class SelfLearnLoop:
                 z_full = np.array(latents_data["z"])
                 h_full = np.array(latents_data["h"])
                 res_full = np.array(latents_data["target_residuals"])
+
+            assert len(z_full) == len(shard_data["actions"]), (
+                f"Length mismatch: {shard_path.name} has {len(shard_data['actions'])} actions, "
+                f"but latents has {len(z_full)} steps."
+            )
 
             ep_lengths = shard_data["episode_lengths"]
 

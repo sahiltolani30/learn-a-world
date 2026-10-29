@@ -83,11 +83,17 @@ class HeadTrainer:
         else:
             out_path = p.with_suffix(".latents.npz")
 
-        if out_path.exists():
-            return out_path
-        sidecar_next_to_shard = p.with_suffix(".latents.npz")
-        if sidecar_next_to_shard.exists():
-            return sidecar_next_to_shard
+        for candidate in [out_path, p.with_suffix(".latents.npz")]:
+            if candidate.exists():
+                try:
+                    if candidate.stat().st_mtime >= p.stat().st_mtime:
+                        with np.load(candidate) as c_data:
+                            if "z" in c_data:
+                                shard_meta = ShardLoader.load_shard(p, load_obs=False)
+                                if len(c_data["z"]) == len(shard_meta["actions"]):
+                                    return candidate
+                except Exception:
+                    pass
 
         shard = ShardLoader.load_shard(p, load_obs=True)
         obs = shard["obs"]
