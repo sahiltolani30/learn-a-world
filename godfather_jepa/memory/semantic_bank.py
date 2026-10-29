@@ -70,6 +70,7 @@ class SemanticConsolidatedBank:
                 "predecessors": card.predecessors,
                 "success_count": card.success_count,
                 "failure_count": card.failure_count,
+                "is_fixture": card.is_fixture,
             }
             for card_name, card in self.cards.items()
         }
@@ -144,7 +145,9 @@ class SemanticConsolidatedBank:
                         predecessors=card_dict.get("predecessors", []),
                         success_count=card_dict.get("success_count", 0),
                         failure_count=card_dict.get("failure_count", 0),
-                        is_fixture=card_dict.get("is_fixture", False),
+                        is_fixture=card_dict.get("is_fixture", False) or bool(
+                            any("placed" in p or "place_" in card_name for p in card_dict.get("produces", {}))
+                        ),
                     )
             return True
         except Exception:

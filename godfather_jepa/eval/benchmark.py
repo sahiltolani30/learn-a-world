@@ -95,12 +95,16 @@ class BenchmarkRunner:
                 steps += 1
                 if isinstance(state, dict):
                     state["last_reward"] = float(reward)
+                    if "completed_milestones" not in state:
+                        state["completed_milestones"] = ep_unlocked
 
                 # Record achievements unlocked during this step
                 step_achievements = info.get("achievements", {})
                 for ach_name, count in step_achievements.items():
                     if count > 0:
                         ep_unlocked.add(ach_name)
+                        if isinstance(state, dict):
+                            state.setdefault("completed_milestones", set()).add(ach_name)
 
             for ach in ep_unlocked:
                 achievements_unlocked_counts[ach] = achievements_unlocked_counts.get(ach, 0) + 1

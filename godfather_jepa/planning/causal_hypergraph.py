@@ -182,17 +182,20 @@ class CausalHypergraph:
         self,
         current_inventory: Dict[str, int],
         workstations_present: Optional[Set[str]] = None,
+        completed_milestones: Optional[Set[str]] = None,
     ) -> str:
         """
         Autonomous Affordance Frontier Selector (AAFS):
         Dynamically selects the optimal reachable milestone from the learned causal hypergraph.
         Scores candidate goals by reachability from current inventory, expected yield,
         epistemic curiosity, and topological tech-tree depth without any hardcoded goal strings.
+        Filters out milestones already completed in this episode to drive curriculum advancement.
         """
         if not self.cards:
             return "explore"
 
         ws = workstations_present or set()
+        completed = completed_milestones or set()
         candidates: List[Tuple[float, str]] = []
 
         # Derived catalyst tools from hypergraph (items required as catalysts, not placed fixtures)
@@ -208,20 +211,22 @@ class CausalHypergraph:
                     catalyst_tools.add(c.catalyst_needed)
 
         for name, card in self.cards.items():
+            # 0. Skip milestones already unlocked in this episode (Crafter rewards each achievement once)
+            if name in completed:
+                continue
+
             # 1. Skip if card produces a catalyst tool that the agent already possesses
             if any(prod in catalyst_tools and current_inventory.get(prod, 0) > 0 for prod in card.produces):
                 continue
 
             # 2. Skip if card only produces placed workstations that are already in the world
-            produces_fixture = False
-            fixture_already_placed = True
-            for prod in card.produces:
-                is_prod_fixture = (card.is_fixture or prod in ws)
-                if is_prod_fixture:
-                    produces_fixture = True
-                    if prod not in ws:
-                        fixture_already_placed = False
-            if produces_fixture and fixture_already_placed:
+            is_fixture = (
+                card.is_fixture
+                or name in ws
+                or any(p in ws for p in card.produces)
+                or (bool(card.consumes) and not any(p in current_inventory for p in card.produces))
+            )
+            if is_fixture and (name in ws or any(p in ws for p in card.produces)):
                 continue
 
             # 3. Zone of Proximal Development (ZPD) filter:
@@ -286,7 +291,7 @@ class CausalHypergraph:
 
             # Topological depth bonus: deeper tech cards in the causal DAG provide higher long-term utility
             depth = self.get_card_depth(name)
-            depth_bonus = 0.5 * depth
+            depth_bonus = 1.0 * depth
 
             score = 2.0 * reachability + 1.0 * p_success + 0.5 * curiosity + depth_bonus
             candidates.append((score, name))

@@ -294,6 +294,7 @@ class GodfatherJEPAPipeline:
                 "anchor_graph": TopologicalAnchorGraph(),
                 "inventory": {},
                 "workstations": set(),
+                "completed_milestones": set(),
                 "internal_vitals": {"drink": 9.0, "food": 9.0, "health": 9.0},
                 "step": 0,
             }
@@ -305,6 +306,7 @@ class GodfatherJEPAPipeline:
         anchor = state["anchor_graph"]
         inv = state["inventory"]
         ws = state["workstations"]
+        completed = state.setdefault("completed_milestones", set())
         vitals = state["internal_vitals"]
         step = state["step"]
 
@@ -345,6 +347,7 @@ class GodfatherJEPAPipeline:
             target_goal = self.causal_hypergraph.select_affordance_frontier(
                 current_inventory=inv,
                 workstations_present=ws,
+                completed_milestones=completed,
             )
             if use_mpc:
                 teleo_action, mpc_debug = self.mpc_planner.plan(
@@ -392,6 +395,9 @@ class GodfatherJEPAPipeline:
                             if alias != prod:
                                 ws.add(alias)
                         anchor.register_landmark(c_name, latent_key=z.detach().cpu().numpy())
+                        completed.add(c_name)
+                    elif bool(card.consumes) or bool(card.catalyst_needed):
+                        completed.add(c_name)
         next_state = {
             "h_spatial": h_spatial,
             "h_vector": h_vector,
@@ -400,6 +406,7 @@ class GodfatherJEPAPipeline:
             "anchor_graph": anchor,
             "inventory": inv,
             "workstations": ws,
+            "completed_milestones": completed,
             "internal_vitals": vitals,
             "step": step + 1,
         }
