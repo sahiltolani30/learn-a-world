@@ -38,9 +38,8 @@ class OfflineConsolidationEngine:
     def __init__(self, semantic_bank: Optional[SemanticConsolidatedBank] = None):
         self.bank = semantic_bank or SemanticConsolidatedBank()
         self.catalyst_support: Dict[str, Dict[str, int]] = {}
-        self.catalyst_falsified: Dict[str, Dict[str, int]] = {}
         self.catalyst_lags: Dict[str, Dict[str, float]] = {}
-        self.all_known_entities: Set[str] = set()
+        self.milestone_success_counts: Dict[str, int] = {}
 
     def consolidate_episode(self, episodic_store: OnlineEpisodicStore) -> Dict[str, Any]:
         """
@@ -105,51 +104,64 @@ class OfflineConsolidationEngine:
                                     present_entities[canonical_station] = float(step.step_idx - p_step)
 
                     for item_name, count in inv.items():
-                        if count > 0 and step.item_deltas.get(item_name, 0) >= 0 and item_name != ach:
+                        # Physical Invariant: An inventory item is a candidate tool/catalyst if and only if
+                        # it is a manufactured instrument (produced via resource consumption in this episode or bank).
+                        # Primary raw feedstocks (gathered freely with 0 consumption, e.g. sapling, wood) are consumable inputs, never durable tools.
+                        is_manufactured_tool = any(
+                            c.produces.get(item_name, 0) > 0 and bool(c.consumes)
+                            for c in self.bank.cards.values()
+                        ) or any(
+                            s.item_deltas.get(item_name, 0) > 0 and any(d < 0 for d in s.item_deltas.values())
+                            for s in episodic_store.steps
+                        )
+                        if (
+                            count > 0
+                            and is_manufactured_tool
+                            and step.item_deltas.get(item_name, 0) >= 0
+                            and item_name != ach
+                            and item_name not in step_produces
+                            and item_name not in step_consumes
+                        ):
                             present_entities[item_name] = 0.0
-
-                self.all_known_entities.update(present_entities.keys())
 
                 if ach not in self.catalyst_support:
                     self.catalyst_support[ach] = {}
-                    self.catalyst_falsified[ach] = {}
                     self.catalyst_lags[ach] = {}
+                    self.milestone_success_counts[ach] = 0
+
+                self.milestone_success_counts[ach] += 1
+                total_successes = self.milestone_success_counts[ach]
 
                 for s, lag in present_entities.items():
                     self.catalyst_support[ach][s] = self.catalyst_support[ach].get(s, 0) + 1
                     self.catalyst_lags[ach][s] = self.catalyst_lags[ach].get(s, 0.0) + lag
 
-                # Any known entity absent during this milestone success is definitively falsified!
-                for entity in self.all_known_entities:
-                    if entity not in present_entities and entity != ach:
-                        self.catalyst_falsified[ach][entity] = self.catalyst_falsified[ach].get(entity, 0) + 1
-
                 # Never consume what this step produces
                 for prod in step_produces:
                     step_consumes.pop(prod, None)
 
-                # Determine best catalyst candidate satisfying strict necessity (zero falsifications)
+                # Strict Popperian Necessity Criterion:
+                # An entity is a necessary catalyst if and only if it was present in 100% of successes:
+                # supp == total_successes
                 card_catalyst = None
-                if ach in self.catalyst_support:
+                candidates = [
+                    s for s, supp in self.catalyst_support[ach].items()
+                    if supp == total_successes and supp >= 2
+                ]
+                if not candidates and total_successes == 1:
                     candidates = [
                         s for s, supp in self.catalyst_support[ach].items()
-                        if self.catalyst_falsified[ach].get(s, 0) == 0 and supp >= 2
+                        if supp == total_successes
                     ]
-                    if not candidates:
-                        # Allow single-observation hypothesis for rare first-time milestones if zero falsifications
-                        candidates = [
-                            s for s, supp in self.catalyst_support[ach].items()
-                            if self.catalyst_falsified[ach].get(s, 0) == 0 and supp >= 1
-                        ]
-                    if candidates:
-                        candidates.sort(
-                            key=lambda s: (
-                                self.catalyst_support[ach][s],
-                                -self.catalyst_lags[ach].get(s, 0.0) / (self.catalyst_support[ach][s] + 1e-5),
-                            ),
-                            reverse=True,
-                        )
-                        card_catalyst = candidates[0]
+                if candidates:
+                    candidates.sort(
+                        key=lambda s: (
+                            self.catalyst_support[ach][s],
+                            -self.catalyst_lags[ach].get(s, 0.0) / (self.catalyst_support[ach][s] + 1e-5),
+                        ),
+                        reverse=True,
+                    )
+                    card_catalyst = candidates[0]
 
                 if ach in self.bank.cards:
                     card = self.bank.cards[ach]
