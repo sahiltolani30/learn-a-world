@@ -22,6 +22,7 @@ import torch.nn.functional as F
 from atlas.backbone import FrozenBackbone
 from atlas.belief import AchievementBelief
 from atlas.config import (
+    CRAFTER_ACTION_NAMES,
     LATENT_DIM,
     NUM_ACHIEVEMENTS,
     NUM_ACTIONS,
@@ -304,6 +305,32 @@ class AtlasAgent:
         self.h_prev = h
         self.a_prev = a_final_t
 
+        # Compute human-readable decision reason
+        a_int_name = CRAFTER_ACTION_NAMES[a_intended] if a_intended < len(CRAFTER_ACTION_NAMES) else str(a_intended)
+        a_fin_name = CRAFTER_ACTION_NAMES[a_final] if a_final < len(CRAFTER_ACTION_NAMES) else str(a_final)
+
+        if override_fired:
+            decision_reason = (
+                f"SAFETY OVERRIDE: Intended '{a_int_name}' had high risk ({risk_intended:.2f} > {self.cfg.safety.risk_threshold:.2f}). "
+                f"Safest action '{a_fin_name}' chosen instead (risk: {min_risk_val:.2f})."
+            )
+        elif self.mode == "NAVIGATE":
+            goal_key_str = f"Goal key #{int(abs(hash(str(self.active_goal.key[:4])))) % 1000}" if self.active_goal else "Goal"
+            decision_reason = (
+                f"NAVIGATE: OptionNet chose '{a_fin_name}' pursuing {goal_key_str} "
+                f"(arrival_cos: {arrival_cos:.2f}, goal_score: {self.goal_score:.2f}, risk: {risk_intended:.2f})."
+            )
+        elif self.mode == "PROBE":
+            decision_reason = (
+                f"PROBE (Curiosity): Chose '{a_fin_name}' exploring affordances for locked achievements "
+                f"(disagreement: {d_val:.2f}, risk: {risk_intended:.2f})."
+            )
+        else:
+            decision_reason = (
+                f"FALLBACK (Prior + Exploration): Prior policy chose '{a_fin_name}' "
+                f"(disagreement: {d_val:.2f}, risk: {risk_intended:.2f})."
+            )
+
         telemetry = {
             "mode": self.mode,
             "goal_score": float(self.goal_score),
@@ -312,6 +339,9 @@ class AtlasAgent:
             "risk_intended": float(risk_intended),
             "override_fired": bool(override_fired),
             "r_int": float(r_int),
+            "reason": decision_reason,
+            "a_intended": a_int_name,
+            "a_final": a_fin_name,
         }
 
         # Record step buffer for collection

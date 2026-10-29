@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 import numpy as np
 
-from atlas.inspect_games import load_journal, print_summary, export_html_report
+from atlas.inspect_games import (
+    export_best_and_worst,
+    export_html_report,
+    generate_game_markdown,
+    load_journal,
+    print_summary,
+)
 
 
 def test_journal_round_trip(tmp_path: Path):
@@ -42,3 +48,11 @@ def test_journal_round_trip(tmp_path: Path):
     export_html_report(loaded, html_out)
     assert html_out.exists()
     assert "ATLAS Game Journal Dashboard" in html_out.read_text()
+
+    # Test Best & Worst Export
+    bw = export_best_and_worst(loaded, tmp_path / "analysis")
+    assert bw["best_md"].exists()
+    assert bw["worst_md"].exists()
+    assert bw["best_json"].exists()
+    assert bw["worst_json"].exists()
+    assert "Complete Step-by-Step Decision Chronicle" in bw["best_md"].read_text()

@@ -152,6 +152,7 @@ class EpisodeCollector:
                 "risk": round(float(telemetry.get("risk_intended", 0.0)), 3),
                 "override": bool(telemetry.get("override_fired", False)),
                 "r": round(float(reward), 2),
+                "reason": telemetry.get("reason", ""),
             }
             if ach_step:
                 step_record["unlocked"] = ach_step

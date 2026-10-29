@@ -150,6 +150,136 @@ def show_game_trace(game: Dict[str, Any], max_steps: Optional[int] = None) -> No
     print("=" * 80)
 
 
+def generate_game_markdown(game: Dict[str, Any], title: str = "GAME ANALYSIS") -> str:
+    """Generates a comprehensive Markdown report with reasoning for every single step."""
+    gid = game.get("game_id", "unknown")
+    it = game.get("iter", 0)
+    seed = game.get("seed", 0)
+    length = game.get("length", 0)
+    reward = game.get("total_reward", 0.0)
+    died = game.get("died", False)
+    achs = game.get("achievements", [])
+    mode_counts = game.get("mode_counts", {})
+    overrides = game.get("overrides_count", 0)
+    steps = game.get("steps", [])
+
+    total_mode_steps = sum(mode_counts.values()) or max(1, length)
+    nav_pct = (mode_counts.get("NAVIGATE", 0) / total_mode_steps) * 100
+    probe_pct = (mode_counts.get("PROBE", 0) / total_mode_steps) * 100
+    fallback_pct = (mode_counts.get("FALLBACK", 0) / total_mode_steps) * 100
+
+    status_badge = "💀 DIED (Lethal Event)" if died else "⏳ TRUNCATED (Max Steps Survived)"
+
+    md = [
+        f"# 🎮 ATLAS Game Deep-Dive: {title}",
+        f"**Game ID**: `{gid}` | **Iteration**: `{it}` | **World Seed**: `{seed}`",
+        "",
+        "## 📊 Executive Scorecard",
+        f"- **Outcome**: {status_badge}",
+        f"- **Total Steps Survived**: `{length}` steps",
+        f"- **Total Reward Realized**: `{reward:.1f}`",
+        f"- **Achievements Unlocked ({len(achs)})**: " + (", ".join([f"`{a}`" for a in achs]) if achs else "*None*"),
+        f"- **Safety Critic Overrides**: `{overrides}` times triggered",
+        "",
+        "## 🧠 Cognitive Mode Breakdown",
+        f"- 🧭 **Goal-Directed Navigation (NAVIGATE)**: {nav_pct:.1f}% ({mode_counts.get('NAVIGATE', 0)} steps)",
+        f"- 🔬 **Epistemic Probing (PROBE)**: {probe_pct:.1f}% ({mode_counts.get('PROBE', 0)} steps)",
+        f"- 🎲 **Prior & Curiosity Fallback (FALLBACK)**: {fallback_pct:.1f}% ({mode_counts.get('FALLBACK', 0)} steps)",
+        "",
+        "## 🔍 Critical Milestones & Turning Points",
+    ]
+
+    milestones = []
+    for s in steps:
+        t = s.get("t", 0) + 1
+        unlocked = s.get("unlocked", [])
+        ovr = s.get("override", False)
+        r = s.get("r", 0.0)
+        risk = s.get("risk", 0.0)
+        if unlocked:
+            milestones.append(f"- **Step {t}**: 🎉 Unlocked **{', '.join(unlocked)}** (Reward +{r})")
+        elif ovr:
+            milestones.append(f"- **Step {t}**: ⚠️ Safety Critic intervened (Lethal risk {risk:.2f}) -> Overrode action to `{s.get('a')}`")
+        elif r > 0:
+            milestones.append(f"- **Step {t}**: Earned reward +{r} taking `{s.get('a')}`")
+
+    if milestones:
+        md.extend(milestones)
+    else:
+        md.append("- *No discrete reward milestones unlocked in this session.*")
+
+    md.extend([
+        "",
+        "## 📜 Complete Step-by-Step Decision Chronicle",
+        "",
+        "| Step | Action Taken | Mode | Risk | Override? | Reward | Reasoning / Cognitive Basis | Events |",
+        "| :---: | :--- | :---: | :---: | :---: | :---: | :--- | :--- |",
+    ])
+
+    for s in steps:
+        t = s.get("t", 0) + 1
+        a = s.get("a", "noop")
+        mode = s.get("mode", "UNKNOWN")
+        risk = s.get("risk", 0.0)
+        ovr = "⚠️ YES" if s.get("override", False) else "no"
+        r = s.get("r", 0.0)
+        unlocked = ", ".join(s.get("unlocked", []))
+        reason = s.get("reason", "")
+        if not reason:
+            if s.get("override", False):
+                reason = f"Safety Critic detected risk {risk:.2f}; overrode to safest action."
+            elif mode == "NAVIGATE":
+                reason = f"OptionNet pursued associative goal landmark."
+            elif mode == "PROBE":
+                reason = f"Probed affordances for locked achievements."
+            else:
+                reason = f"Prior exploration policy."
+
+        md.append(f"| {t} | `{a}` | {mode} | {risk:.2f} | {ovr} | {r} | {reason} | {unlocked} |")
+
+    return "\n".join(md)
+
+
+def export_best_and_worst(games: List[Dict[str, Any]], out_dir: Path) -> Dict[str, Path]:
+    """Extracts the best and worst games and exports full Markdown and JSON deep-dives."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if not games:
+        print("❌ No games available to export.")
+        return {}
+
+    best_game = max(
+        games,
+        key=lambda g: (g.get("total_reward", 0.0), g.get("num_achievements", 0), g.get("length", 0)),
+    )
+
+    worst_game = min(
+        games,
+        key=lambda g: (g.get("total_reward", 0.0), g.get("length", 0)),
+    )
+
+    best_md_path = out_dir / "best_game_analysis.md"
+    best_json_path = out_dir / "best_game.json"
+    worst_md_path = out_dir / "worst_game_analysis.md"
+    worst_json_path = out_dir / "worst_game.json"
+
+    best_md_path.write_text(generate_game_markdown(best_game, title="CHAMPION RUN (BEST GAME)"), encoding="utf-8")
+    best_json_path.write_text(json.dumps(best_game, indent=2), encoding="utf-8")
+
+    worst_md_path.write_text(generate_game_markdown(worst_game, title="EARLY FAILURE / DEFEAT (WORST GAME)"), encoding="utf-8")
+    worst_json_path.write_text(json.dumps(worst_game, indent=2), encoding="utf-8")
+
+    print(f"✅ Exported Best Game Deep-Dive:  {best_md_path}")
+    print(f"✅ Exported Worst Game Deep-Dive: {worst_md_path}")
+
+    return {
+        "best_md": best_md_path,
+        "best_json": best_json_path,
+        "worst_md": worst_md_path,
+        "worst_json": worst_json_path,
+    }
+
+
 def export_html_report(games: List[Dict[str, Any]], out_path: Path) -> Path:
     """Exports an interactive standalone HTML dashboard with dark mode and search."""
     out_path = Path(out_path)
@@ -410,6 +540,12 @@ def main():
     parser.add_argument("--worst", type=int, default=None, help="Show top N worst games")
     parser.add_argument("--achievement", type=str, default=None, help="Filter games unlocking this achievement")
     parser.add_argument("--html", type=str, default=None, help="Export interactive HTML dashboard")
+    parser.add_argument(
+        "--export-best-worst",
+        type=str,
+        default=None,
+        help="Export full Markdown & JSON deep-dive analysis for the best and worst games to this directory",
+    )
     args = parser.parse_args()
 
     journal_path = Path(args.journal) if args.journal else find_default_journal()
@@ -439,6 +575,9 @@ def main():
         return
 
     print_summary(games)
+
+    if args.export_best_worst:
+        export_best_and_worst(games, Path(args.export_best_worst))
 
     if args.html:
         out = export_html_report(games, Path(args.html))
