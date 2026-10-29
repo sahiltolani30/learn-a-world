@@ -184,6 +184,7 @@ class GoalBank:
         self.rejected_same_kind: int = 0
         self.rejected_frontier_overflow: int = 0
         self._dim_counts: Dict[int, int] = {i: 0 for i in range(NUM_ACHIEVEMENTS)}
+        self.last_selection_mode: str = "none"
 
     def _rebuild_dim_counts(self) -> None:
         self._dim_counts = {i: 0 for i in range(NUM_ACHIEVEMENTS)}
@@ -273,8 +274,8 @@ class GoalBank:
 
         return entry
 
-    def mark_used(self, key: np.ndarray, success: bool, current_iter: int = 0) -> None:
-        """Updates visit and success counts for the matched goal."""
+    def mark_used(self, key: np.ndarray, success: bool, current_iter: int = 0) -> bool:
+        """Updates visit and success counts for the matched goal; returns True if matched cos >= 0.93."""
         target = _unit_vector(key)
         best_sim = -1.0
         best_entry: Optional[GoalEntry] = None
@@ -290,6 +291,57 @@ class GoalBank:
             if success:
                 best_entry.n_succ += 1
             best_entry.last_used_iter = current_iter
+            return True
+        return False
+
+    def _compute_goal_score(
+        self,
+        g: GoalEntry,
+        s: np.ndarray,
+        locked_dims: List[int],
+        psi_fn: Callable[[np.ndarray, np.ndarray], float],
+        danger_fn: Optional[Callable[[np.ndarray, np.ndarray], float]],
+        novelty_fn: Optional[Callable[[np.ndarray], float]],
+        lift: Optional[PredecessorLift],
+        current_iter: int,
+        beta_t: float,
+    ) -> float:
+        # 1) Unlock potential
+        if locked_dims:
+            locked_profiles = g.action_profile[:, locked_dims]
+            max_unlock = float(np.max(locked_profiles))
+            best_flat_idx = int(np.argmax(locked_profiles))
+            best_locked_dim = locked_dims[best_flat_idx % len(locked_dims)]
+
+            if lift is not None:
+                pred_bonus = 0.25 * min(
+                    sum(float(lift.ci_low[d, best_locked_dim]) for d in locked_dims if lift.ci_low[d, best_locked_dim] > 1.2),
+                    4.0,
+                )
+                predecessor_factor = 1.0 + pred_bonus
+            else:
+                predecessor_factor = 1.0
+            score_unlock = self.cfg.w_unlock * max_unlock * predecessor_factor
+        else:
+            score_unlock = 0.0
+
+        # 2) Reachability psi(s, g.key)
+        psi_val = float(psi_fn(s, g.key))
+        score_reach = self.cfg.w_reach * psi_val
+
+        # 3) Exploration curiosity
+        is_frontier = 1.0 if g.kind == "frontier" else 0.0
+        score_explor = self.cfg.w_explor * is_frontier * beta_t
+
+        # 4) Recency bonus
+        age = max(0, current_iter - g.born_iter)
+        score_recency = 0.1 * (1.0 / (1.0 + 0.1 * age))
+
+        # 5) Danger penalty
+        danger = float(danger_fn(s, g.key)) if danger_fn is not None else 0.0
+        score_danger = self.cfg.w_danger * danger
+
+        return float(score_unlock + score_reach + score_explor + score_recency - score_danger)
 
     def select(
         self,
@@ -303,61 +355,70 @@ class GoalBank:
         current_iter: int = 0,
         beta_t: float = 1.0,
     ) -> Tuple[Optional[GoalEntry], float]:
-        """Selects the best goal entry by composite utility score (§5.8)."""
+        """Selects a goal entry with statistical rotation to break selection monopoly (V2.2 F3)."""
         if not self.entries:
+            self.last_selection_mode = "none"
             return None, 0.0
 
         s = np.concatenate([z.reshape(-1), h.reshape(-1)], axis=-1)
         m_soft = np.asarray(m_soft, dtype=np.float32).reshape(-1)
         locked_dims = [i for i in range(NUM_ACHIEVEMENTS) if m_soft[i] < 0.5]
 
-        best_score = -float("inf")
-        best_goal: Optional[GoalEntry] = None
+        frontier_goals = [g for g in self.entries if g.kind == "frontier"]
+        u = float(np.random.rand())
 
-        for g in self.entries:
-            # 1) Unlock potential
-            if locked_dims:
-                locked_profiles = g.action_profile[:, locked_dims]
-                max_unlock = float(np.max(locked_profiles))
-                # argmax achievement index among locked
-                best_flat_idx = int(np.argmax(locked_profiles))
-                best_locked_dim = locked_dims[best_flat_idx % len(locked_dims)]
+        frontier_share = getattr(self.cfg, "selection_frontier_share", 0.10)
+        rotate_share = getattr(self.cfg, "selection_rotate_share", 0.25)
 
-                # Predecessor prior lift factor (V2: uses ci_low, only edges > 1.2)
-                if lift is not None:
-                    pred_bonus = 0.25 * min(
-                        sum(float(lift.ci_low[d, best_locked_dim]) for d in locked_dims if lift.ci_low[d, best_locked_dim] > 1.2),
-                        4.0,
+        if u < frontier_share and len(frontier_goals) > 0:
+            mode = "frontier"
+            chosen_g = min(frontier_goals, key=lambda g: (g.last_used_iter, g.n_try))
+            chosen_score = self._compute_goal_score(
+                chosen_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+            )
+        elif u < (frontier_share + rotate_share):
+            event_vital = [g for g in self.entries if g.kind in ("event", "vital")]
+            if len(event_vital) > 0:
+                mode = "rotate"
+                scored_candidates = [
+                    (
+                        g,
+                        self._compute_goal_score(
+                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                        ),
                     )
-                    predecessor_factor = 1.0 + pred_bonus
-                else:
-                    predecessor_factor = 1.0
-                score_unlock = self.cfg.w_unlock * max_unlock * predecessor_factor
+                    for g in event_vital
+                ]
+                scored_candidates.sort(key=lambda item: item[1], reverse=True)
+                top10 = scored_candidates[:10]
+                chosen_g, chosen_score = min(top10, key=lambda item: (item[0].last_used_iter, item[0].n_try))
             else:
-                score_unlock = 0.0
+                mode = "argmax"
+                scored_all = [
+                    (
+                        g,
+                        self._compute_goal_score(
+                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                        ),
+                    )
+                    for g in self.entries
+                ]
+                chosen_g, chosen_score = max(scored_all, key=lambda item: item[1])
+        else:
+            mode = "argmax"
+            scored_all = [
+                (
+                    g,
+                    self._compute_goal_score(
+                        g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                    ),
+                )
+                for g in self.entries
+            ]
+            chosen_g, chosen_score = max(scored_all, key=lambda item: item[1])
 
-            # 2) Reachability psi(s, g.key)
-            psi_val = float(psi_fn(s, g.key))
-            score_reach = self.cfg.w_reach * psi_val
-
-            # 3) Exploration curiosity
-            is_frontier = 1.0 if g.kind == "frontier" else 0.0
-            score_explor = self.cfg.w_explor * is_frontier * beta_t
-
-            # 4) Recency bonus
-            age = max(0, current_iter - g.born_iter)
-            score_recency = 0.1 * (1.0 / (1.0 + 0.1 * age))
-
-            # 5) Danger penalty
-            danger = float(danger_fn(s, g.key)) if danger_fn is not None else 0.0
-            score_danger = self.cfg.w_danger * danger
-
-            total_score = score_unlock + score_reach + score_explor + score_recency - score_danger
-            if total_score > best_score:
-                best_score = total_score
-                best_goal = g
-
-        return best_goal, best_score
+        self.last_selection_mode = mode
+        return chosen_g, chosen_score
 
     def save(self, path: Union[str, Path]) -> None:
         """Saves goal bank to npz + json metadata."""

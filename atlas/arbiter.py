@@ -108,6 +108,9 @@ class AtlasAgent:
         self.nav_steps: int = 0
         self.stagnation_counter: int = 0
         self.psi_best: float = -1.0
+        self.current_option_budget: int = self.cfg.skills.max_option_steps
+        self.current_goal_mode: str = "none"
+        self.last_probe_decision: Optional[Dict[str, Any]] = None
 
         # In-progress episode transition buffer for collector
         self.episode_buffer: list[Dict[str, Any]] = []
@@ -135,6 +138,9 @@ class AtlasAgent:
         self.nav_steps = 0
         self.stagnation_counter = 0
         self.psi_best = -1.0
+        self.current_option_budget = self.cfg.skills.max_option_steps
+        self.current_goal_mode = "none"
+        self.last_probe_decision = None
         self.episode_buffer.clear()
 
     @torch.no_grad()
@@ -197,6 +203,17 @@ class AtlasAgent:
             self.mode = "WANDER"
             self.wander_steps_remaining -= 1
         elif self.active_goal is not None:
+            # Ensure option budget is scaled for active goal (V2.2 F9)
+            if getattr(self, "_active_goal_id", None) != id(self.active_goal):
+                self._active_goal_id = id(self.active_goal)
+                g_key_t = torch.from_numpy(self.active_goal.key).float().to(self.device).unsqueeze(0)
+                psi_val = float(self.reach_net(s, g_key_t).item())
+                base_budget = self.cfg.skills.max_option_steps
+                scaled_budget = base_budget * (1.0 + 2.0 * max(0.0, 1.0 - psi_val))
+                b_min = min(getattr(self.cfg.skills, "option_budget_min", 25), base_budget)
+                b_max = max(getattr(self.cfg.skills, "option_budget_max", 60), base_budget)
+                self.current_option_budget = int(min(b_max, max(b_min, round(scaled_budget))))
+
             g_key_np = self.active_goal.key
             arrival_cos = _cosine(z_np, g_key_np)
             if arrival_cos >= self.cfg.skills.arrival_cosine:
@@ -216,7 +233,7 @@ class AtlasAgent:
                 self.nav_steps += 1
                 if (
                     self.stagnation_counter >= self.cfg.skills.stagnation_patience
-                    or self.nav_steps >= self.cfg.skills.max_option_steps
+                    or self.nav_steps >= self.current_option_budget
                 ):
                     # Stagnated or timed out -> abandon goal and enter WANDER (10 steps)
                     if not self.frozen_memory:
@@ -244,6 +261,16 @@ class AtlasAgent:
             if best_goal is not None and score > 0.0:
                 self.active_goal = best_goal
                 self.goal_score = score
+                self.current_goal_mode = getattr(self.goals, "last_selection_mode", "none")
+
+                # Reachability-scaled option budget (V2.2 F9)
+                g_key_t = torch.from_numpy(best_goal.key).float().to(self.device).unsqueeze(0)
+                psi_val = float(self.reach_net(s, g_key_t).item())
+                b_min = getattr(self.cfg.skills, "option_budget_min", 25)
+                b_max = getattr(self.cfg.skills, "option_budget_max", 60)
+                scaled_budget = self.cfg.skills.max_option_steps * (1.0 + 2.0 * max(0.0, 1.0 - psi_val))
+                self.current_option_budget = int(min(b_max, max(b_min, round(scaled_budget))))
+
                 self.nav_steps = 0
                 self.stagnation_counter = 0
                 self.psi_best = -1.0
@@ -269,9 +296,21 @@ class AtlasAgent:
             probe_score = affordance + self.cfg.goals.probe_entropy * F.softmax(d_all, dim=-1)
             a_intended = int(torch.argmax(probe_score).item())
 
+            self.last_probe_decision = {
+                "step": step,
+                "goal_kind": self.active_goal.kind if self.active_goal else "none",
+                "goal_dim": list(self.active_goal.event_dims) if self.active_goal else [],
+                "blended_scores": probe_score.detach().cpu().numpy().tolist(),
+                "probe_event_probs": all_event_probs.detach().cpu().to(torch.float16).numpy().tolist(),
+                "arrival_cos": float(arrival_cos),
+                "matched_bank": False,
+            }
+
             if self.probe_steps_remaining == 0 and self.active_goal is not None:
                 if not self.frozen_memory:
-                    self.goals.mark_used(self.active_goal.key, success=self.probe_unlocked, current_iter=self.current_iter)
+                    matched = self.goals.mark_used(self.active_goal.key, success=self.probe_unlocked, current_iter=self.current_iter)
+                    if self.last_probe_decision is not None:
+                        self.last_probe_decision["matched_bank"] = bool(matched)
                 self.active_goal = None
 
         elif self.mode == "NAVIGATE" and self.active_goal is not None:
@@ -381,6 +420,8 @@ class AtlasAgent:
             "reason": decision_reason,
             "a_intended": a_int_name,
             "a_final": a_fin_name,
+            "goal_mode": self.current_goal_mode,
+            "option_budget": int(self.current_option_budget),
         }
 
         # Record step buffer for collection

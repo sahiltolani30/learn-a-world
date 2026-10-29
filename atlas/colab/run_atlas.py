@@ -90,6 +90,12 @@ def parse_args():
         default=False,
         help="Skip load_state, skip re-mine, start with empty banks from iteration 0",
     )
+    parser.add_argument(
+        "--no-audit",
+        action="store_true",
+        default=False,
+        help="Disable diagnostic audit pack exporter (V2.2 F8)",
+    )
     return parser.parse_args()
 
 
@@ -191,6 +197,7 @@ def main():
         results_dir=paths["results_dir"],
         cfg=cfg,
     )
+    loop.enable_audit = not args.no_audit
 
     if args.phase == "selflearn":
         print("=" * 70)
@@ -215,7 +222,7 @@ def main():
                 print(f"[SelfLearnLoop] Performing one-time memory repair pass (re-mine) at iteration {resume_iter}...")
                 remine_stats = loop.remine_shards()
                 print(f"[SelfLearnLoop] Re-mine complete: {remine_stats}")
-            agent.resumed_from = {"run_id": "atlas_v2_scratch", "iteration": 39}
+            agent.resumed_from = {"run_id": args.run_id, "iteration": resume_iter}
             agent.memory_source = "own_play_v2"
             agent.remine = True
 

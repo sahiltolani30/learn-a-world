@@ -189,19 +189,25 @@ class HeadTrainer:
         skills_cfg = getattr(self.option_net, "cfg", None)
         r_max = getattr(skills_cfg, "her_reward_weight_max", 4.0)
         u_weight = getattr(skills_cfg, "her_unlock_weight", 2.0)
+        p_gain = getattr(skills_cfg, "progress_weight_gain", 3.0)
+        horizons = getattr(skills_cfg, "her_horizons", (5, 10))
         her_train = build_her_batch(
             train_eps,
+            horizons=horizons,
             max_samples=max_her,
             her_reward_weight_max=r_max,
             her_unlock_weight=u_weight,
+            progress_weight_gain=p_gain,
             device=self.device,
         )
         her_val = (
             build_her_batch(
                 val_eps,
+                horizons=horizons,
                 max_samples=max_her,
                 her_reward_weight_max=r_max,
                 her_unlock_weight=u_weight,
+                progress_weight_gain=p_gain,
                 device=self.device,
             )
             if val_eps
@@ -231,25 +237,28 @@ class HeadTrainer:
         last_skills_metrics: Dict[str, float] = {}
 
         n_her = her_train["s_pos"].shape[0] if her_train is not None else 0
-        print(f"  [Train] HER batch: {n_her} pairs | Transitions: {N} | Epochs: {self.cfg.epochs_per_iter}")
+        skill_epochs = getattr(self.cfg, "skill_epochs_per_iter", 16)
+        other_epochs = self.cfg.epochs_per_iter
+        print(f"  [Train] HER batch: {n_her} pairs (skill epochs: {skill_epochs}) | Transitions: {N} (other epochs: {other_epochs})")
 
         max_epoch_samples = min(N, 32768)
 
-        for epoch in range(self.cfg.epochs_per_iter):
-            t_epoch_start = time.time()
-            # 1) Train OptionNet & ReachabilityNet
-            if her_train is not None and her_train["s_pos"].shape[0] > 0:
+        # 1) Train OptionNet & ReachabilityNet (V2.2 F5 skill-epoch boost: 16 epochs)
+        if her_train is not None and her_train["s_pos"].shape[0] > 0:
+            for s_ep in range(skill_epochs):
                 opt_skills.zero_grad()
                 loss_skills, metrics_skills = compute_her_loss(self.option_net, self.reach_net, her_train)
                 loss_skills.backward()
                 nn.utils.clip_grad_norm_(params_skills, 1.0)
                 opt_skills.step()
                 last_skills_metrics = metrics_skills
-                if epoch == 0:
+                if s_ep == 0:
                     initial_ce_loss = metrics_skills["ce_loss"]
                 final_ce_loss = metrics_skills["ce_loss"]
 
-            # 2) Train EpistemicNet, ContinueNet, ReadoutNet in mini-batches
+        # 2) Train EpistemicNet, ContinueNet, ReadoutNet in mini-batches (6 epochs)
+        for epoch in range(other_epochs):
+            t_epoch_start = time.time()
             indices = np.random.permutation(N)[:max_epoch_samples]
             for b_start in range(0, max_epoch_samples, batch_size):
                 b_idx = indices[b_start: b_start + batch_size]
@@ -283,7 +292,7 @@ class HeadTrainer:
                     opt_readout.step()
 
             dt_ep = time.time() - t_epoch_start
-            print(f"    -> Epoch {epoch+1}/{self.cfg.epochs_per_iter} completed in {dt_ep:.1f}s (HER CE: {final_ce_loss:.3f})")
+            print(f"    -> Other Heads Epoch {epoch+1}/{other_epochs} completed in {dt_ep:.1f}s (HER CE: {final_ce_loss:.3f})")
 
         # Gate Checks (§5.11 / PLAN_V2)
         # 1. Reachability AUROC: hard (50/50 cross-ep + far within-ep) and easy (cross-ep)

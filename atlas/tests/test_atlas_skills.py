@@ -264,8 +264,8 @@ def test_reward_anchored_imitation_weights():
         "events": np.zeros((T, 22), dtype=bool),
     }
 
-    batch_unrew = build_her_batch([ep_unrewarded], horizons=(5,))
-    batch_rew = build_her_batch([ep_rewarded], horizons=(5,))
+    batch_unrew = build_her_batch([ep_unrewarded], horizons=(5,), progress_weight_gain=0.0)
+    batch_rew = build_her_batch([ep_rewarded], horizons=(5,), progress_weight_gain=0.0)
 
     # Unrewarded return 0 -> weight = 1.0 + 0 = 1.0
     # Rewarded return (k * 1 = 5) -> weight = 1.0 + min(5, 4.0) = 5.0, or with return 1: 1.0 + 1 = 2.0
@@ -277,7 +277,7 @@ def test_reward_anchored_imitation_weights():
         "events": np.zeros((T, 22), dtype=bool),
     }
     ep_rew1["rewards"][2] = 1.0  # single reward of 1 in segment
-    batch_rew1 = build_her_batch([ep_rew1], horizons=(5,))
+    batch_rew1 = build_her_batch([ep_rew1], horizons=(5,), progress_weight_gain=0.0)
 
     # A segment with return 9 clips to weight 1.0 + min(9.0, 4.0) = 5.0
     ep_clip = {
@@ -287,7 +287,7 @@ def test_reward_anchored_imitation_weights():
         "rewards": np.full(T, 9.0, dtype=np.float32),
         "events": np.zeros((T, 22), dtype=bool),
     }
-    batch_clip = build_her_batch([ep_clip], horizons=(5,))
+    batch_clip = build_her_batch([ep_clip], horizons=(5,), progress_weight_gain=0.0)
     w_clip = batch_clip["weights_pos"].cpu().numpy()
     assert np.allclose(w_clip, 5.0), f"Expected return 9 to clip to weight 5.0, got {w_clip}"
 

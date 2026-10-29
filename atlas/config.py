@@ -102,7 +102,7 @@ class TopoMapConfig:
 class SkillsConfig:
     goal_emb_dim: int = 128
     hidden_dim: int = 256
-    her_horizons: Tuple[int, ...] = (5, 10, 20)
+    her_horizons: Tuple[int, ...] = (5, 10)  # dropped k=20 (measured arrivals are short-range)
     arrival_cosine: float = 0.85  # CHANGED from 0.93 (0.93 was unreachable; cos plateaus ~0.92)
     max_option_steps: int = 25
     stagnation_patience: int = 8
@@ -114,6 +114,9 @@ class SkillsConfig:
     weight_clip: float = 50.0  # max per-sample imitation weight
     her_reward_weight_max: float = 4.0
     her_unlock_weight: float = 2.0
+    progress_weight_gain: float = 3.0  # V2.2 F4
+    option_budget_min: int = 25        # V2.2 F9
+    option_budget_max: int = 60        # V2.2 F9
 
 
 @dataclass
@@ -162,6 +165,9 @@ class GoalsConfig:
     lift_min_base_count: int = 20    # min firings of d to mine edge (d,e)
     lift_min_pair_support: int = 3   # min co-occurrence count k
     lift_ci_threshold: float = 1.2   # ci_low must exceed this to influence scoring
+    # V2.2 F3 Selection rotation:
+    selection_rotate_share: float = 0.25
+    selection_frontier_share: float = 0.10
 
 
 @dataclass
@@ -180,6 +186,7 @@ class CollectConfig:
 class TrainConfig:
     batch_size: int = 256
     epochs_per_iter: int = 6
+    skill_epochs_per_iter: int = 16  # V2.2 F5 (OptionNet + ReachNet)
     device: str = "auto"
     cache_latents: bool = True
     her_max_pairs: int = 32_768

@@ -22,6 +22,14 @@ from atlas.config import (
 )
 
 
+def _cosine(a: np.ndarray, b: np.ndarray) -> float:
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a < 1e-8 or norm_b < 1e-8:
+        return 0.0
+    return float(np.dot(a, b) / (norm_a * norm_b))
+
+
 class OptionNet(nn.Module):
     """Goal-conditioned policy network: pi(a | s, g).
 
@@ -105,11 +113,12 @@ class ReachabilityNet(nn.Module):
 
 def build_her_batch(
     episodes: Sequence[Dict[str, Union[np.ndarray, torch.Tensor]]],
-    horizons: Sequence[int] = (5, 10, 20),
+    horizons: Sequence[int] = (5, 10),
     negatives_per_pos: int = 1,
     max_samples: int = 32_768,
     her_reward_weight_max: float = 4.0,
     her_unlock_weight: float = 2.0,
+    progress_weight_gain: float = 3.0,
     device: Optional[torch.device | str] = None,
 ) -> Dict[str, torch.Tensor]:
     """Constructs Hindsight Experience Replay (HER) training pairs.
@@ -192,11 +201,20 @@ def build_her_batch(
                 k = int(np.random.choice(valid_ks))
                 t = int(np.random.randint(0, T - k))
                 goal = ep["z"][t + k]
+
+                # Progress-weighted HER (V2.2 F4)
+                cos_start = _cosine(ep["z"][t], goal)
+                cos_end = 1.0  # g = ep["z"][t+k], so cos_end = 1.0
+                progress = cos_end - cos_start
+                w_progress = 1.0 + progress_weight_gain * max(0.0, progress)
+
                 seg_return = float(np.sum(ep["r"][t:t + k]))
-                w_reward = 1.0 + min(max(seg_return, 0.0), her_reward_weight_max)
+                w_reward = (
+                    (1.0 + min(max(seg_return, 0.0), her_reward_weight_max))
+                    * (her_unlock_weight if np.any(ep["events"][t:t + k]) else 1.0)
+                    * w_progress
+                )
                 is_unlock = bool(np.any(ep["events"][t:t + k]))
-                if is_unlock:
-                    w_reward *= her_unlock_weight
 
                 for tau in range(t, t + k):
                     s_pos_list.append(ep["s"][tau])
@@ -227,11 +245,20 @@ def build_her_batch(
                     continue
                 for t in range(0, T - k):
                     goal = ep["z"][t + k]
+
+                    # Progress-weighted HER (V2.2 F4)
+                    cos_start = _cosine(ep["z"][t], goal)
+                    cos_end = 1.0  # g = ep["z"][t+k], so cos_end = 1.0
+                    progress = cos_end - cos_start
+                    w_progress = 1.0 + progress_weight_gain * max(0.0, progress)
+
                     seg_return = float(np.sum(ep["r"][t:t + k]))
-                    w_reward = 1.0 + min(max(seg_return, 0.0), her_reward_weight_max)
+                    w_reward = (
+                        (1.0 + min(max(seg_return, 0.0), her_reward_weight_max))
+                        * (her_unlock_weight if np.any(ep["events"][t:t + k]) else 1.0)
+                        * w_progress
+                    )
                     is_unlock = bool(np.any(ep["events"][t:t + k]))
-                    if is_unlock:
-                        w_reward *= her_unlock_weight
 
                     for tau in range(t, t + k):
                         s_pos_list.append(ep["s"][tau])
@@ -304,7 +331,7 @@ def build_her_batch(
 
 def build_validation_reach_pairs(
     val_eps: Sequence[Dict[str, Union[np.ndarray, torch.Tensor]]],
-    horizons: Sequence[int] = (5, 10, 20),
+    horizons: Sequence[int] = (5, 10),
     max_samples: int = 4096,
     device: Optional[torch.device | str] = None,
 ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:

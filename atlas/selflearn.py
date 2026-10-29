@@ -18,6 +18,7 @@ import numpy as np
 import torch
 
 from atlas.arbiter import AtlasAgent
+from atlas.audit_pack import AuditPackExporter
 from atlas.backbone import FrozenBackbone
 from atlas.collect import EpisodeCollector, ShardLoader
 from atlas.config import NUM_ACHIEVEMENTS, NUM_ACTIONS, REPO_ROOT, AtlasConfig
@@ -26,19 +27,28 @@ from atlas.health import HealthMonitor
 from atlas.screen import screen_agent
 from atlas.skills import build_her_batch
 from atlas.train import HeadTrainer
+from eval.metrics import CRAFTER_ACHIEVEMENTS
 
 
 class IterationInstrumenter:
     """Instruments agent.act during an iteration's episode collection to record telemetry."""
 
-    def __init__(self, agent: AtlasAgent):
+    def __init__(
+        self,
+        agent: AtlasAgent,
+        iter_idx: int = 0,
+        audit_exporter: Optional[AuditPackExporter] = None,
+    ):
         self.agent = agent
+        self.iter_idx = iter_idx
+        self.audit_exporter = audit_exporter
         self.orig_act = agent.act
         self.stats: Dict[str, Any] = {
             "goals_selected_by_kind": {"event": 0, "vital": 0, "frontier": 0},
             "arrivals": 0,
             "probes_started": 0,
             "probe_unlocks": 0,
+            "probe_unlocks_bank_matched": 0,
             "wander_starts": 0,
         }
 
@@ -62,6 +72,8 @@ class IterationInstrumenter:
             arrival_cos = float(telemetry.get("arrival_cos", 0.0))
             if arrival_cos >= self.agent.cfg.skills.arrival_cosine:
                 self.stats["arrivals"] += 1
+                if self.audit_exporter is not None:
+                    self.audit_exporter.record_frame(f"arrival_it{self.iter_idx}_step{step}", obs_uint8)
 
             # 3. Probes started
             if prev_mode != "PROBE" and self.agent.mode == "PROBE":
@@ -71,7 +83,28 @@ class IterationInstrumenter:
             if prev_mode == "PROBE":
                 curr_m_bin_sum = int(np.sum(self.agent.belief.m_bin))
                 if curr_m_bin_sum > prev_m_bin_sum:
-                    self.stats["probe_unlocks"] += (curr_m_bin_sum - prev_m_bin_sum)
+                    diff = curr_m_bin_sum - prev_m_bin_sum
+                    self.stats["probe_unlocks"] += diff
+                    if getattr(self.agent, "last_probe_decision", None) and self.agent.last_probe_decision.get("matched_bank", False):
+                        self.stats["probe_unlocks_bank_matched"] += diff
+
+                if self.audit_exporter is not None and getattr(self.agent, "last_probe_decision", None):
+                    dec = self.agent.last_probe_decision
+                    unlocked_dims = [i for i in range(NUM_ACHIEVEMENTS) if self.agent.belief.m_bin[i] > 0]
+                    self.audit_exporter.record_decision(
+                        iter_idx=self.iter_idx,
+                        step=step,
+                        goal_kind=dec.get("goal_kind", "unknown"),
+                        goal_dim=dec.get("goal_dim", []),
+                        mode="PROBE",
+                        arrival_cos=dec.get("arrival_cos", 0.0),
+                        chosen_action=action,
+                        blended_scores=dec.get("blended_scores", [0.0] * 17),
+                        probe_event_probs=dec.get("probe_event_probs", [[0.0] * 22] * 17),
+                        unlocked_dims=unlocked_dims,
+                        matched_bank=dec.get("matched_bank", False),
+                    )
+                    self.audit_exporter.record_frame(f"probe_it{self.iter_idx}_step{step}", obs_uint8)
 
             # 5. Wander starts
             if prev_mode != "WANDER" and self.agent.mode == "WANDER":
@@ -246,11 +279,79 @@ class SelfLearnLoop:
         except Exception:
             self.git_commit = "unknown"
 
+        self.audit_exporter = AuditPackExporter(self.run_dir)
+        self.enable_audit: bool = True
+
+        # Wrap collector.run_episode to ensure journal entries carry run_segment (V2.2 F1)
+        # and positions are appended to player_positions.jsonl (V2.2 F7c)
+        orig_run_ep = self.collector.run_episode
+
+        def run_ep_with_segment(seed: int, iter_idx: int = 0) -> Dict[str, Any]:
+            ep_data = orig_run_ep(seed, iter_idx=iter_idx)
+
+            if self.journal_path is not None:
+                all_unlocked = [
+                    CRAFTER_ACHIEVEMENTS[idx]
+                    for idx in range(NUM_ACHIEVEMENTS)
+                    if ep_data["events"][:, idx].any()
+                ]
+                mode_counts: Dict[str, int] = {}
+                for t_item in ep_data.get("telemetry", []):
+                    m = t_item.get("mode", "UNKNOWN")
+                    mode_counts[m] = mode_counts.get(m, 0) + 1
+
+                journal_entry = {
+                    "run_segment": self.git_commit,
+                    "iter": iter_idx,
+                    "seed": seed,
+                    "game_id": f"it{iter_idx}_seed{seed}",
+                    "length": ep_data["episode_length"],
+                    "total_reward": round(float(np.sum(ep_data["rewards"])), 2),
+                    "died": bool(ep_data["dones"][-1]) if len(ep_data["dones"]) > 0 else False,
+                    "achievements": all_unlocked,
+                    "num_achievements": len(all_unlocked),
+                    "mode_counts": mode_counts,
+                    "overrides_count": sum(1 for t_item in ep_data.get("telemetry", []) if t_item.get("override", False)),
+                    "positions": ep_data["positions"],
+                    "moved_steps": ep_data["moved_steps"],
+                    "moved_fraction": ep_data["moved_fraction"],
+                    "action_histogram": ep_data["action_histogram"],
+                    "steps": ep_data.get("telemetry", []),
+                }
+                try:
+                    with open(self.journal_path, "a") as jf:
+                        jf.write(json.dumps(journal_entry) + "\n")
+                except Exception:
+                    pass
+
+            # Diagnostic player positions logging
+            pos_record = {
+                "game_id": f"it{iter_idx}_seed{seed}",
+                "seed": seed,
+                "iter": iter_idx,
+                "run_segment": self.git_commit,
+                "length": ep_data["episode_length"],
+                "positions": ep_data["positions"],
+                "moved_steps": ep_data["moved_steps"],
+                "moved_fraction": ep_data["moved_fraction"],
+            }
+            try:
+                with open(self.run_dir / "player_positions.jsonl", "a") as pf:
+                    pf.write(json.dumps(pos_record) + "\n")
+            except Exception:
+                pass
+
+            return ep_data
+
+        self.collector.journal_path = None
+        self.collector.run_episode = run_ep_with_segment
+
     def save_state(self, current_iter: int) -> None:
         """Atomic state checkpoint."""
         tmp_file = self.state_file.with_suffix(".tmp")
         payload = {
             "iter": current_iter,
+            "health_snapshot": self.health.get_snapshot(),
             "option_net": self.agent.option_net.state_dict(),
             "reach_net": self.agent.reach_net.state_dict(),
             "epistemic_net": self.agent.epistemic_net.state_dict(),
@@ -266,6 +367,16 @@ class SelfLearnLoop:
         self.agent.goals.save(self.run_dir / "goal_bank")
         self.agent.lift.save(self.run_dir / "lift.npz")
         self.agent.topomap.save(self.run_dir / "topomap.npz")
+
+        # Audit Pack export (V2.2 F8)
+        if getattr(self, "enable_audit", True):
+            self.audit_exporter.export(
+                current_iter=current_iter,
+                git_commit=self.git_commit,
+                cfg=self.cfg,
+                cached_episodes=self.all_cached_episodes,
+                results_dir=self.results_dir,
+            )
 
     def load_state(self) -> int:
         """Loads state checkpoint if present; returns resume iteration."""
@@ -285,6 +396,9 @@ class SelfLearnLoop:
             torch.set_rng_state(ckpt["torch_rng"].cpu())
         if "np_rng" in ckpt:
             np.random.set_state(ckpt["np_rng"])
+
+        if "health_snapshot" in ckpt:
+            self.health.load_snapshot(ckpt["health_snapshot"])
 
         self.agent.goals.load(self.run_dir / "goal_bank")
         self.agent.lift.load(self.run_dir / "lift.npz")
@@ -419,7 +533,11 @@ class SelfLearnLoop:
         t0 = time.time()
         end_iter = self.start_iter + num_iters
 
+        print(f"[Resume] starting at iteration {self.start_iter}, seeds {10000 + self.start_iter * 100}..")
+        last_dev_ach = self.health.progress_history[-1][1] if self.health.progress_history else 0.0
+
         for it in range(self.start_iter, end_iter):
+            assert it >= self.start_iter, f"Loop iteration {it} is less than start_iter {self.start_iter}"
             if minutes_budget is not None and (time.time() - t0) / 60.0 >= minutes_budget:
                 print(f"[SelfLearnLoop] Time budget of {minutes_budget}m reached. Graceful exit.")
                 break
@@ -428,7 +546,7 @@ class SelfLearnLoop:
             seed_base = 10000 + it * 100
 
             # 1. Collect with loop instrumentation
-            with IterationInstrumenter(self.agent) as inst:
+            with IterationInstrumenter(self.agent, iter_idx=it, audit_exporter=self.audit_exporter) as inst:
                 shard_path = self.collector.run_episodes(
                     n=self.cfg.collect.episodes_per_iter,
                     seed_base=seed_base,
@@ -440,6 +558,7 @@ class SelfLearnLoop:
                 "arrivals": inst.stats["arrivals"],
                 "probes_started": inst.stats["probes_started"],
                 "probe_unlocks": inst.stats["probe_unlocks"],
+                "probe_unlocks_bank_matched": inst.stats.get("probe_unlocks_bank_matched", 0),
                 "wander_starts": inst.stats["wander_starts"],
                 "git_commit": self.git_commit,
             }
@@ -521,10 +640,12 @@ class SelfLearnLoop:
                     tag=f"{self.run_id}_dev_it{it}",
                     out_dir=self.results_dir,
                 )
-                ach_per_ep = float(screen_res.get("summary", {}).get("achievements_per_episode", 0.0))
-                self.health.observe_progress(it, ach_per_ep)
+                last_dev_ach = float(screen_res.get("summary", {}).get("achievements_per_episode", 0.0))
                 probe_frac = float(screen_res.get("per_mode_telemetry", {}).get("probe_fraction", 0.0))
                 self.health.observe_probe_fraction(probe_frac)
+
+            # Honest monitor feed: carry forward last known dev screen ach (V2.2 F2)
+            self.health.observe_progress(it, last_dev_ach)
 
             # 6. Runtime health check and alarms
             health_status = self.health.check(it, log_file=self.trainer.log_file)

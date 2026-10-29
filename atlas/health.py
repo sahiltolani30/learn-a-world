@@ -51,6 +51,24 @@ class HealthMonitor:
         """Passive metric updated from dev screen or train log."""
         self.probe_fraction = float(frac)
 
+    def get_snapshot(self) -> Dict[str, Any]:
+        """Captures health state snapshot for resume integrity (V2.2 F1)."""
+        return {
+            "best_ach_per_ep": float(self.best_ach_per_ep),
+            "last_best_iter": int(self.last_best_iter),
+            "progress_history": list(self.progress_history),
+            "alarms_so_far": list(self.alarms_so_far),
+        }
+
+    def load_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
+        """Restores health state snapshot on resume (V2.2 F1)."""
+        if not snapshot:
+            return
+        self.best_ach_per_ep = float(snapshot.get("best_ach_per_ep", 0.0))
+        self.last_best_iter = int(snapshot.get("last_best_iter", 0))
+        self.progress_history = [(int(it), float(val)) for it, val in snapshot.get("progress_history", [])]
+        self.alarms_so_far = list(snapshot.get("alarms_so_far", []))
+
     def notify_step(self) -> None:
         """Called on each environment step during collection to decrement boost_steps_left."""
         if self.boost_steps_left > 0:
