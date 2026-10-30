@@ -144,34 +144,33 @@ class AgentForensics:
         Forensic X-Ray of the Two-Tier Replay Memory Buffer.
         Audits stored transitions, milestone archive health, and retention ratios.
         """
-        t1_len = len(getattr(buffer, "tier1", []))
-        t2_len = len(getattr(buffer, "tier2", []))
-        total_len = len(buffer)
-        t2_capacity = getattr(buffer, "tier2_capacity", 0)
-        t1_capacity = getattr(buffer, "tier1_capacity", 0)
+        t1_size = getattr(buffer, "t1_size", 0)
+        t2_size = getattr(buffer, "t2_size", 0)
+        total_len = len(buffer) if hasattr(buffer, "__len__") else (t1_size + t2_size)
+        t1_cap = getattr(buffer, "tier1_capacity", 100000)
+        t2_cap = getattr(buffer, "tier2_capacity", 20000)
 
-        # Audit milestones present in Tier 2
-        milestone_counts: Dict[str, int] = {}
-        if hasattr(buffer, "tier2"):
-            for trans in buffer.tier2:
-                info = getattr(trans, "info", {})
-                if isinstance(info, dict):
-                    for ach in info.get("unlocked_achievements", []):
-                        milestone_counts[ach] = milestone_counts.get(ach, 0) + 1
+        # Audit milestones in Tier 2
+        milestone_count = 0
+        if hasattr(buffer, "t2_is_milestone") and buffer.t2_is_milestone is not None:
+            milestone_count = int(np.sum(buffer.t2_is_milestone[:t2_size]))
+
+        novelty_thresh = buffer.get_novelty_threshold() if hasattr(buffer, "get_novelty_threshold") else 0.0
 
         return {
             "total_transitions": total_len,
-            "tier1_count": t1_len,
-            "tier1_capacity": t1_capacity,
-            "tier2_count": t2_len,
-            "tier2_capacity": t2_capacity,
-            "tier2_utilization_pct": (t2_len / max(1, t2_capacity)) * 100.0,
-            "milestone_catalog": milestone_counts,
+            "tier1_count": t1_size,
+            "tier1_capacity": t1_cap,
+            "tier2_count": t2_size,
+            "tier2_capacity": t2_cap,
+            "tier2_utilization_pct": (t2_size / max(1, t2_cap)) * 100.0,
+            "tier2_milestones": milestone_count,
+            "novelty_threshold": float(novelty_thresh),
         }
 
     def plot_forensic_panel(
         self,
-        obs: np.ndarray,
+        obs: Any,
         explanation: Dict[str, Any],
         title_suffix: str = "",
         save_path: Optional[str] = None,
@@ -188,9 +187,14 @@ class AgentForensics:
 
         # 1. Raw Crafter Visual Frame
         ax_img = axes[0, 0]
-        # Normalize/format observation for display
-        img = obs.copy()
-        if img.shape[0] in (1, 3, 4) and img.ndim == 3:
+        # Normalize/format observation for display (supports Tensor, ResetObs, ndarray)
+        if isinstance(obs, torch.Tensor):
+            img = obs.detach().cpu().numpy()
+        else:
+            img = np.asarray(obs)
+        img = img.copy()
+
+        if img.ndim == 3 and img.shape[0] in (1, 3, 4):
             img = np.transpose(img, (1, 2, 0))
         if img.max() <= 1.0:
             img = (img * 255).astype(np.uint8)
