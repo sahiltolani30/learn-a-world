@@ -28,8 +28,35 @@ def _get_action_name(idx: int) -> str:
     return str(idx)
 
 
+def _resolve_trace_dir(run_dir: Path) -> Path:
+    """Resolves trace directory supporting Colab Drive, local, or direct trace dir paths."""
+    # 1. Exact match run_dir / "trace"
+    if (run_dir / "trace").is_dir():
+        return run_dir / "trace"
+    # 2. If run_dir itself is the trace directory
+    if run_dir.is_dir() and run_dir.name == "trace":
+        return run_dir
+    # 3. If run_dir itself contains trace_it*.jsonl
+    if run_dir.is_dir() and list(run_dir.glob("trace_it*.jsonl")):
+        return run_dir
+    # 4. Common path mappings between local & Colab Drive
+    run_name = run_dir.name
+    candidates = [
+        Path("/content/drive/MyDrive/learn-a-world/atlas/runs") / run_name,
+        Path("/content/drive/MyDrive/learn-a-world") / run_dir,
+        Path("atlas/runs") / run_name,
+        Path("atlas_runs") / run_name,
+    ]
+    for cand in candidates:
+        if (cand / "trace").is_dir():
+            return cand / "trace"
+        if cand.is_dir() and cand.name == "trace":
+            return cand
+    return run_dir / "trace"
+
+
 def _load_trace_lines(run_dir: Path, iter_idx: Optional[int] = None) -> List[Dict[str, Any]]:
-    trace_dir = run_dir / "trace"
+    trace_dir = _resolve_trace_dir(run_dir)
     if not trace_dir.exists():
         sys.stderr.write(f"Trace directory not found: {trace_dir}\n")
         sys.exit(2)
@@ -57,10 +84,33 @@ def _load_trace_lines(run_dir: Path, iter_idx: Optional[int] = None) -> List[Dic
 
 
 def run_story(args: argparse.Namespace) -> None:
-    run_dir = Path(args.run_dir)
-    lines = _load_trace_lines(run_dir, iter_idx=args.iter)
-
-    ep_lines = [line for line in lines if line.get("ep_idx") == args.ep]
+    if getattr(args, "trace_file", None):
+        trace_path = Path(args.trace_file)
+        if "*" in args.trace_file:
+            import glob
+            matched = sorted(glob.glob(args.trace_file))
+            if not matched:
+                sys.stderr.write(f"No trace files matched pattern: {args.trace_file}\n")
+                sys.exit(2)
+            trace_path = Path(matched[0])
+        if not trace_path.exists():
+            sys.stderr.write(f"Missing trace file: {trace_path}\n")
+            sys.exit(2)
+        ep_lines = []
+        with open(trace_path, "r") as fp:
+            for line_str in fp:
+                line_str = line_str.strip()
+                if line_str:
+                    ep_lines.append(json.loads(line_str))
+        if getattr(args, "ep", None) is not None:
+            ep_lines = [l for l in ep_lines if l.get("ep_idx") == args.ep]
+    else:
+        if args.run_dir is None or args.iter is None or args.ep is None:
+            sys.stderr.write("story requires either --trace-file or (--run-dir, --iter, --ep)\n")
+            sys.exit(2)
+        run_dir = Path(args.run_dir)
+        lines = _load_trace_lines(run_dir, iter_idx=args.iter)
+        ep_lines = [line for line in lines if line.get("ep_idx") == args.ep]
     if not ep_lines:
         sys.stderr.write(f"No trace entries found for episode {args.ep} in iteration {args.iter}\n")
         sys.exit(2)
@@ -268,9 +318,10 @@ def main() -> None:
 
     # story
     p_story = subparsers.add_parser("story", help="Render step-by-step decision story")
-    p_story.add_argument("--run-dir", type=str, required=True, help="Path to run directory")
-    p_story.add_argument("--iter", type=int, required=True, help="Iteration index")
-    p_story.add_argument("--ep", type=int, required=True, help="Episode index")
+    p_story.add_argument("--trace-file", type=str, default=None, help="Direct path or glob to trace JSONL file")
+    p_story.add_argument("--run-dir", type=str, default=None, help="Path to run directory")
+    p_story.add_argument("--iter", type=int, default=None, help="Iteration index")
+    p_story.add_argument("--ep", type=int, default=None, help="Episode index")
     p_story.add_argument("--from", dest="from_step", type=int, default=None, help="Start step")
     p_story.add_argument("--to", dest="to_step", type=int, default=None, help="End step")
     p_story.set_defaults(func=run_story)
