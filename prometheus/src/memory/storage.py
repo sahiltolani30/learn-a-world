@@ -250,7 +250,13 @@ class CheckpointManager:
                     f"Component '{name}' does not implement load_state_dict()."
                 )
 
-        return checkpoint.get("metadata", {})
+        metadata = checkpoint.get("metadata", {})
+        del checkpoint, comp_states
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return metadata
 
     def find_latest_checkpoint(
         self,

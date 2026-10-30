@@ -215,9 +215,9 @@ class TrainingPipeline:
             gamma=self.gamma,
         )
 
-        # 3. Two-Tier Replay Buffer
+        # 3. Two-Tier Replay Buffer (Tier 1 capped at 50,000 to save 1.2 GB RAM in Colab)
         self.buffer = TwoTierReplayBuffer(
-            tier1_capacity=100_000,
+            tier1_capacity=int(self.cfg.get("tier1_capacity", 50_000)),
             tier2_capacity=20_000,
             default_tier2_ratio=self.tier2_ratio,
             seed=self.seed,

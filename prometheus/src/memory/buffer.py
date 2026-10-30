@@ -435,7 +435,8 @@ class TwoTierReplayBuffer:
 
     def load_state_dict(self, state: Dict[str, Any]) -> None:
         """Restore replay buffer state from serialized checkpoint."""
-        self.tier1_capacity = state.get("tier1_capacity", self.tier1_capacity)
+        loaded_cap = state.get("tier1_capacity", self.tier1_capacity)
+        self.tier1_capacity = min(loaded_cap, 50_000)
         self.tier2_capacity = state.get("tier2_capacity", self.tier2_capacity)
         self.novelty_percentile = state.get("novelty_percentile", self.novelty_percentile)
         self.default_tier2_ratio = state.get("default_tier2_ratio", self.default_tier2_ratio)
@@ -448,24 +449,32 @@ class TwoTierReplayBuffer:
             self._allocate_tier1(tuple(obs_shape))
             self._allocate_tier2(tuple(obs_shape))
 
-            if self.t1_size > 0 and state.get("t1_obs") is not None:
-                self.t1_obs[:self.t1_size] = state["t1_obs"]
-                self.t1_next_obs[:self.t1_size] = state["t1_next_obs"]
-                self.t1_actions[:self.t1_size] = state["t1_actions"]
-                self.t1_rewards[:self.t1_size] = state["t1_rewards"]
-                self.t1_dones[:self.t1_size] = state["t1_dones"]
-                self.t1_int_rewards[:self.t1_size] = state["t1_int_rewards"]
-                self.t1_epistemic_errors[:self.t1_size] = state["t1_epistemic_errors"]
+            if self.t1_size > 0 and "t1_obs" in state:
+                t1_o = state.pop("t1_obs")
+                if t1_o is not None:
+                    self.t1_obs[:self.t1_size] = t1_o
+                t1_no = state.pop("t1_next_obs")
+                if t1_no is not None:
+                    self.t1_next_obs[:self.t1_size] = t1_no
+                self.t1_actions[:self.t1_size] = state.pop("t1_actions")
+                self.t1_rewards[:self.t1_size] = state.pop("t1_rewards")
+                self.t1_dones[:self.t1_size] = state.pop("t1_dones")
+                self.t1_int_rewards[:self.t1_size] = state.pop("t1_int_rewards")
+                self.t1_epistemic_errors[:self.t1_size] = state.pop("t1_epistemic_errors")
 
-            if self.t2_size > 0 and state.get("t2_obs") is not None:
-                self.t2_obs[:self.t2_size] = state["t2_obs"]
-                self.t2_next_obs[:self.t2_size] = state["t2_next_obs"]
-                self.t2_actions[:self.t2_size] = state["t2_actions"]
-                self.t2_rewards[:self.t2_size] = state["t2_rewards"]
-                self.t2_dones[:self.t2_size] = state["t2_dones"]
-                self.t2_int_rewards[:self.t2_size] = state["t2_int_rewards"]
-                self.t2_epistemic_errors[:self.t2_size] = state["t2_epistemic_errors"]
-                self.t2_is_milestone[:self.t2_size] = state["t2_is_milestone"]
+            if self.t2_size > 0 and "t2_obs" in state:
+                t2_o = state.pop("t2_obs")
+                if t2_o is not None:
+                    self.t2_obs[:self.t2_size] = t2_o
+                t2_no = state.pop("t2_next_obs")
+                if t2_no is not None:
+                    self.t2_next_obs[:self.t2_size] = t2_no
+                self.t2_actions[:self.t2_size] = state.pop("t2_actions")
+                self.t2_rewards[:self.t2_size] = state.pop("t2_rewards")
+                self.t2_dones[:self.t2_size] = state.pop("t2_dones")
+                self.t2_int_rewards[:self.t2_size] = state.pop("t2_int_rewards")
+                self.t2_epistemic_errors[:self.t2_size] = state.pop("t2_epistemic_errors")
+                self.t2_is_milestone[:self.t2_size] = state.pop("t2_is_milestone")
 
         if "recent_novelties" in state:
             self._recent_novelties = deque(state["recent_novelties"], maxlen=2000)
