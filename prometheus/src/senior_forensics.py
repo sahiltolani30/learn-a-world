@@ -155,7 +155,7 @@ class SeniorForensicSuite:
         plt.tight_layout()
         plot_path = self.output_dir / "action_histograms.png"
         fig.savefig(plot_path, dpi=150)
-        plt.close(fig)
+        plt.show()
 
         return {"t1_pct": t1_pct, "t2_pct": t2_pct, "ev_pct": ev_pct}
 
@@ -417,7 +417,7 @@ class SeniorForensicSuite:
         plt.tight_layout()
         curve_path = self.output_dir / "training_and_eval_curves.png"
         fig.savefig(curve_path, dpi=150)
-        plt.close(fig)
+        plt.show()
         self.log(f"[+] Curves plotted and saved to: {curve_path.resolve()}")
 
         return {"steps": steps, "returns": returns, "lengths": lengths}
@@ -632,6 +632,11 @@ class SeniorForensicSuite:
         try:
             ani.save(str(gif_path), writer="pillow", fps=10)
             self.log(f"[+] 30-Second evaluation animation saved to: {gif_path.resolve()}")
+            try:
+                from IPython.display import display, Image as IPImage
+                display(IPImage(filename=str(gif_path)))
+            except Exception:
+                pass
         except Exception as e:
             self.log(f"[!] Animation saving warning: {e}")
         plt.close(fig)
