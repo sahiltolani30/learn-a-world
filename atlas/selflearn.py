@@ -700,7 +700,11 @@ class SelfLearnLoop:
                     tag=f"{self.run_id}_dev_it{it}",
                     out_dir=self.results_dir,
                 )
-                last_dev_ach = float(screen_res.get("summary", {}).get("achievements_per_episode", 0.0))
+                last_dev_ach = float(
+                    screen_res.get("mean_achievements_per_ep")
+                    if "mean_achievements_per_ep" in screen_res
+                    else screen_res.get("summary", {}).get("achievements_per_episode", 0.0)
+                )
                 probe_frac = float(screen_res.get("per_mode_telemetry", {}).get("probe_fraction", 0.0))
                 self.health.observe_probe_fraction(probe_frac)
 
