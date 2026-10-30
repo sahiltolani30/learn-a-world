@@ -539,16 +539,28 @@ class SeniorForensicSuite:
         self.log("=" * 80)
 
         mem_audit = AgentForensics.inspect_memory(self.buffer)
-        self.log(f"Total Experiences in Buffer: {mem_audit.get('total_experiences', 0)}")
-        self.log(f"Tier 1 Size: {mem_audit.get('tier1_size', 0)} / {self.buffer.tier1_capacity}")
-        self.log(f"Tier 2 Size: {mem_audit.get('tier2_size', 0)} / {self.buffer.tier2_capacity}")
+        total_exp = mem_audit.get("total_transitions", self.buffer.size)
+        t1_sz = mem_audit.get("tier1_count", self.buffer.t1_size)
+        t2_sz = mem_audit.get("tier2_count", self.buffer.t2_size)
+        self.log(f"Total Experiences in Buffer: {total_exp}")
+        self.log(f"Tier 1 Size: {t1_sz} / {self.buffer.tier1_capacity}")
+        self.log(f"Tier 2 Size: {t2_sz} / {self.buffer.tier2_capacity}")
         self.log(f"Curiosity Threshold: {mem_audit.get('novelty_threshold', 0.0):.4f}")
 
-        catalog = mem_audit.get("milestone_catalog", {})
-        if catalog:
+        catalog = mem_audit.get("milestone_catalog")
+        if isinstance(catalog, dict):
             self.log("\nTop Actions Retained in Tier 2 Archive:")
             for act_name, count in sorted(catalog.items(), key=lambda x: x[1], reverse=True)[:10]:
                 self.log(f"  - {act_name:<20}: {count} transitions")
+        elif catalog:
+            self.log(f"  {catalog}")
+
+        if hasattr(self.buffer, "t2_actions") and self.buffer.t2_size > 0:
+            t2_acts = self.buffer.t2_actions[:self.buffer.t2_size]
+            unique, counts = np.unique(t2_acts, return_counts=True)
+            self.log("\nTop Actions Stored in Tier 2 Archive:")
+            for a_id, cnt in sorted(zip(unique, counts), key=lambda x: x[1], reverse=True)[:10]:
+                self.log(f"  - {CRAFTER_ACTION_NAMES[a_id]:<20}: {cnt} transitions ({(cnt / max(1, self.buffer.t2_size))*100:.1f}%)")
 
         return mem_audit
 
