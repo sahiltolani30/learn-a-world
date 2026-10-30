@@ -33,6 +33,8 @@ import os
 import sys
 import time
 import argparse
+import shutil
+import gc
 import json
 import numpy as np
 import torch
@@ -580,13 +582,26 @@ class TrainingPipeline:
             metadata=metadata,
             is_best=is_best,
         )
-        # Also maintain active verified checkpoint 'state.pt' per Rule 2 and Rule 3
-        self.checkpoint_manager.save(
-            filepath="state.pt",
-            components=components,
-            metadata=metadata,
-            is_best=False,
-        )
+        # Atomically update active verified checkpoint 'state.pt' via zero-copy file clone (Rule 2 & 3)
+        # Avoids duplicating massive replay buffer payload in Python RAM to eliminate Colab OOM crashes
+        state_path = Path(saved_path).parent / "state.pt"
+        state_tmp = Path(saved_path).parent / f"state.pt.tmp.{os.getpid()}"
+        try:
+            shutil.copyfile(saved_path, str(state_tmp))
+            os.replace(str(state_tmp), str(state_path))
+        except Exception as e:
+            if state_tmp.exists():
+                try:
+                    state_tmp.unlink()
+                except OSError:
+                    pass
+
+        # Clean memory immediately
+        del components, metadata
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return saved_path
 
     def train(self) -> Dict[str, Any]:
@@ -638,6 +653,8 @@ class TrainingPipeline:
                     ac_metrics = self.update_actor_critic()
                     combined_metrics = {**wm_metrics, **ac_metrics}
                     self.loss_history.append(combined_metrics)
+                    if len(self.loss_history) > 500:
+                        self.loss_history = self.loss_history[-500:]
 
                 # 3. Periodic Progress Logging
                 if self.current_step % self.log_interval == 0:

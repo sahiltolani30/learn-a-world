@@ -17,6 +17,8 @@ import os
 import glob
 import re
 import uuid
+import shutil
+import gc
 import torch
 import torch.nn as nn
 
@@ -129,7 +131,7 @@ class CheckpointManager:
                     pass
             raise IOError(f"Failed to atomically write checkpoint to {target_path}: {e}") from e
 
-        # Handle best checkpoint copy if requested
+        # Handle best checkpoint copy if requested via efficient file copy (zero RAM overhead)
         if is_best:
             if best_filepath is None:
                 b_path = target_path.parent / "best_checkpoint.pt"
@@ -140,7 +142,7 @@ class CheckpointManager:
 
             b_temp = b_path.parent / f"{b_path.name}.tmp.{uuid.uuid4().hex}"
             try:
-                torch.save(payload, str(b_temp))
+                shutil.copyfile(str(target_path), str(b_temp))
                 os.replace(str(b_temp), str(b_path))
             except Exception as e:
                 if b_temp.exists():
@@ -149,6 +151,17 @@ class CheckpointManager:
                     except OSError:
                         pass
                 raise IOError(f"Failed to write best checkpoint to {b_path}: {e}") from e
+
+        # Explicit RAM cleanup to prevent Google Colab OOM
+        del payload
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        try:
+            if hasattr(os, "sync"):
+                os.sync()
+        except Exception:
+            pass
 
         # Prune older checkpoints if configured
         if self.keep_last_n is not None and self.keep_last_n > 0:
