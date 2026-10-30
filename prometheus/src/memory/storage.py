@@ -54,6 +54,27 @@ class CheckpointManager:
             return obj.state_dict()
         return obj
 
+    @staticmethod
+    def save_atomic_checkpoint(payload: Dict[str, Any], filepath: Union[str, Path]) -> str:
+        """
+        Rule 2: Preemption-Resilient Atomic Checkpointing.
+        Saves directly to a .pt.tmp file first, flushes, and performs atomic rename via os.replace.
+        """
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_suffix(".pt.tmp")
+        try:
+            torch.save(payload, str(tmp_path))
+            os.replace(str(tmp_path), str(path))
+        except Exception as e:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+            raise IOError(f"Failed to atomically write checkpoint to {path}: {e}") from e
+        return str(path.resolve())
+
     def save(
         self,
         filepath: Union[str, Path],
@@ -231,6 +252,11 @@ class CheckpointManager:
         Returns:
             Absolute path string of latest checkpoint, or None if none found.
         """
+        # Rule 3: Prioritize active verified checkpoint 'state.pt' if present
+        state_file = self.checkpoint_dir / "state.pt"
+        if state_file.exists():
+            return str(state_file.resolve())
+
         search_path = str(self.checkpoint_dir / pattern)
         files = glob.glob(search_path)
         if not files:
@@ -270,6 +296,11 @@ class CheckpointManager:
         """
         if keep_last_n <= 0:
             return []
+
+        # Rule 3: Prioritize active verified checkpoint 'state.pt' if present
+        state_file = self.checkpoint_dir / "state.pt"
+        if state_file.exists():
+            return str(state_file.resolve())
 
         search_path = str(self.checkpoint_dir / pattern)
         files = glob.glob(search_path)

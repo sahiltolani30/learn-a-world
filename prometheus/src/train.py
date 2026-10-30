@@ -571,6 +571,13 @@ class TrainingPipeline:
             metadata=metadata,
             is_best=is_best,
         )
+        # Also maintain active verified checkpoint 'state.pt' per Rule 2 and Rule 3
+        self.checkpoint_manager.save(
+            filepath="state.pt",
+            components=components,
+            metadata=metadata,
+            is_best=False,
+        )
         return saved_path
 
     def train(self) -> Dict[str, Any]:
