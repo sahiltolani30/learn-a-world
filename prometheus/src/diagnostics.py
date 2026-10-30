@@ -38,6 +38,45 @@ CRAFTER_ACTION_NAMES: List[str] = [
 ]
 
 
+ALL_CRAFTER_ACHIEVEMENTS: List[str] = [
+    "collect_coal",
+    "collect_diamond",
+    "collect_drink",
+    "collect_iron",
+    "collect_sapling",
+    "collect_stone",
+    "collect_wood",
+    "defeat_skeleton",
+    "defeat_zombie",
+    "eat_cow",
+    "eat_plant",
+    "make_iron_pickaxe",
+    "make_iron_sword",
+    "make_stone_pickaxe",
+    "make_stone_sword",
+    "make_wood_pickaxe",
+    "make_wood_sword",
+    "place_furnace",
+    "place_plant",
+    "place_stone",
+    "place_table",
+    "wake_up",
+]
+
+
+def compute_crafter_score(success_rates: Dict[str, float]) -> float:
+    """
+    Official Crafter Score formula (Hafner, 2021):
+    Score = exp( (1/22) * sum_{i=1}^{22} ln(1 + S_i) ) - 1
+    where S_i is in percent [0.0, 100.0].
+    """
+    log_sum = 0.0
+    for ach in ALL_CRAFTER_ACHIEVEMENTS:
+        s_i = success_rates.get(ach, 0.0)
+        log_sum += np.log(1.0 + s_i)
+    return float(np.exp(log_sum / len(ALL_CRAFTER_ACHIEVEMENTS)) - 1.0)
+
+
 class AgentForensics:
     """
     Forensic Analyzer for inspecting every internal operation of the JEPA Agent.
@@ -236,6 +275,125 @@ class AgentForensics:
         ax_unc.set_ylabel("Predictor Head Disagreement", fontsize=10)
         ax_unc.set_title("4. World Model Uncertainty / Curiosity", fontsize=11, fontweight="bold")
         ax_unc.grid(axis="y", linestyle="--", alpha=0.5)
+
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        return fig
+
+    def run_benchmark(
+        self,
+        num_episodes: int = 20,
+        planning: bool = False,
+        base_seed: int = 1000,
+    ) -> Dict[str, Any]:
+        """
+        Runs N independent benchmark evaluation games to compute:
+        1. Official Crafter Score (geometric mean of success rates across 22 achievements)
+        2. Per-game average achievements unlocked
+        3. Mean survival steps and episodic returns
+        4. Success rate for every single achievement
+        """
+        from src.env.wrapper import make_crafter_env
+
+        self.agent.eval()
+        ep_returns = []
+        ep_lengths = []
+        ep_achievements = []
+        ach_counts = {ach: 0 for ach in ALL_CRAFTER_ACHIEVEMENTS}
+
+        for ep_idx in range(num_episodes):
+            seed = base_seed + ep_idx * 137
+            env = make_crafter_env(seed=seed)
+            obs = env.reset()
+            ep_ret = 0.0
+            ep_steps = 0
+            done = False
+            unlocked_this_ep = set()
+
+            while not done:
+                action = self.agent.act(obs, eval_mode=True, planning=planning)
+                obs, reward, term, trunc, info = env.step(action)
+                ep_ret += float(reward)
+                ep_steps += 1
+                done = term or trunc
+
+                eval_info = info.get("eval_info", {})
+                for ach in eval_info.get("unlocked_achievements", []):
+                    unlocked_this_ep.add(ach)
+
+            ep_returns.append(ep_ret)
+            ep_lengths.append(ep_steps)
+            ep_achievements.append(unlocked_this_ep)
+
+            for ach in unlocked_this_ep:
+                if ach in ach_counts:
+                    ach_counts[ach] += 1
+
+        success_rates = {
+            ach: (ach_counts[ach] / num_episodes) * 100.0
+            for ach in ALL_CRAFTER_ACHIEVEMENTS
+        }
+        crafter_score = compute_crafter_score(success_rates)
+        mean_achs_per_game = float(np.mean([len(s) for s in ep_achievements]))
+        all_unlocked = sorted(list(set.union(*ep_achievements))) if ep_achievements else []
+
+        return {
+            "num_episodes": num_episodes,
+            "crafter_score": crafter_score,
+            "mean_return": float(np.mean(ep_returns)),
+            "std_return": float(np.std(ep_returns)),
+            "mean_length": float(np.mean(ep_lengths)),
+            "std_length": float(np.std(ep_lengths)),
+            "mean_achievements_per_game": mean_achs_per_game,
+            "total_unique_achievements": len(all_unlocked),
+            "unlocked_list": all_unlocked,
+            "success_rates": success_rates,
+            "episode_details": [
+                {
+                    "episode": i + 1,
+                    "return": ep_returns[i],
+                    "steps": ep_lengths[i],
+                    "achievements": sorted(list(ep_achievements[i])),
+                }
+                for i in range(num_episodes)
+            ],
+        }
+
+    def plot_benchmark_results(
+        self,
+        benchmark_results: Dict[str, Any],
+        save_path: Optional[str] = None,
+    ) -> plt.Figure:
+        """
+        Plots the official Crafter benchmark achievement success rates.
+        """
+        success_rates = benchmark_results["success_rates"]
+        sorted_achs = sorted(ALL_CRAFTER_ACHIEVEMENTS, key=lambda a: success_rates[a], reverse=True)
+        rates = [success_rates[a] for a in sorted_achs]
+        labels = [a.replace("_", " ") for a in sorted_achs]
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+        colors = ["#2ecc71" if r > 0 else "#bdc3c7" for r in rates]
+        bars = ax.barh(range(len(sorted_achs)), rates, color=colors, edgecolor="black", alpha=0.85)
+        ax.set_yticks(range(len(sorted_achs)))
+        ax.set_yticklabels(labels, fontsize=9)
+        ax.invert_yaxis()
+        ax.set_xlabel("Success Rate (%) across Evaluation Games", fontsize=11, fontweight="bold")
+        ax.set_xlim(0, 105)
+        ax.grid(axis="x", linestyle="--", alpha=0.6)
+
+        title = (
+            f"Official Crafter Benchmark Evaluation ({benchmark_results['num_episodes']} Games)\n"
+            f"Official Crafter Score: {benchmark_results['crafter_score']:.2f}% | "
+            f"Mean Achievements/Game: {benchmark_results['mean_achievements_per_game']:.2f} | "
+            f"Mean Return: {benchmark_results['mean_return']:.2f}"
+        )
+        ax.set_title(title, fontsize=12, fontweight="bold", pad=12)
+
+        for bar, rate in zip(bars, rates):
+            if rate > 0:
+                ax.text(rate + 1.0, bar.get_y() + bar.get_height() / 2, f"{rate:.1f}%", va="center", fontsize=9, fontweight="bold")
 
         plt.tight_layout()
         if save_path:
