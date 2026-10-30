@@ -237,8 +237,8 @@ def main():
         print(f"Writing final protocol JSON to: {paths['results_dir']}")
         print("=" * 70)
 
-        loop.load_state()
-        agent.resumed_from = {"run_id": "atlas_v2_scratch", "iteration": 39}
+        resume_it = loop.load_state()
+        agent.resumed_from = {"run_id": args.run_id, "iteration": resume_it}
         agent.memory_source = "own_play_v2"
         agent.remine = True
 

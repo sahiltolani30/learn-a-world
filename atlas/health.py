@@ -121,6 +121,7 @@ class HealthMonitor:
                 f"A3_FLATLINE: Progress {self.best_ach_per_ep:.3f} flatlined for {iter_idx - self.last_best_iter} iters (>= {self.cfg.flatline_iters})"
             )
             beta_reset = True
+            self.last_best_iter = iter_idx
 
         for alarm in active_alarms:
             alarm_record = {"iter": iter_idx, "alarm": alarm}
