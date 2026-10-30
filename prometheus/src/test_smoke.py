@@ -31,6 +31,14 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+# ABI & compatibility shim for NumPy 2.x and SciPy internal array_api_compat
+try:
+    if hasattr(np, "_core") and hasattr(np._core, "_multiarray_umath"):
+        if not hasattr(np._core._multiarray_umath, "_blas_supports_fpe"):
+            setattr(np._core._multiarray_umath, "_blas_supports_fpe", lambda *args, **kwargs: False)
+except Exception:
+    pass
+
 from src.env.wrapper import make_crafter_env, FORBIDDEN_CHEAT_KEYS
 from src.agent.agent import JEPAAgent
 from src.curiosity.ensemble import EpistemicCuriosityEngine
