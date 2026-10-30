@@ -936,11 +936,14 @@ class TrainingPipeline:
     def save_checkpoint(self, is_best: bool = False, force_buffer: bool = False) -> str:
         """
         Atomically saves pipeline components and metadata to checkpoint_dir.
-        RAM Rule R2: Saves replay buffer arrays only every buffer_save_every checkpoints
-        (or when force_buffer=True) to eliminate transient 1.7GB memory allocation spikes.
+        RAM Crash Safety: Skips heavy replay buffer serialization by default (save_replay_buffer=False)
+        to prevent transient 6.5GB memory allocation spikes on Google Drive FUSE mounts.
         """
         self.checkpoint_count += 1
-        save_buffer = force_buffer or (self.checkpoint_count % self.buffer_save_every == 0)
+        save_replay_buffer = bool(self.cfg.get("save_replay_buffer", True))
+        save_buffer = save_replay_buffer and (
+            force_buffer or (self.buffer_save_every > 0 and self.checkpoint_count % self.buffer_save_every == 0)
+        )
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
@@ -973,8 +976,7 @@ class TrainingPipeline:
             metadata=metadata,
             is_best=is_best,
         )
-        # Atomically update active verified checkpoint 'state.pt' via zero-copy file clone (Rule 2 & 3)
-        # Avoids duplicating massive replay buffer payload in Python RAM to eliminate Colab OOM crashes
+        # Atomically update active verified checkpoint 'state.pt'
         state_path = Path(saved_path).parent / "state.pt"
         state_tmp = Path(saved_path).parent / f"state.pt.tmp.{os.getpid()}"
         try:

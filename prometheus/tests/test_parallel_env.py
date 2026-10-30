@@ -144,6 +144,7 @@ class TestParallelCrafterEnvironment(unittest.TestCase):
             "batch_size": 4,
             "checkpoint_dir": self.temp_dir,
             "buffer_save_every": 5,
+            "save_replay_buffer": True,
             "no_resume": True,
         }
         pipeline = TrainingPipeline(config)
