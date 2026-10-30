@@ -33,17 +33,19 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
 def calibrate_arrival_cosine(
     cached_episodes: Sequence[Dict[str, Any]],
     bounds: Tuple[float, float] = (0.60, 0.85),
+    min_step_gap: int = 5,
 ) -> Tuple[float, float]:
     """Offline calibration of arrival threshold (G1a).
     Collects RE-SIGHT cosines over cached episodes: for each step t,
-    max over k < t in the SAME episode with cos(z_t, z_k) < 0.95.
+    max over keyframes k in the SAME episode with k.step < t (excluding near-identical adjacent frames)
+    with cos(z_t, z_k) < 0.95.
     Returns (p75, calibrated_threshold).
     """
     resight_cosines: List[float] = []
 
     for ep in cached_episodes:
         z = ep.get("z")
-        if z is None or len(z) < 2:
+        if z is None or len(z) <= min_step_gap:
             continue
         z_arr = np.asarray(z, dtype=np.float32)
         norms = np.linalg.norm(z_arr, axis=-1, keepdims=True)
@@ -51,8 +53,8 @@ def calibrate_arrival_cosine(
         cos_matrix = z_norm @ z_norm.T
 
         T = len(z_arr)
-        for t in range(1, T):
-            past_cos = cos_matrix[t, :t]
+        for t in range(min_step_gap, T):
+            past_cos = cos_matrix[t, : t - min_step_gap + 1]
             distinct_past = past_cos[past_cos < 0.95]
             if len(distinct_past) > 0:
                 resight_cosines.append(float(np.max(distinct_past)))
