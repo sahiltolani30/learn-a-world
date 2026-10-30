@@ -204,6 +204,7 @@ class AgentForensics:
             "tier2_capacity": t2_cap,
             "tier2_utilization_pct": (t2_size / max(1, t2_cap)) * 100.0,
             "tier2_milestones": milestone_count,
+            "milestone_catalog": f"{milestone_count} milestone transitions archived",
             "novelty_threshold": float(novelty_thresh),
         }
 
