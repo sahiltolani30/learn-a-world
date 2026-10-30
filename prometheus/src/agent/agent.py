@@ -296,8 +296,13 @@ class JEPAAgent(nn.Module):
             action = self.planner.select_action(z)
             return int(action)
         else:
-            # Fast Policy Mode (R3, R5)
-            action_t = self.actor.sample(z, deterministic=eval_mode)
+            # In evaluation mode: select greedy optimal action from TwinCritic Q(z, a)
+            if eval_mode:
+                q1, q2 = self.critic(z)
+                q_min = torch.min(q1, q2)
+                return int(torch.argmax(q_min, dim=-1).item())
+            # Fast Policy Exploration Mode (R3, R5)
+            action_t = self.actor.sample(z, deterministic=False)
             if action_t.numel() == 1:
                 return int(action_t.item())
             return int(action_t[0].item())
