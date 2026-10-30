@@ -12,6 +12,7 @@ from src.env.wrapper import (
     ResetObs,
     FORBIDDEN_CHEAT_KEYS,
 )
+from src.env.parallel import ParallelCrafterBatch, _to_uint8
 from src.env.atari_wrapper import (
     AtariEnvWrapper,
     make_atari_env,
@@ -23,6 +24,8 @@ __all__ = [
     "ZeroCheatWrapper",
     "FrameStackWrapper",
     "make_crafter_env",
+    "ParallelCrafterBatch",
+    "_to_uint8",
     "AtariEnvWrapper",
     "make_atari_env",
     "ResetObs",

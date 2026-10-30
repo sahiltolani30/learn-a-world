@@ -44,12 +44,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from src.env.wrapper import make_crafter_env, FORBIDDEN_CHEAT_KEYS
+from src.env.parallel import ParallelCrafterBatch
 from src.agent.agent import JEPAAgent
 from src.curiosity.ensemble import EpistemicCuriosityEngine, RunningMeanStd
 from src.curiosity.episodic import EpisodicNovelty
 from src.memory.buffer import TwoTierReplayBuffer
 from src.memory.storage import CheckpointManager
 from src.models.losses import VICRegLoss, verify_non_collapse
+
+# Safe RAM telemetry utility (Rule R3)
+try:
+    import psutil
+    def get_ram_percent() -> float:
+        return float(psutil.virtual_memory().percent)
+except ImportError:
+    def get_ram_percent() -> float:
+        return 0.0
 
 
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
@@ -216,6 +226,25 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         default=5,
         help="Horizon n for n-step TD critic targets (default 5)",
     )
+    # Parallel environment batching arguments (PARALLEL_ENV_PLAN.md)
+    parser.add_argument(
+        "--num_envs",
+        type=int,
+        default=8,
+        help="Number of parallel environments stepped in lockstep (default 8, set 1 for serial)",
+    )
+    parser.add_argument(
+        "--buffer_save_every",
+        type=int,
+        default=5,
+        help="Save replay buffer arrays to disk only every Nth checkpoint (default 5, RAM Rule R2)",
+    )
+    parser.add_argument(
+        "--ram_abort_percent",
+        type=float,
+        default=80.0,
+        help="Emergency save and abort threshold on system RAM percentage (default 80.0, RAM Rule R3)",
+    )
 
     return parser.parse_args(args)
 
@@ -268,14 +297,32 @@ class TrainingPipeline:
         self.eps_novelty_coef: float = float(self.cfg.get("eps_novelty_coef", 0.20))
         self.eps_max: float = float(self.cfg.get("eps_max", 0.50))
         self.nstep: int = int(self.cfg.get("nstep", 5))
+        
+        # Parallel Environment Configuration (PARALLEL_ENV_PLAN.md)
+        self.num_envs: int = int(self.cfg.get("num_envs", 8))
+        self.buffer_save_every: int = int(self.cfg.get("buffer_save_every", 5))
+        self.ram_abort_percent: float = float(self.cfg.get("ram_abort_percent", 80.0))
+        self.checkpoint_count: int = 0
+        self.vector_step: int = 0
+
         self.recent_t1_indices: deque = deque(maxlen=30)
+        self.recent_t1_indices_per_env: List[deque] = [
+            deque(maxlen=30) for _ in range(self.num_envs)
+        ]
+        self.env_episode_ids: List[int] = [i for i in range(self.num_envs)]
+        self.episode_achievements: List[Set[str]] = [set() for _ in range(self.num_envs)]
+        self.episodic_novelties: List[EpisodicNovelty] = [
+            EpisodicNovelty(latent_dim=256, seed=self.seed + 100 * i)
+            for i in range(self.num_envs)
+        ]
+
         self.total_milestones: int = 0
         self.success_counts: Dict[str, int] = {}
         self.recent_eps: deque = deque(maxlen=1000)
 
         # C4: Per-action normalized curiosity running statistics and episodic novelty
         self.per_action_disc_stats = RunningMeanStd(shape=(17,)).to(self.device)
-        self.episodic_novelty = EpisodicNovelty(latent_dim=256, seed=self.seed)
+        self.episodic_novelty = self.episodic_novelties[0]
         self.episodic_stats = RunningMeanStd(shape=())
 
         # Set seeds for reproducibility
@@ -284,8 +331,9 @@ class TrainingPipeline:
         if torch.cuda.is_available() and self.device.type == "cuda":
             torch.cuda.manual_seed_all(self.seed)
 
-        # 1. Environment Initialization
-        self.env = make_crafter_env(seed=self.seed)
+        # 1. Environment Initialization (N parallel envs + 1 standalone eval env)
+        self.envs = ParallelCrafterBatch(num_envs=self.num_envs, base_seed=self.seed)
+        self.env = self.envs.envs[0]
         self.eval_env = make_crafter_env(seed=self.seed + 1000)
 
         # 2. Agent Initialization
@@ -368,10 +416,15 @@ class TrainingPipeline:
                     strict=False,
                 )
                 self.current_step = metadata.get("step", 0)
+                self.vector_step = metadata.get("vector_step", self.current_step // self.num_envs)
+                self.checkpoint_count = metadata.get("checkpoint_count", 0)
                 self.current_episode = metadata.get("episode", 0)
+                self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
                 self.best_eval_return = metadata.get("best_eval_return", -float("inf"))
                 self.achievement_history = metadata.get("achievement_history", {})
                 self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
+                if "success_counts" in metadata:
+                    self.success_counts = dict(metadata["success_counts"])
                 print(
                     f"[+] Resumed successfully at step {self.current_step}, "
                     f"episode {self.current_episode}, best return {self.best_eval_return:.2f}"
@@ -381,6 +434,119 @@ class TrainingPipeline:
                 print(f"[!] Warning: Failed to restore checkpoint at {latest_ckpt}: {e}")
                 return False
         return False
+
+    def collect_batch_step(self) -> int:
+        """
+        Executes one vector step across all N parallel environments in lockstep.
+        Batches visual observation encoding and curiosity prediction into single tensor operations.
+        
+        Returns:
+            transitions_added: Number of environment transitions added to the replay buffer.
+        """
+        obs_np = self.envs.obs  # (N, 3, 64, 64) uint8
+        obs_batch = torch.from_numpy(obs_np).to(self.device).float() / 255.0
+
+        with torch.no_grad():
+            z = self.agent.encoder(obs_batch)  # (N, D)
+
+            # Epsilon-greedy action selection per environment
+            if self.vector_step < self.warmup_steps:
+                action_list = [int(self.envs.action_space.sample()) for _ in range(self.num_envs)]
+            else:
+                probs = self.agent.actor.get_probs(z)  # (N, 17)
+                actions_t = torch.multinomial(probs, 1).squeeze(-1)
+                action_list = [int(a.item()) for a in actions_t]
+
+                # Per-env novelty-modulated epsilon (PARALLEL_ENV_PLAN.md §3.2)
+                for env_i in range(self.num_envs):
+                    z_i = z[env_i].detach().cpu().numpy()
+                    nov_raw = self.episodic_novelties[env_i].novelty_and_insert(z_i)
+                    self.episodic_stats.update(nov_raw)
+                    nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
+                    eps = min(self.eps_max, self.eps_base + self.eps_novelty_coef * nov)
+                    self.recent_eps.append(eps)
+                    if float(np.random.random_sample()) < eps:
+                        action_list[env_i] = int(self.envs.action_space.sample())
+
+            # Batched predictor forward pass for disagreement and intrinsic curiosity
+            actions_tensor = torch.tensor(action_list, device=self.device, dtype=torch.long)
+            _, all_preds = self.agent.predictor(z, actions_tensor)
+            disagreement = self.agent.curiosity_engine.compute_epistemic_disagreement(all_preds)
+            r_int_tensor = self.agent.curiosity_engine.compute_intrinsic_reward(all_preds, update_stats=True)
+            r_int_np = r_int_tensor.detach().cpu().numpy()
+            disagree_np = disagreement.detach().cpu().numpy()
+
+        # Step all environments in lockstep
+        old_obs = obs_np.copy()
+        step_results = self.envs.step(action_list)
+
+        transitions_added = 0
+        for env_i in range(self.num_envs):
+            if self.current_step >= self.total_steps:
+                break
+
+            terminal_obs_i, ext_r, done_i, info_i = step_results[env_i]
+
+            for forbidden in FORBIDDEN_CHEAT_KEYS:
+                if forbidden in info_i:
+                    raise AssertionError(
+                        f"CRITICAL ZERO-CHEAT LEAK: Forbidden key '{forbidden}' found in env info!"
+                    )
+
+            is_milestone = False
+            eval_info = info_i.get("eval_info", {})
+            unlocked = eval_info.get("unlocked_achievements", [])
+            for ach in unlocked:
+                if ach not in self.episode_achievements[env_i]:
+                    self.episode_achievements[env_i].add(ach)
+                    is_milestone = True
+                    if ach not in self.all_unlocked_achievements:
+                        self.all_unlocked_achievements.add(ach)
+                        print(f" [★ DISCOVERY] Env {env_i} Step {self.current_step + 1}: Unlocked achievement '{ach}'!")
+
+            r_int_i = float(r_int_np[env_i]) if r_int_np.ndim > 0 else float(r_int_np)
+            if r_int_i > 0.5:
+                is_milestone = True
+
+            act = action_list[env_i]
+            if ext_r >= 0.5:
+                act_names = getattr(self.env, "action_names", None)
+                act_label = act_names[act] if act_names is not None else str(act)
+                self.success_counts[act_label] = self.success_counts.get(act_label, 0) + 1
+
+            err_i = float(disagree_np[env_i]) if disagree_np.ndim > 0 else float(disagree_np)
+            self.buffer.add(
+                obs=old_obs[env_i],
+                action=act,
+                reward=ext_r,
+                next_obs=terminal_obs_i,
+                done=done_i,
+                r_int=r_int_i,
+                is_milestone=is_milestone,
+                epistemic_error=err_i,
+                episode_id=self.env_episode_ids[env_i],
+                step_in_ep=self.envs.episode_step[env_i],
+            )
+            written_slot = (self.buffer.t1_ptr - 1) % self.buffer.tier1_capacity
+            self.recent_t1_indices_per_env[env_i].append(written_slot)
+            self.recent_t1_indices.append(written_slot)
+            if is_milestone:
+                self.total_milestones += 1
+                for past_idx in self.recent_t1_indices_per_env[env_i]:
+                    self.buffer.flag_milestone_at(past_idx)
+
+            if done_i:
+                self.current_episode += 1
+                self.env_episode_ids[env_i] = self.current_episode
+                self.episode_achievements[env_i].clear()
+                self.recent_t1_indices_per_env[env_i].clear()
+                self.episodic_novelties[env_i].reset()
+
+            self.current_step += 1
+            transitions_added += 1
+
+        self.vector_step += 1
+        return transitions_added
 
     def collect_step(
         self,
@@ -767,28 +933,39 @@ class TrainingPipeline:
 
         return eval_summary
 
-    def save_checkpoint(self, is_best: bool = False) -> str:
+    def save_checkpoint(self, is_best: bool = False, force_buffer: bool = False) -> str:
         """
         Atomically saves pipeline components and metadata to checkpoint_dir.
+        RAM Rule R2: Saves replay buffer arrays only every buffer_save_every checkpoints
+        (or when force_buffer=True) to eliminate transient 1.7GB memory allocation spikes.
         """
+        self.checkpoint_count += 1
+        save_buffer = force_buffer or (self.checkpoint_count % self.buffer_save_every == 0)
+
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
             "step": self.current_step,
+            "vector_step": self.vector_step,
+            "checkpoint_count": self.checkpoint_count,
             "episode": self.current_episode,
+            "num_envs": self.num_envs,
             "best_eval_return": self.best_eval_return,
             "all_unlocked_achievements": sorted(list(self.all_unlocked_achievements)),
             "achievement_history": self.achievement_history,
+            "success_counts": self.success_counts,
+            "has_buffer": save_buffer,
             "config": self.cfg,
             "timestamp": time.time(),
         }
 
         components = {
             "agent": self.agent,
-            "buffer": self.buffer,
             "wm_optimizer": self.wm_optimizer,
             "critic_optimizer": self.critic_optimizer,
             "actor_optimizer": self.actor_optimizer,
         }
+        if save_buffer:
+            components["buffer"] = self.buffer
 
         saved_path = self.checkpoint_manager.save(
             filepath=filename,
@@ -831,58 +1008,59 @@ class TrainingPipeline:
         print("=" * 80)
         print(f"Device:           {self.device}")
         print(f"Total Steps:      {self.total_steps}")
+        print(f"Num Envs:         {self.num_envs} (Parallel Batching)")
         print(f"Batch Size:       {self.batch_size}")
         print(f"Checkpoint Dir:   {self.checkpoint_dir.resolve()}")
         print(f"Eval Interval:    {self.eval_interval} steps ({self.eval_episodes} episodes)")
         print(f"Seed:             {self.seed}")
         print("=" * 80)
 
-        obs = self.env.reset()
-        ep_achievements: Set[str] = set()
-        ep_reward = 0.0
-        ep_length = 0
-
         start_time = time.perf_counter()
         last_log_time = start_time
+        next_eval_step = (
+            ((self.current_step // self.eval_interval) + 1) * self.eval_interval
+            if self.eval_interval > 0
+            else float("inf")
+        )
+        next_save_step = (
+            ((self.current_step // self.save_interval) + 1) * self.save_interval
+            if self.save_interval > 0
+            else float("inf")
+        )
 
         try:
             while self.current_step < self.total_steps:
-                self.current_step += 1
+                # 1. Environment step and experience accumulation (Batched across N parallel envs)
+                added = self.collect_batch_step()
+                if added == 0:
+                    break
 
-                # 1. Environment step and experience accumulation
-                obs, ext_r, done, step_metrics = self.collect_step(
-                    obs,
-                    ep_achievements,
-                    episode_id=self.current_episode,
-                    step_in_ep=ep_length,
-                )
-                ep_reward += ext_r
-                ep_length += 1
-
-                if done:
-                    self.current_episode += 1
-                    obs = self.env.reset()
-                    ep_achievements = set()
-                    ep_reward = 0.0
-                    ep_length = 0
-                    self.episodic_novelty.reset()
-
-                # 2. Interleaved Model & Policy Updates (halved gradient frequency via update_every)
+                # 2. Interleaved Model & Policy Updates (counts vector steps: C5 & PARALLEL_ENV_PLAN.md §3.2)
                 if (
                     self.buffer.size >= self.batch_size
-                    and self.current_step >= self.warmup_steps
-                    and (self.current_step % self.update_every == 0)
+                    and self.vector_step >= self.warmup_steps
+                    and (self.vector_step % self.update_every == 0)
                 ):
                     wm_metrics = self.update_world_model()
                     ac_metrics = self.update_actor_critic()
                     combined_metrics = {**wm_metrics, **ac_metrics}
                     self.loss_history.append(combined_metrics)
 
-                # 3. Periodic Progress Logging
-                if self.current_step % self.log_interval == 0:
+                # 3. Periodic Progress Logging & RAM telemetry (Rule R3)
+                if self.vector_step % self.log_interval == 0:
                     now = time.perf_counter()
-                    sps = self.log_interval / max(1e-4, now - last_log_time)
+                    elapsed = max(1e-4, now - last_log_time)
                     last_log_time = now
+                    vec_sps = self.log_interval / elapsed
+                    env_sps = (self.log_interval * self.num_envs) / elapsed
+                    ram_pct = get_ram_percent()
+
+                    if ram_pct > self.ram_abort_percent:
+                        emergency_ckpt = self.save_checkpoint(force_buffer=True)
+                        raise RuntimeError(
+                            f"EMERGENCY ABORT (Rule R3): System RAM at {ram_pct:.1f}% exceeds safe limit of {self.ram_abort_percent}%. "
+                            f"Emergency checkpoint saved to {emergency_ckpt}."
+                        )
 
                     loss_info = ""
                     if self.loss_history:
@@ -894,15 +1072,17 @@ class TrainingPipeline:
                         )
 
                     print(
-                        f"Step {self.current_step:6d}/{self.total_steps} | "
+                        f"Step {self.current_step:7d}/{self.total_steps} (Vec: {self.vector_step}) | "
                         f"Buf: {self.buffer.size:5d} (T1:{self.buffer.t1_size}, T2:{self.buffer.t2_size}) | "
                         f"MS: {self.total_milestones:4d} | "
                         f"Ach: {len(self.all_unlocked_achievements):2d} | "
-                        f"SPS: {sps:5.1f}{loss_info}"
+                        f"SPS: {env_sps:5.1f} (Vec: {vec_sps:4.1f}) | "
+                        f"RAM: {ram_pct:4.1f}%{loss_info}"
                     )
 
                 # 4. Periodic Episodic Evaluation
-                if self.current_step % self.eval_interval == 0 or self.current_step == self.total_steps:
+                if self.current_step >= next_eval_step or self.current_step >= self.total_steps:
+                    next_eval_step = ((self.current_step // self.eval_interval) + 1) * self.eval_interval
                     eval_metrics = self.evaluate()
                     print("-" * 80)
                     print(
@@ -917,18 +1097,18 @@ class TrainingPipeline:
                     if is_best:
                         self.best_eval_return = eval_metrics["mean_return"]
 
-                    # Checkpoint saving
                     saved = self.save_checkpoint(is_best=is_best)
                     print(f" [+] Checkpoint saved: {saved}")
 
                 # 5. Periodic Checkpoint Saving (if not overlapping eval)
-                elif self.current_step % self.save_interval == 0:
+                elif self.current_step >= next_save_step:
+                    next_save_step = ((self.current_step // self.save_interval) + 1) * self.save_interval
                     saved = self.save_checkpoint(is_best=False)
                     print(f" [+] Checkpoint saved: {saved}")
 
         except KeyboardInterrupt:
             print("\n[!] Training interrupted by user. Saving emergency checkpoint...")
-            saved = self.save_checkpoint(is_best=False)
+            saved = self.save_checkpoint(is_best=False, force_buffer=True)
             print(f" [+] Emergency checkpoint saved: {saved}")
 
         total_time = time.perf_counter() - start_time
@@ -943,11 +1123,11 @@ class TrainingPipeline:
         print(f"Success Counts:     {self.success_counts}")
         print("=" * 80)
 
-        # Final checkpoint save
-        final_ckpt = self.save_checkpoint(is_best=False)
+        # Final checkpoint save (with buffer forced)
+        final_ckpt = self.save_checkpoint(is_best=False, force_buffer=True)
 
         # Close environments
-        self.env.close()
+        self.envs.close()
         self.eval_env.close()
 
         return {
