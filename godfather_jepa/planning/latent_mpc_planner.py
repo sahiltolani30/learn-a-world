@@ -52,6 +52,7 @@ class LatentMPCPlanner:
         elite_ratio: float = 0.15,
         gamma: float = 0.99,
         death_penalty: float = 5.0,
+        exploration_bonus: float = 0.0,
         num_actions: int = 17,
         device: Optional[torch.device] = None,
     ):
@@ -71,6 +72,7 @@ class LatentMPCPlanner:
         self.elite_ratio = elite_ratio
         self.gamma = gamma
         self.death_penalty = death_penalty
+        self.exploration_bonus = exploration_bonus
         self.num_actions = num_actions
         self.device = device or torch.device("cpu")
 
@@ -152,10 +154,8 @@ class LatentMPCPlanner:
 
         # Proposal distribution: derived purely from policy actor and learned causal card affordances
         action_has_affordable_card = {a: False for a in range(self.num_actions)}
-        action_in_any_card = {a: False for a in range(self.num_actions)}
 
         for card in self.causal_hypergraph.cards.values():
-            action_in_any_card[card.action] = True
             has_mats = all(inventory.get(res, 0) >= amt for res, amt in card.consumes.items())
             has_cat = (
                 card.catalyst_needed is None
@@ -166,8 +166,9 @@ class LatentMPCPlanner:
                 action_has_affordable_card[card.action] = True
 
         affordance_mask = torch.ones(self.num_actions, dtype=torch.bool, device=self.device)
-        for a in range(self.num_actions):
-            if action_in_any_card[a] and not action_has_affordable_card[a]:
+        # Macro craft and placement actions (actions >= 7) require a learned causal card with met preconditions
+        for a in range(7, self.num_actions):
+            if not action_has_affordable_card[a]:
                 affordance_mask[a] = False
 
         base_probs = affordance_mask.float()
@@ -204,11 +205,11 @@ class LatentMPCPlanner:
                     pred_r = self.reward_head(composite, act_t)
                     pred_c = self.continuation_head(composite)
 
-                    # Epistemic curiosity bonus from predictor ensemble disagreement
-                    if self.ensemble is not None:
+                    # Epistemic curiosity bonus from predictor ensemble disagreement (training exploration only)
+                    if self.ensemble is not None and self.exploration_bonus > 0.0:
                         ens_preds = self.ensemble(z_k, h_k, act_t)
                         disagreement = self.ensemble.disagreement(ens_preds)
-                        pred_r = pred_r + 0.1 * disagreement
+                        pred_r = pred_r + self.exploration_bonus * disagreement
 
                     # Penalty for dying: triggers when continuation drops below healthy threshold (0.4)
                     step_penalty = self.death_penalty * torch.clamp(0.4 - pred_c, min=0.0)

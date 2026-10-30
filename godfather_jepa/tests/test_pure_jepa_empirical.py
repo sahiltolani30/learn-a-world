@@ -175,3 +175,37 @@ class TestMultiWorkstationInduction:
         card = bank.cards["collect_wood"]
         assert "wood" not in card.consumes
         assert card.produces.get("wood", 0) >= 1
+
+
+class TestBehavioralCloningAndAffordances:
+    def test_actor_bc_step_and_loss_decrease(self):
+        import glob
+        pipe = GodfatherJEPAPipeline(device="cpu")
+        shards = sorted(glob.glob("data/sequences/*.npz"))
+        if not shards:
+            pytest.skip("No local sequence shards found.")
+        pipe.buffer.load_npz_shards(shards, max_episodes=5)
+
+        stats = pipe.train_actor_bc_step(batch_size=4, seq_len=4)
+        assert "bc_loss" in stats
+        assert "bc_acc" in stats
+        assert stats["bc_loss"] > 0.0
+
+    def test_affordance_mask_prevents_unaffordable_macro_actions(self):
+        pipe = GodfatherJEPAPipeline(device="cpu")
+        pipe.semantic_bank.load("checkpoints/godfather_memory_bank.pt")
+        z = torch.randn(1, 512)
+        h_vec = torch.zeros(1, 512)
+        h_sp = torch.zeros(1, 64, 8, 8)
+
+        # With empty inventory, macro crafts (>= 7) must not be chosen by CEM
+        act, debug = pipe.mpc_planner.plan(
+            z_0=z,
+            h_vector_0=h_vec,
+            h_spatial_0=h_sp,
+            inventory={},
+            workstations=set(),
+            anchor_graph=None,
+            target_goal="collect_wood",
+        )
+        assert act < 7, f"With empty inventory, expected motor action (< 7), got macro action {act}"

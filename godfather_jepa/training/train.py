@@ -390,7 +390,16 @@ class GodfatherJEPAPipeline:
                     current_inventory=inv,
                     workstations_present=ws,
                 )
-                teleo_action = determined_action if (determined_action != 0 and subgoal != "explore") else actor_action
+                target_card = self.causal_hypergraph.cards.get(subgoal) if subgoal else None
+                is_assembly_or_placement = (
+                    target_card is not None
+                    and (bool(target_card.consumes) or target_card.is_fixture)
+                )
+                teleo_action = (
+                    determined_action
+                    if (determined_action != 0 and subgoal != "explore" and is_assembly_or_placement)
+                    else actor_action
+                )
 
             # If an action repeated without progress (no reward, no inventory change),
             # stochastically sample from policy actor to escape deadlocks naturally
@@ -757,6 +766,127 @@ class GodfatherJEPAPipeline:
             "actor_loss": actor_loss.item(),
         }
 
+    def train_actor_bc_step(self, batch_size: int = 32, seq_len: int = 8) -> Dict[str, float]:
+        """
+        Behavioral Cloning pretraining step:
+        Supervises the amortized policy actor directly on expert / demonstration actions
+        from the sequence shards.
+        """
+        if len(self.buffer) < batch_size:
+            return {}
+
+        batch = self.buffer.sample_batch(batch_size=batch_size, seq_len=seq_len, device=self.device)
+        obs = batch["obs"]      # (B, T, 64, 64, 3)
+        acts = batch["actions"] # (B, T)
+        rews = batch["rewards"] # (B, T)
+
+        b, t = acts.shape
+        flat_obs = obs.reshape(b * t, 64, 64, 3)
+
+        self.encoder.eval()
+        self.spatial_projector.eval()
+        with torch.no_grad():
+            z, feat = self.encoder(flat_obs)
+            z = z.reshape(b, t, -1)
+            feat = feat.reshape(b, t, 256, 8, 8)
+            feat_proj = self.spatial_projector(feat.reshape(b * t, 256, 8, 8)).reshape(b, t, 64, 8, 8)
+
+        # Recurrent belief tracking
+        h_spatial = None
+        h_vector = None
+        losses = []
+        correct = 0
+        total = 0
+
+        self.actor.train()
+        for step in range(t):
+            z_s = z[:, step]
+            act_s = acts[:, step]
+            feat_s = feat_proj[:, step]
+
+            if step == 0:
+                h_spatial = torch.zeros(b, 64, 8, 8, device=self.device)
+                h_vector = torch.zeros(b, self.latent_dim, device=self.device)
+            else:
+                prev_act = acts[:, step - 1]
+                h_spatial = self.spatial_gru(feat_s, prev_act, H=h_spatial)
+                h_vector = self.vector_belief(z_s, prev_act, h_spatial, h=h_vector)
+
+            composite = torch.cat([z_s, h_vector.detach()], dim=-1)
+            log_probs = self.actor(composite)
+
+            # Upweight transitions with positive rewards or milestone achievements
+            rew_s = rews[:, step]
+            weights = torch.ones_like(act_s, dtype=torch.float32) + 2.0 * (rew_s > 0).float()
+            step_loss = (F.nll_loss(log_probs, act_s, reduction="none") * weights).mean()
+            losses.append(step_loss)
+
+            pred_act = torch.argmax(log_probs, dim=-1)
+            correct += (pred_act == act_s).sum().item()
+            total += b
+
+        total_loss = torch.stack(losses).mean()
+        self.actor_opt.zero_grad()
+        total_loss.backward()
+        nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
+        self.actor_opt.step()
+
+        return {
+            "bc_loss": total_loss.item(),
+            "bc_acc": correct / max(1, total),
+        }
+
+    def pretrain_offline(
+        self,
+        epochs: int = 5,
+        updates_per_epoch: int = 50,
+        batch_size: int = 16,
+        seq_len: int = 16,
+    ) -> None:
+        """
+        Turnkey Offline Pretraining on demonstration sequence shards:
+        Pretrains World Model, Reward Head, Continuation Head, Policy Actor (via Behavioral Cloning),
+        and Categorical Critic before online interaction or benchmark evaluation.
+        """
+        if len(self.buffer) < batch_size:
+            print("[Pretrain] Buffer has insufficient transitions. Skipping offline pretrain.")
+            return
+
+        print(f"\n=== Starting Offline Pretraining ({epochs} epochs, {updates_per_epoch} updates/epoch) ===")
+        for epoch in range(epochs):
+            wm_losses = []
+            bc_losses = []
+            bc_accs = []
+            ac_losses = []
+
+            for _ in range(updates_per_epoch):
+                wm_stats = self.train_world_model_step(batch_size=batch_size, seq_len=seq_len)
+                if "wm_loss" in wm_stats:
+                    wm_losses.append(wm_stats["wm_loss"])
+
+                bc_stats = self.train_actor_bc_step(batch_size=batch_size, seq_len=8)
+                if "bc_loss" in bc_stats:
+                    bc_losses.append(bc_stats["bc_loss"])
+                    bc_accs.append(bc_stats["bc_acc"])
+
+                ac_stats = self.train_actor_critic_step(batch_size=batch_size)
+                if "actor_loss" in ac_stats:
+                    ac_losses.append(ac_stats.get("critic_loss", 0.0))
+
+            mean_wm = float(np.mean(wm_losses)) if wm_losses else 0.0
+            mean_bc = float(np.mean(bc_losses)) if bc_losses else 0.0
+            mean_acc = float(np.mean(bc_accs)) if bc_accs else 0.0
+            mean_crit = float(np.mean(ac_losses)) if ac_losses else 0.0
+
+            print(
+                f"Pretrain Epoch {epoch+1:02d}/{epochs:02d} | "
+                f"WM Loss: {mean_wm:.4f} | "
+                f"BC Loss: {mean_bc:.4f} | "
+                f"BC Accuracy: {mean_acc*100:.1f}% | "
+                f"Critic Loss: {mean_crit:.4f}",
+                flush=True,
+            )
+
     def save_checkpoint(self, out_path: str) -> None:
         """
         Saves full model state dict for Colab / Drive persistence.
@@ -846,6 +976,9 @@ def main():
     parser.add_argument("--eval-every", type=int, default=50, help="Periodic evaluation on locked benchmark seeds every N episodes")
     parser.add_argument("--eval-only", action="store_true", help="Run benchmark evaluation only and exit")
     parser.add_argument("--eval-seeds", type=int, default=10, help="Number of locked seeds for evaluation (10 for quick smoke test, 50 for full locked benchmark)")
+    parser.add_argument("--pretrain-epochs", type=int, default=0, help="Epochs of offline pretraining on sequence shards before training or evaluation")
+    parser.add_argument("--pretrain-updates", type=int, default=50, help="Gradient updates per offline pretraining epoch")
+    parser.add_argument("--max-pretrain-episodes", type=int, default=500, help="Maximum demonstration episodes to load from sequence shards")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint in out-dir if available")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/jepa_crafter_v3_phase2.pt")
@@ -884,11 +1017,43 @@ def main():
     else:
         print("[Memory Bank] Starting with empty memory bank (tabula rasa).")
 
-    # Optional resume from previous checkpoint if available
-    latest_ckpt = out_dir / "godfather_jepa_latest.pt"
-    if args.resume and latest_ckpt.exists():
-        print(f"[Resume] Resuming weights and memory bank from {latest_ckpt}...")
-        pipeline.load_checkpoint(str(latest_ckpt))
+    # Resolve full model checkpoint if available (godfather_jepa_latest.pt or godfather_jepa_pretrained.pt)
+    ckpt_candidates = [
+        str(out_dir / "godfather_jepa_latest.pt"),
+        str(out_dir / "godfather_jepa_pretrained.pt"),
+        "/content/drive/MyDrive/learn-a-world/checkpoints/godfather_jepa_latest.pt",
+        "/content/drive/MyDrive/learn-a-world/checkpoints/godfather_jepa_pretrained.pt",
+        "checkpoints/godfather_jepa_latest.pt",
+        "checkpoints/godfather_jepa_pretrained.pt",
+    ]
+    loaded_full = False
+    for ck in ckpt_candidates:
+        if (args.resume or args.eval_only) and os.path.exists(ck):
+            loaded_full = pipeline.load_checkpoint(ck)
+            if loaded_full:
+                print(f"[Resume] Loaded trained Godfather JEPA model from {ck}")
+                break
+
+    # Ingest sequence shards if shard_dir provided
+    if args.shard_dir and os.path.exists(args.shard_dir):
+        shard_files = sorted(Path(args.shard_dir).glob("*.npz"))
+        if shard_files:
+            print(f"[Bootstrap] Ingesting {len(shard_files)} sequence shards from {args.shard_dir}...")
+            loaded = pipeline.buffer.load_npz_shards([str(f) for f in shard_files], max_episodes=args.max_pretrain_episodes)
+            print(f"[Bootstrap] Successfully loaded {loaded} episodes into MilestoneReplayBuffer ({len(pipeline.buffer.milestone_indices)} milestones).")
+
+    # Run offline pretraining if requested and buffer has data
+    if args.pretrain_epochs > 0 and len(pipeline.buffer) > 0:
+        pipeline.pretrain_offline(
+            epochs=args.pretrain_epochs,
+            updates_per_epoch=args.pretrain_updates,
+            batch_size=16,
+        )
+        ckpt_pretrained = str(out_dir / "godfather_jepa_pretrained.pt")
+        ckpt_latest = str(out_dir / "godfather_jepa_latest.pt")
+        pipeline.save_checkpoint(ckpt_pretrained)
+        pipeline.save_checkpoint(ckpt_latest)
+        print(f"[Pretrain] Persisted pretrained weights to {ckpt_pretrained}")
 
     # If --eval-only is set, execute benchmark immediately and exit
     if args.eval_only:
@@ -903,14 +1068,6 @@ def main():
         for ach, pct in sorted(eval_res['unlock_percentages'].items(), key=lambda x: -x[1]):
             print(f"  - {ach:22s}: {pct:5.1f}%")
         return
-
-    # Optional: Load Drive / local sequence shards into MilestoneReplayBuffer
-    if args.shard_dir and os.path.exists(args.shard_dir):
-        shard_files = sorted(Path(args.shard_dir).glob("*.npz"))
-        if shard_files:
-            print(f"[Bootstrap] Ingesting {len(shard_files)} sequence shards from {args.shard_dir}...")
-            loaded = pipeline.buffer.load_npz_shards([str(f) for f in shard_files], max_episodes=500)
-            print(f"[Bootstrap] Successfully loaded {loaded} episodes into MilestoneReplayBuffer ({len(pipeline.buffer.milestone_indices)} milestones).")
 
     print(f"=== Starting Godfather JEPA Training on {device} (updates_per_episode={args.updates_per_episode}) ===")
     import gc
