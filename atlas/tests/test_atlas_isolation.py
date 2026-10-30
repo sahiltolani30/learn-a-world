@@ -79,3 +79,21 @@ def test_git_cleanliness():
                 assert first_dir not in read_only_targets, (
                     f"Forbidden modification to read-only repo module: {path}"
                 )
+
+
+def test_probes_importer_allowlist():
+    """T2/CAN5 AST test: atlas/probes.py is imported by nothing outside selflearn.py, canaries.py, and tests."""
+    atlas_dir = Path(__file__).resolve().parent.parent
+    py_files = list(atlas_dir.rglob("*.py"))
+    allowed_importers = {"selflearn.py", "canaries.py", "test_v4_probes.py", "test_atlas_isolation.py"}
+
+    for py_file in py_files:
+        if py_file.name in allowed_importers or "tests" in py_file.parts:
+            continue
+        imports = get_all_imports(py_file)
+        for imp in imports:
+            assert "probes" not in imp, (
+                f"Illegal import of probes in {py_file.name}: {imp}. "
+                f"probes.py may only be imported by selflearn.py, canaries.py, and tests."
+            )
+

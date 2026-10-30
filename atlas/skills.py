@@ -30,6 +30,57 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (norm_a * norm_b))
 
 
+def calibrate_arrival_cosine(
+    cached_episodes: Sequence[Dict[str, Any]],
+    bounds: Tuple[float, float] = (0.60, 0.85),
+) -> Tuple[float, float]:
+    """Offline calibration of arrival threshold (G1a).
+    Collects RE-SIGHT cosines over cached episodes: for each step t,
+    max over k < t in the SAME episode with cos(z_t, z_k) < 0.95.
+    Returns (p75, calibrated_threshold).
+    """
+    resight_cosines: List[float] = []
+
+    for ep in cached_episodes:
+        z = ep.get("z")
+        if z is None or len(z) < 2:
+            continue
+        z_arr = np.asarray(z, dtype=np.float32)
+        norms = np.linalg.norm(z_arr, axis=-1, keepdims=True)
+        z_norm = z_arr / np.maximum(norms, 1e-8)
+        cos_matrix = z_norm @ z_norm.T
+
+        T = len(z_arr)
+        for t in range(1, T):
+            past_cos = cos_matrix[t, :t]
+            distinct_past = past_cos[past_cos < 0.95]
+            if len(distinct_past) > 0:
+                resight_cosines.append(float(np.max(distinct_past)))
+
+    if not resight_cosines:
+        p75 = bounds[1]
+    else:
+        p75 = float(np.percentile(resight_cosines, 75))
+
+    threshold = float(np.clip(p75, bounds[0], bounds[1]))
+    return p75, threshold
+
+
+def check_arrival_rollback(
+    current_unlock_rate: float,
+    baseline_unlock_rate: float,
+    current_threshold: float,
+    previous_threshold: float,
+) -> Tuple[float, bool]:
+    """Rollback guard for G1 (G1b).
+    If current_unlock_rate drops > 50% vs baseline, restore previous_threshold.
+    Returns (effective_threshold, rollback_fired).
+    """
+    if baseline_unlock_rate > 1e-6 and current_unlock_rate < 0.5 * baseline_unlock_rate:
+        return previous_threshold, True
+    return current_threshold, False
+
+
 class OptionNet(nn.Module):
     """Goal-conditioned policy network: pi(a | s, g).
 

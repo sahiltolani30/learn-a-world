@@ -68,6 +68,7 @@ def screen_agent(
     resumed_from: Any = _DEFAULT_PROVENANCE,
     memory_source: Any = _DEFAULT_PROVENANCE,
     remine: Any = _DEFAULT_PROVENANCE,
+    trace_writer: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Runs strict visual evaluation and writes protocol screening JSON."""
     results_dir = Path(out_dir or (REPO_ROOT / "results"))
@@ -90,9 +91,12 @@ def screen_agent(
     old_eps = agent.epsilon
     old_beta = agent.beta_t
     old_frozen = agent.frozen_memory
+    old_trace = getattr(agent, "trace_enabled", False)
     agent.epsilon = 0.0
     agent.beta_t = 0.0
     agent.frozen_memory = True
+    if trace_writer is not None:
+        agent.trace_enabled = True
 
     achievement_records: List[Dict[str, int]] = []
     survivals: List[int] = []
@@ -109,6 +113,9 @@ def screen_agent(
         obs, reset_info = env.reset(seed=seed)
         agent.reset_episode(seed=seed)
 
+        if trace_writer is not None:
+            trace_writer.begin_episode(iter_idx=-1, ep_idx=idx, seed=seed, screen=True)
+
         reward_prev = 0.0
         step = 0
         ep_reward = 0.0
@@ -117,6 +124,9 @@ def screen_agent(
         while step < max_steps:
             obs_uint8 = np.asarray(obs, dtype=np.uint8)
             action, telemetry = agent.act(obs_uint8, reward_prev, step)
+
+            if trace_writer is not None and getattr(agent, "trace_enabled", False):
+                trace_writer.write_step(agent, step, reward_prev)
 
             mode = telemetry.get("mode", "FALLBACK")
             mode_counts[mode] = mode_counts.get(mode, 0) + 1
@@ -137,6 +147,13 @@ def screen_agent(
             if terminated or truncated:
                 break
 
+        if trace_writer is not None and getattr(agent, "trace_enabled", False):
+            trace_writer.end_episode(
+                length=step,
+                total_reward=ep_reward,
+                died=bool(terminated and discount == 0.0),
+            )
+
         survivals.append(step)
         rewards.append(ep_reward)
         achievement_records.append(dict(last_info.get("achievements", {})))
@@ -145,6 +162,7 @@ def screen_agent(
     agent.epsilon = old_eps
     agent.beta_t = old_beta
     agent.frozen_memory = old_frozen
+    agent.trace_enabled = old_trace
 
     # Official scoring
     crafter_metrics = compute_crafter_score(achievement_records)

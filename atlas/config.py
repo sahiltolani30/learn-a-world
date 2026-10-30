@@ -104,6 +104,8 @@ class SkillsConfig:
     hidden_dim: int = 256
     her_horizons: Tuple[int, ...] = (5, 10)  # dropped k=20 (measured arrivals are short-range)
     arrival_cosine: float = 0.85  # CHANGED from 0.93 (0.93 was unreachable; cos plateaus ~0.92)
+    arrival_calibrate: bool = True  # V4 G1: learned arrival threshold calibration
+    arrival_bounds: Tuple[float, float] = (0.60, 0.85)  # V4 G1: calibration bounds
     max_option_steps: int = 25
     stagnation_patience: int = 24  # V3 F6: raised from 8 to 24 to avoid aborting valid detours
     lr: float = 3e-4
@@ -235,6 +237,13 @@ class HealthConfig:
 
 
 @dataclass
+class TraceConfig:
+    enabled: bool = True
+    dir_name: str = "trace"            # -> atlas_runs/<run_id>/trace/
+    max_folder_mb: float = 500.0       # prune oldest trace_it*.jsonl when exceeded
+
+
+@dataclass
 class AtlasConfig:
     backbone: BackboneConfig = field(default_factory=BackboneConfig)
     belief: BeliefConfig = field(default_factory=BeliefConfig)
@@ -248,6 +257,7 @@ class AtlasConfig:
     train: TrainConfig = field(default_factory=TrainConfig)
     screen: ScreenConfig = field(default_factory=ScreenConfig)
     health: HealthConfig = field(default_factory=HealthConfig)
+    trace: TraceConfig = field(default_factory=TraceConfig)
 
 
 def resolve_device(device: str = "auto") -> str:

@@ -75,6 +75,7 @@ class EpisodeCollector:
         cfg: Optional[CollectConfig] = None,
         journal_path: Optional[Union[str, Path]] = None,
         health: Optional[Any] = None,
+        trace_writer: Optional[Any] = None,
     ):
         self.agent = agent
         self.cfg = cfg or CollectConfig()
@@ -82,6 +83,8 @@ class EpisodeCollector:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.journal_path = Path(journal_path) if journal_path is not None else None
         self.health = health
+        self.trace_writer = trace_writer
+        self._current_ep_idx = 0
         if self.journal_path is not None:
             self.journal_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -105,6 +108,14 @@ class EpisodeCollector:
         obs, reset_info = env.reset(seed=seed)
 
         self.agent.reset_episode(seed=seed)
+        if getattr(self, "trace_writer", None) is not None:
+            self.agent.trace_enabled = True
+            self.trace_writer.begin_episode(
+                iter_idx=iter_idx,
+                ep_idx=getattr(self, "_current_ep_idx", 0),
+                seed=seed,
+                screen=(iter_idx < 0),
+            )
 
         obs_list: List[np.ndarray] = []
         action_list: List[int] = []
@@ -125,6 +136,9 @@ class EpisodeCollector:
         while step < self.cfg.max_steps:
             obs_uint8 = np.asarray(obs, dtype=np.uint8)
             action, telemetry = self.agent.act(obs_uint8, reward_prev, step)
+
+            if getattr(self, "trace_writer", None) is not None and getattr(self.agent, "trace_enabled", False):
+                self.trace_writer.write_step(self.agent, step, reward_prev)
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             discount = float(info.get("discount", 0.0 if terminated else 1.0))
@@ -229,6 +243,13 @@ class EpisodeCollector:
             except Exception:
                 pass
 
+        if getattr(self, "trace_writer", None) is not None and getattr(self.agent, "trace_enabled", False):
+            self.trace_writer.end_episode(
+                length=step,
+                total_reward=float(sum(reward_list)),
+                died=bool(done_list[-1]) if done_list else False,
+            )
+
         return {
             "obs": np.stack(obs_list, axis=0),
             "actions": np.array(action_list, dtype=np.int64),
@@ -271,6 +292,7 @@ class EpisodeCollector:
         all_positions: List[np.ndarray] = []
 
         for i in range(n):
+            self._current_ep_idx = i
             ep_seed = seed_base + i
             ep_data = self.run_episode(ep_seed, iter_idx=iter_idx)
             all_obs.append(ep_data["obs"])

@@ -48,6 +48,61 @@ def _config_to_dict(obj: Any) -> Any:
     return obj
 
 
+def export_relations_snapshot(audit_dir: Union[str, Path], iter_idx: int, agent: Any) -> Path:
+    """Exports learned relations, ItemEventMap, and GoalBank metadata (T5).
+    Strictly anonymous: no key vectors, no achievement names.
+    """
+    audit_path = Path(audit_dir)
+    relations_dir = audit_path / "relations"
+    relations_dir.mkdir(parents=True, exist_ok=True)
+    out_file = relations_dir / f"relations_it{iter_idx}.json"
+
+    lift_edges = []
+    if hasattr(agent, "lift") and hasattr(agent.lift, "ci_low") and hasattr(agent.lift, "lift"):
+        ci_low = agent.lift.ci_low
+        lift = agent.lift.lift
+        num_ach = ci_low.shape[0]
+        for d in range(num_ach):
+            for e in range(num_ach):
+                if float(ci_low[d, e]) > 0.0:
+                    lift_edges.append([
+                        int(d),
+                        int(e),
+                        float(round(float(ci_low[d, e]), 4)),
+                        float(round(float(lift[d, e]), 4)),
+                    ])
+
+    item_event_map = {}
+    if hasattr(agent, "item_event_map") and agent.item_event_map:
+        for k, v in agent.item_event_map.items():
+            item_event_map[str(k)] = int(v) if v is not None else None
+
+    bank_list = []
+    if hasattr(agent, "goal_bank") and hasattr(agent.goal_bank, "entries"):
+        for entry in agent.goal_bank.entries:
+            b_obj = {
+                "kind": str(entry.kind),
+                "event_dims": [int(d) for d in entry.event_dims],
+                "n_try": int(entry.n_try),
+                "n_succ": int(entry.n_succ),
+                "world_frequency": float(round(float(getattr(entry, "world_frequency", 0.0)), 4)),
+                "born_iter": int(getattr(entry, "born_iter", 0)),
+            }
+            bank_list.append(b_obj)
+
+    data = {
+        "iter": int(iter_idx),
+        "lift_edges": lift_edges,
+        "item_event_map": item_event_map,
+        "bank": bank_list,
+    }
+
+    with open(out_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+    return out_file
+
+
 class AuditPackExporter:
     """Manages diagnostic audit pack exports for Project ATLAS."""
 
@@ -56,9 +111,11 @@ class AuditPackExporter:
         self.audit_dir = self.run_dir / "audit"
         self.frames_dir = self.audit_dir / "frames"
         self.health_dir = self.audit_dir / "health_cards"
+        self.probes_dir = self.audit_dir / "probes"
+        self.relations_dir = self.audit_dir / "relations"
         self.max_bytes = int(max_folder_mb * 1024 * 1024)
 
-        for d in [self.audit_dir, self.frames_dir, self.health_dir]:
+        for d in [self.audit_dir, self.frames_dir, self.health_dir, self.probes_dir, self.relations_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
         self.pending_decisions: List[Dict[str, Any]] = []
@@ -109,6 +166,7 @@ class AuditPackExporter:
         cfg: Any,
         cached_episodes: List[Dict[str, Any]],
         results_dir: Optional[Union[str, Path]] = None,
+        agent: Optional[Any] = None,
     ) -> None:
         """Writes audit files on save_state and enforces ~60MB cap."""
         # 1. Manifest
@@ -193,6 +251,14 @@ class AuditPackExporter:
             if cards:
                 latest_card = cards[-1]
                 shutil.copy2(latest_card, self.health_dir / latest_card.name)
+            p_files = sorted(res_p.glob("probes_it*.json"), key=lambda p: p.stat().st_mtime)
+            if p_files:
+                latest_p = p_files[-1]
+                shutil.copy2(latest_p, self.probes_dir / latest_p.name)
+
+        # 5c. Relations snapshot (T5)
+        if agent is not None:
+            export_relations_snapshot(self.audit_dir, current_iter, agent)
 
         # 6. Folder size cap: ~60 MB
         self._enforce_size_cap()

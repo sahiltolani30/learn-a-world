@@ -47,6 +47,7 @@ class GoalEntry:
     born_iter: int = 0
     last_used_iter: int = 0
     world_frequency: float = 1.0       # V2.2 F10: fraction of historical episodes containing this view
+    material_serves: int = 0           # V4 G2: times chosen as material subgoal
 
     def __post_init__(self):
         self.key = np.asarray(self.key, dtype=np.float32).reshape(-1)
@@ -387,6 +388,8 @@ class GoalBank:
         episode_artifact_views: Optional[Dict[int, np.ndarray]] = None,
         critic: Optional[Any] = None,
         readout_net: Optional[Any] = None,
+        active_material_deficit_dim: Optional[int] = None,
+        item_event_map: Optional[Dict[int, Optional[int]]] = None,
     ) -> Tuple[Optional[GoalEntry], float]:
         """Selects a goal entry with statistical rotation (F3) and episode-scope gating (F10)."""
         if not self.entries:
@@ -434,8 +437,12 @@ class GoalBank:
             return None, 0.0
 
         s = np.concatenate([z.reshape(-1), h.reshape(-1)], axis=-1)
-        m_soft = np.asarray(m_soft, dtype=np.float32).reshape(-1)
-        locked_dims = [i for i in range(NUM_ACHIEVEMENTS) if m_soft[i] < 0.5]
+        m_soft_arr = np.asarray(m_soft, dtype=np.float32).copy().reshape(-1)
+        if active_material_deficit_dim is not None and item_event_map is not None:
+            mapped_e = item_event_map.get(active_material_deficit_dim)
+            if mapped_e is not None and 0 <= mapped_e < NUM_ACHIEVEMENTS:
+                m_soft_arr[mapped_e] = 0.0  # V4 G2b: treat deficit dim's event as locked to prevent single-unlock drop-out
+        locked_dims = [i for i in range(NUM_ACHIEVEMENTS) if m_soft_arr[i] < 0.5]
 
         frontier_goals = [g for g in selectable if g.kind == "frontier"]
         u = float(np.random.rand())
@@ -589,6 +596,7 @@ class GoalBank:
                 "born_iter": g.born_iter,
                 "last_used_iter": g.last_used_iter,
                 "world_frequency": getattr(g, "world_frequency", 1.0),
+                "material_serves": getattr(g, "material_serves", 0),
             }
             for g in self.entries
         ]
@@ -625,6 +633,7 @@ class GoalBank:
                 born_iter=m["born_iter"],
                 last_used_iter=m["last_used_iter"],
                 world_frequency=float(m.get("world_frequency", 1.0)),
+                material_serves=int(m.get("material_serves", 0)),
             )
             self.entries.append(entry)
         self._rebuild_dim_counts()

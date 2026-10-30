@@ -24,8 +24,10 @@ from atlas.collect import EpisodeCollector, ShardLoader
 from atlas.config import NUM_ACHIEVEMENTS, NUM_ACTIONS, REPO_ROOT, AtlasConfig
 from atlas.goals import GoalEntry
 from atlas.health import HealthMonitor
+from atlas.probes import evaluate_probes_suite, export_probes
 from atlas.screen import screen_agent
-from atlas.skills import build_her_batch
+from atlas.skills import build_her_batch, calibrate_arrival_cosine, check_arrival_rollback
+from atlas.trace import TraceWriter
 from atlas.train import HeadTrainer
 from eval.metrics import CRAFTER_ACHIEVEMENTS
 
@@ -292,12 +294,19 @@ class SelfLearnLoop:
 
         self.journal_path = self.run_dir / "game_journal.jsonl"
         self.health = HealthMonitor(self.cfg.health)
+        self.trace_writer: Optional[TraceWriter] = None
+        if getattr(self.cfg, "trace", None) and self.cfg.trace.enabled:
+            self.trace_writer = TraceWriter(
+                run_dir=self.run_dir,
+                max_folder_mb=self.cfg.trace.max_folder_mb,
+            )
         self.collector = EpisodeCollector(
             agent=self.agent,
             out_dir=self.shards_dir,
             cfg=self.cfg.collect,
             journal_path=self.journal_path,
             health=self.health,
+            trace_writer=self.trace_writer,
         )
         self.trainer = HeadTrainer(
             backbone=self.agent.backbone,
@@ -410,6 +419,8 @@ class SelfLearnLoop:
             "readout_net": self.agent.readout_net.state_dict() if self.agent.readout_net else None,
             "critic_net": self.trainer.critic_net.state_dict() if hasattr(self.trainer, "critic_net") else None,
             "item_event_map": getattr(self.agent, "item_event_map", None),
+            "arrival_calibration": getattr(self, "arrival_calibration", None),
+            "arrival_threshold": getattr(self.agent, "arrival_threshold", None),
             "torch_rng": torch.get_rng_state(),
             "np_rng": np.random.get_state(),
         }
@@ -429,6 +440,7 @@ class SelfLearnLoop:
                 cfg=self.cfg,
                 cached_episodes=self.all_cached_episodes,
                 results_dir=self.results_dir,
+                agent=self.agent,
             )
 
     def load_state(self) -> int:
@@ -449,6 +461,12 @@ class SelfLearnLoop:
             self.agent.critic_net = self.trainer.critic_net
         if "item_event_map" in ckpt:
             self.agent.item_event_map = ckpt["item_event_map"]
+        if "arrival_calibration" in ckpt and ckpt["arrival_calibration"]:
+            self.arrival_calibration = ckpt["arrival_calibration"]
+            if "threshold" in self.arrival_calibration:
+                self.agent.arrival_threshold = float(self.arrival_calibration["threshold"])
+        elif "arrival_threshold" in ckpt and ckpt["arrival_threshold"]:
+            self.agent.arrival_threshold = float(ckpt["arrival_threshold"])
 
         resume_iter = int(ckpt.get("iter", 0)) + 1
         if "torch_rng" in ckpt:
@@ -666,6 +684,22 @@ class SelfLearnLoop:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
+            # 2b. Evaluate linear probes on cached latents (T2)
+            try:
+                eps_per_shard = getattr(self.cfg.collect, "episodes_per_iter", 8)
+                probe_eps_count = min(len(self.all_cached_episodes), 8 * eps_per_shard)
+                probe_eps = self.all_cached_episodes[-probe_eps_count:]
+                probes_out = self.run_dir / "audit" / "probes" / f"probes_it{it}.json"
+                probe_report = evaluate_probes_suite(
+                    cached_episodes=probe_eps,
+                    iter_idx=it,
+                    git_commit=self.git_commit,
+                    out_path=probes_out,
+                )
+                export_probes(probe_report, self.trainer.log_file)
+            except Exception as e:
+                print(f"[SelfLearnLoop] Warning: Probe evaluation failed at iter {it}: {e}")
+
             # 3. Train heads (90% train, 10% val split by episode)
             num_eps = len(self.all_cached_episodes)
             if num_eps < 2:
@@ -690,6 +724,20 @@ class SelfLearnLoop:
             # 4. Mine GoalBank and PredecessorLift
             mine_goals_and_lift(self.agent, self.all_cached_episodes, iter_idx=it)
 
+            # G1: Calibrate arrival threshold every 10 iterations
+            if getattr(self.cfg.skills, "arrival_calibrate", True):
+                if (it + 1) % 10 == 0 or not hasattr(self, "arrival_calibration"):
+                    try:
+                        eps_per_shard = getattr(self.cfg.collect, "episodes_per_iter", 8)
+                        cal_eps_count = min(len(self.all_cached_episodes), 8 * eps_per_shard)
+                        cal_eps = self.all_cached_episodes[-cal_eps_count:]
+                        p75, cal_thresh = calibrate_arrival_cosine(cal_eps, bounds=self.cfg.skills.arrival_bounds)
+                        self.arrival_calibration = {"p75": p75, "threshold": cal_thresh, "iter": it}
+                        self.agent.arrival_threshold = cal_thresh
+                        print(f"[SelfLearnLoop] G1 Calibrated arrival cosine: p75={p75:.3f} -> threshold={cal_thresh:.3f}")
+                    except Exception as e:
+                        print(f"[SelfLearnLoop] Warning: G1 calibration failed at iter {it}: {e}")
+
             # 5. Dev screen every 5 iterations
             if (it + 1) % 5 == 0:
                 print(f"[SelfLearnLoop] Running dev screen at iteration {it}...")
@@ -699,6 +747,7 @@ class SelfLearnLoop:
                     num_episodes=10,
                     tag=f"{self.run_id}_dev_it{it}",
                     out_dir=self.results_dir,
+                    trace_writer=self.trace_writer,
                 )
                 last_dev_ach = float(
                     screen_res.get("mean_achievements_per_ep")

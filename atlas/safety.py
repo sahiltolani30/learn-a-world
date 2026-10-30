@@ -6,7 +6,7 @@ Trained on replay with class-weighted focal BCE (deaths are ~2% of steps).
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -93,3 +93,59 @@ def focal_bce(
     focal_weight = alpha_t * ((1.0 - p_t) ** gamma)
 
     return (focal_weight * bce).mean()
+
+
+def calibrate_risk_threshold(
+    death_risks: Any,
+    survived_risks: Any,
+    grid: Optional[Any] = None,
+) -> Tuple[float, Dict[str, Any]]:
+    """G4a: Threshold recalibration from data maximizing deaths_flagged/total - 0.5 * false_flag_rate.
+    Grid over 0.30..0.60 step 0.05. Updates threshold only if deaths_flagged >= 60%, else keeps 0.50.
+    """
+    import numpy as np
+
+    if grid is None:
+        grid = [round(x, 2) for x in np.arange(0.30, 0.65, 0.05)]
+
+    d_risks = np.asarray(death_risks, dtype=np.float32)
+    s_risks = np.asarray(survived_risks, dtype=np.float32)
+
+    total_deaths = len(d_risks)
+    if total_deaths == 0:
+        return 0.50, {"grid": None, "chosen": 0.50, "deaths_flagged_rate": None}
+
+    grid_results = {}
+    best_utility = -1e9
+    best_tau = 0.50
+
+    for tau in grid:
+        tau_val = float(tau)
+        flagged = int(np.sum(d_risks > tau_val))
+        tpr = flagged / total_deaths
+        false_flags = int(np.sum(s_risks > tau_val)) if len(s_risks) > 0 else 0
+        fpr = false_flags / max(1, len(s_risks))
+        utility = tpr - 0.5 * fpr
+        grid_results[str(tau_val)] = {
+            "tpr": round(tpr, 4),
+            "fpr": round(fpr, 4),
+            "utility": round(utility, 4),
+            "deaths_flagged": flagged,
+        }
+        if utility > best_utility:
+            best_utility = utility
+            best_tau = tau_val
+
+    flagged_share = float(np.sum(d_risks > best_tau) / total_deaths)
+    if flagged_share >= 0.60:
+        chosen_threshold = best_tau
+    else:
+        chosen_threshold = 0.50
+
+    summary = {
+        "grid": grid_results,
+        "best_tau": best_tau,
+        "chosen": chosen_threshold,
+        "deaths_flagged_rate": round(flagged_share, 4),
+    }
+    return chosen_threshold, summary

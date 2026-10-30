@@ -135,16 +135,34 @@ class AtlasAgent:
         self.current_goal_mode: str = "none"
         self.last_probe_decision: Optional[Dict[str, Any]] = None
         self.episode_artifact_views: Dict[int, np.ndarray] = {}
+        self.arrival_threshold: float = float(self.cfg.skills.arrival_cosine)
 
         # V3 F3 & F8: Quantity-aware subgoals and craft execution
         self.target_goal_pending: Optional[GoalEntry] = None
         self.material_subgoal_cycles: int = 0
+        self.active_material_deficit_dim: Optional[int] = None
         self.item_event_map: Optional[Dict[int, Optional[int]]] = None
 
         # V3 Instrumentation (C2 & F6 telemetry)
         self.probe_id: int = 0
         self.probe_newly_unlocked: List[int] = []
         self.last_abort_reason: str = "none"
+
+        # V4 T1 Decision Tracing attributes
+        self.trace_enabled: bool = False
+        self.last_scores_17: Optional[np.ndarray] = None
+        self.last_scores_source: str = "none"
+        self.last_epsilon_fired: bool = False
+        self.last_override_info: Optional[Dict[str, Any]] = None
+        self.last_arrived: bool = False
+        self.last_a_intended: int = 0
+        self.last_a_final: int = 0
+        self.last_risks_17: Optional[np.ndarray] = None
+        self.last_event_p_max: Optional[np.ndarray] = None
+        self.last_suppressed_count: Optional[int] = None
+        self.last_arrival_cos: float = 0.0
+        self.last_psi_val: float = 0.0
+        self.last_r_int: float = 0.0
 
         # In-progress episode transition buffer for collector
         self.episode_buffer: list[Dict[str, Any]] = []
@@ -178,9 +196,63 @@ class AtlasAgent:
         self.episode_artifact_views.clear()
         self.target_goal_pending = None
         self.material_subgoal_cycles = 0
+        self.active_material_deficit_dim = None
         self.probe_newly_unlocked.clear()
         self.last_abort_reason = "none"
         self.episode_buffer.clear()
+
+        self.last_scores_17 = None
+        self.last_scores_source = "none"
+        self.last_epsilon_fired = False
+        self.last_override_info = None
+        self.last_arrived = False
+        self.last_a_intended = 0
+        self.last_a_final = 0
+        self.last_risks_17 = None
+        self.last_event_p_max = None
+        self.last_suppressed_count = None
+        self.last_arrival_cos = 0.0
+        self.last_psi_val = 0.0
+        self.last_r_int = 0.0
+
+    def compute_chain_budget(
+        self,
+        target_dims: Sequence[int],
+        s: torch.Tensor,
+        all_event_probs: torch.Tensor,
+        lift_ci_threshold: float = 1.2,
+        action_profile: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, int]:
+        """Computes chain-aware material budget by summing learned StateDeltaHead costs (G2).
+        Returns (budget, deficit_diffs, d_star).
+        """
+        chain_dims = list(set(target_dims))
+        if hasattr(self, "lift") and hasattr(self.lift, "ci_low"):
+            for e in target_dims:
+                preds = [p for p in range(NUM_ACHIEVEMENTS) if self.lift.ci_low[p, e] > lift_ci_threshold]
+                chain_dims.extend(preds)
+        chain_dims = sorted(list(set(chain_dims)))
+
+        budget = np.zeros(12, dtype=np.float32)
+        if getattr(self.backbone, "has_learned_delta_head", False):
+            for d in chain_dims:
+                if action_profile is not None and np.max(action_profile[:, d]) > 0.0:
+                    a_d = int(np.argmax(action_profile[:, d]))
+                else:
+                    a_d = int(torch.argmax(all_event_probs[:, d]).item())
+                a_d_t = torch.tensor([a_d], device=self.device)
+                delta_d = self.backbone.inventory_delta(s, a_d_t).squeeze(0).detach().cpu().numpy()
+                cost_d = np.clip(-delta_d[:12], 0.0, None)
+                budget += cost_d
+
+        have = np.zeros(12, dtype=np.float32)
+        if self.readout_net is not None:
+            mean_x, _ = self.readout_net(s)
+            have = mean_x.squeeze(0)[:12].detach().cpu().numpy()
+
+        deficit_diffs = budget - have
+        d_star = int(np.argmax(deficit_diffs))
+        return budget, deficit_diffs, d_star
 
     @torch.no_grad()
     def act(
@@ -228,6 +300,38 @@ class AtlasAgent:
         # 3) Mode machine & candidate action selection
         mask_t = self.belief.get_mask_tensor(self.device).unsqueeze(0)  # [1, 22]
         all_event_probs = self.backbone.event_logits_all_actions(s, mask_t).squeeze(0)  # [17, 22]
+
+        # V4 G3: Visual station anchor — stay at what you built
+        if step > 0 and newly_unlocked and self.target_goal_pending is not None:
+            pending_dims = list(self.target_goal_pending.event_dims)
+            for dim in newly_unlocked:
+                is_pred = False
+                if hasattr(self, "lift") and hasattr(self.lift, "ci_low"):
+                    for pd in pending_dims:
+                        if self.lift.ci_low[dim, pd] > getattr(self.cfg.goals, "lift_ci_threshold", 1.2):
+                            is_pred = True
+                            break
+                if is_pred:
+                    _, cur_deficits, _ = self.compute_chain_budget(
+                        target_dims=pending_dims,
+                        s=s,
+                        all_event_probs=all_event_probs,
+                    )
+                    deficit_exists = bool(np.any(cur_deficits > self.cfg.goals.material_gate_margin))
+                    if deficit_exists:
+                        self.active_goal = GoalEntry(
+                            key=z_np.copy(),
+                            context=h_np.copy(),
+                            action_profile=np.zeros((NUM_ACTIONS, NUM_ACHIEVEMENTS), dtype=np.float32),
+                            event_dims=pending_dims,
+                            kind="artifact",
+                            n_try=0,
+                            n_succ=0,
+                        )
+                        self.mode = "NAVIGATE"
+                        break
+        self.last_event_p_max = all_event_probs.max(dim=0).values.detach().cpu().numpy()
+        self.last_arrived = False
         arrival_cos = 0.0
         psi_val = 0.0
 
@@ -263,16 +367,19 @@ class AtlasAgent:
 
             g_key_np = self.active_goal.key
             arrival_cos = _cosine(z_np, g_key_np)
-            if arrival_cos >= self.cfg.skills.arrival_cosine:
+            self.last_arrival_cos = float(arrival_cos)
+            if arrival_cos >= self.arrival_threshold:
                 # Arrived at goal! Transition to PROBE (V3 C2: reset probe attribution)
                 self.mode = "PROBE"
                 self.probe_steps_remaining = self.cfg.goals.probe_steps - 1
                 self.probe_unlocked = False
                 self.probe_id += 1
                 self.probe_newly_unlocked.clear()
+                self.last_arrived = True
             else:
                 g_key_t = torch.from_numpy(g_key_np).float().to(self.device).unsqueeze(0)
                 psi_val = float(self.reach_net(s, g_key_t).item())
+                self.last_psi_val = float(psi_val)
                 # V3 F6: progress_t = max(psi(s_t, g), cos(z_t, g))
                 progress_t = max(psi_val, arrival_cos)
                 if progress_t >= self.progress_best + 0.01:
@@ -284,7 +391,7 @@ class AtlasAgent:
                 self.nav_steps += 1
                 stagnated = (
                     self.stagnation_counter >= self.cfg.skills.stagnation_patience
-                    and arrival_cos < self.cfg.skills.arrival_cosine
+                    and arrival_cos < self.arrival_threshold
                 )
                 timed_out = (self.nav_steps >= self.current_option_budget)
                 if stagnated or timed_out:
@@ -315,6 +422,8 @@ class AtlasAgent:
                 episode_artifact_views=self.episode_artifact_views,
                 critic=self.critic_net,
                 readout_net=self.readout_net,
+                active_material_deficit_dim=self.active_material_deficit_dim,
+                item_event_map=self.item_event_map,
             )
 
             # V3 F3 & F8: Quantity-aware subgoals and craft execution
@@ -339,22 +448,20 @@ class AtlasAgent:
                         top_a = int(torch.argmax(all_event_probs[:, target_dims].max(dim=-1).values).item())
                     else:
                         top_a = 0
-                    with torch.no_grad():
-                        a_cand = torch.tensor([top_a], device=self.device)
-                        delta = self.backbone.inventory_delta(s, a_cand).squeeze(0).cpu().numpy()
-                        mean_x, _ = self.readout_net(s)
-                        have = mean_x.squeeze(0).detach().cpu().numpy()
-
-                    cost = np.clip(-delta[:12], 0.0, None)
-                    deficit_mask = cost > (have[:12] + self.cfg.goals.material_gate_margin)
+                    # V4 G2: Chain-aware material budget along the learned lift chain
+                    budget, deficit_diffs, d_star = self.compute_chain_budget(
+                        target_dims=target_dims,
+                        s=s,
+                        all_event_probs=all_event_probs,
+                        action_profile=best_goal.action_profile if best_goal is not None else None,
+                    )
+                    deficit_mask = deficit_diffs > self.cfg.goals.material_gate_margin
 
                     if np.any(deficit_mask):
-                        # V3 F3: Pick single largest deficit dim d* = argmax_i (cost[i] - have[i])
-                        deficit_diffs = cost - have[:12]
-                        d_star = int(np.argmax(deficit_diffs))
                         max_deficit = float(deficit_diffs[d_star])
                         max_c = getattr(self.cfg.goals, "max_cycles", 4)
                         cycles = int(min(max_c, max(1, np.ceil(max_deficit))))
+                        self.active_material_deficit_dim = d_star
 
                         # Find goal CLOUD = all bank entries whose event_dims contain ItemEventMap(d*)
                         pred_goals = []
@@ -380,6 +487,7 @@ class AtlasAgent:
                                     g, s_np, locked_dims_tmp, _psi_fn, _danger_fn, None, self.lift, self.current_iter, self.beta_t, critic=self.critic_net
                                 )
                             )
+                            best_pred.material_serves = getattr(best_pred, "material_serves", 0) + 1
                             self.target_goal_pending = best_goal
                             self.material_subgoal_cycles = cycles
                             best_goal = best_pred
@@ -419,12 +527,15 @@ class AtlasAgent:
                 self.stagnation_counter = 0
                 self.progress_best = -1.0
                 arrival_cos = _cosine(z_np, best_goal.key)
-                if arrival_cos >= self.cfg.skills.arrival_cosine:
+                self.last_arrival_cos = float(arrival_cos)
+                self.last_psi_val = float(psi_val)
+                if arrival_cos >= self.arrival_threshold:
                     self.mode = "PROBE"
                     self.probe_steps_remaining = self.cfg.goals.probe_steps - 1
                     self.probe_unlocked = False
                     self.probe_id += 1
                     self.probe_newly_unlocked.clear()
+                    self.last_arrived = True
                 else:
                     self.mode = "NAVIGATE"
 
@@ -475,6 +586,9 @@ class AtlasAgent:
                     }
 
             a_intended = int(torch.argmax(probe_score).item())
+            self.last_scores_17 = probe_score.detach().cpu().numpy()
+            self.last_scores_source = "probe_blend"
+            self.last_suppressed_count = suppressed_cnt if learned_gate_info is not None else None
 
             self.last_probe_decision = {
                 "step": step,
@@ -499,21 +613,55 @@ class AtlasAgent:
                 if self.material_subgoal_cycles > 0:
                     self.material_subgoal_cycles -= 1
 
-                if self.target_goal_pending is not None and self.material_subgoal_cycles <= 0:
-                    self.active_goal = self.target_goal_pending
-                    self.target_goal_pending = None
-                    self.current_goal_mode = "released_target"
+                # Check releasing artifact anchor (G3)
+                if self.active_goal is not None and self.active_goal.kind == "artifact":
+                    has_unlocked_target = any(self.belief.has(pd) for pd in self.active_goal.event_dims)
+                    _, cur_deficits, _ = self.compute_chain_budget(
+                        target_dims=self.active_goal.event_dims,
+                        s=s,
+                        all_event_probs=all_event_probs,
+                    )
+                    deficit_satisfied = not np.any(cur_deficits > self.cfg.goals.material_gate_margin)
+                    if has_unlocked_target or deficit_satisfied:
+                        self.active_goal = self.target_goal_pending
+                        self.target_goal_pending = None
+                        self.current_goal_mode = "released_target"
                 else:
-                    self.active_goal = None
+                    # Re-evaluate deficit when in material subgoal cycle (G2)
+                    deficit_satisfied = True
+                    if self.target_goal_pending is not None and self.active_material_deficit_dim is not None:
+                        _, cur_deficits, _ = self.compute_chain_budget(
+                            target_dims=self.target_goal_pending.event_dims,
+                            s=s,
+                            all_event_probs=all_event_probs,
+                        )
+                        if cur_deficits[self.active_material_deficit_dim] > self.cfg.goals.material_gate_margin:
+                            deficit_satisfied = False
+
+                    if self.target_goal_pending is not None and (deficit_satisfied or self.material_subgoal_cycles <= 0):
+                        self.active_goal = self.target_goal_pending
+                        self.target_goal_pending = None
+                        self.active_material_deficit_dim = None
+                        self.current_goal_mode = "released_target"
+                    elif self.target_goal_pending is not None and not deficit_satisfied:
+                        self.active_goal = None
+                    else:
+                        self.active_goal = None
 
         elif self.mode == "NAVIGATE" and self.active_goal is not None:
             g_key_t = torch.from_numpy(self.active_goal.key).float().to(self.device).unsqueeze(0)
+            self.last_scores_17 = self.option_net.logits(s, g_key_t).squeeze(0).detach().cpu().numpy()
+            self.last_scores_source = "option_logits"
+            self.last_suppressed_count = None
             a_tensor = self.option_net.act(s, g_key_t, greedy=True)
             a_intended = int(a_tensor.item())
 
         elif self.mode == "WANDER":
             # WANDER: sample from softmax(beta_t * disagreement) with temperature 1.0
             d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
+            self.last_scores_17 = (self.beta_t * d_all).detach().cpu().numpy()
+            self.last_scores_source = "wander_logits"
+            self.last_suppressed_count = None
             probs = F.softmax(self.beta_t * d_all, dim=-1)
             a_intended = int(torch.multinomial(probs, num_samples=1).item())
 
@@ -523,14 +671,21 @@ class AtlasAgent:
             prior_logits = self.backbone.prior_logits_weighted(s, mask_t).squeeze(0)  # [17]
             d_all = self.epistemic_net.disagreement_all_actions(s).squeeze(0)  # [17]
             logits = self.beta_t * d_all + prior_logits
+            self.last_scores_17 = logits.detach().cpu().numpy()
+            self.last_scores_source = "fallback_logits"
+            self.last_suppressed_count = None
             a_intended = int(torch.argmax(logits).item())
 
         # Universal epsilon random exploration tail across ALL modes
+        self.last_a_intended = int(a_intended)
+        self.last_epsilon_fired = False
         if np.random.rand() < self.epsilon:
+            self.last_epsilon_fired = True
             a_intended = int(np.random.randint(0, NUM_ACTIONS))
 
         # 4) Safety override (§5.6)
         all_risks = self.safety_net.risk_all_actions(s).squeeze(0)  # [17]
+        self.last_risks_17 = all_risks.detach().cpu().numpy()
         risk_intended = float(all_risks[a_intended].item())
         min_risk_val = float(torch.min(all_risks).item())
 
@@ -555,11 +710,21 @@ class AtlasAgent:
                 a_final = int(candidate_actions[best_cand_idx].item())
             override_fired = True
 
+        self.last_override_info = {
+            "fired": bool(override_fired),
+            "risk_intended": round(risk_intended, 4),
+            "min_risk": round(min_risk_val, 4),
+            "a_intended": int(a_intended),
+            "a_final": int(a_final),
+        }
+        self.last_a_final = int(a_final)
+
         # Compute intrinsic curiosity signal
         a_final_t = torch.tensor([a_final], dtype=torch.int64, device=self.device)
         d_val = float(self.epistemic_net.disagreement(s, a_final_t).item())
         knn_val = knn_novelty(h_np, self.h_memory, k=4)
         r_int = d_val + self.cfg.epistemic.knn_beta * knn_val
+        self.last_r_int = float(r_int)
 
         # Predict event probs for chosen action (used to update belief next step)
         chosen_event_probs = self.backbone.event_probs(s, a_final_t, mask_t)

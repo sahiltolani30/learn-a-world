@@ -96,6 +96,12 @@ def parse_args():
         default=False,
         help="Disable diagnostic audit pack exporter (V2.2 F8)",
     )
+    parser.add_argument(
+        "--no-trace",
+        action="store_true",
+        default=False,
+        help="Disable per-step decision tracing (V4 T1)",
+    )
     return parser.parse_args()
 
 
@@ -169,6 +175,8 @@ def main():
         os.environ["ATLAS_CHECKPOINT"] = str(paths["drive_ckpt"])
 
     cfg = AtlasConfig()
+    if args.no_trace:
+        cfg.trace.enabled = False
     if args.device != "auto":
         cfg.backbone.device = args.device
         cfg.train.device = args.device
