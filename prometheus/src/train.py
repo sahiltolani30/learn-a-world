@@ -1083,6 +1083,8 @@ class TrainingPipeline:
                 # 4. Periodic Episodic Evaluation
                 if self.current_step >= next_eval_step or self.current_step >= self.total_steps:
                     next_eval_step = ((self.current_step // self.eval_interval) + 1) * self.eval_interval
+                    if self.save_interval > 0:
+                        next_save_step = ((self.current_step // self.save_interval) + 1) * self.save_interval
                     eval_metrics = self.evaluate()
                     print("-" * 80)
                     print(
