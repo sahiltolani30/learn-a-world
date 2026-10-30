@@ -18,6 +18,7 @@ import crafter
 
 from godfather_jepa.envs.crafter_env import CrafterEnvWrapper
 from godfather_jepa.metrics.crafter_score import compute_crafter_score
+from godfather_jepa.planning.causal_hypergraph import get_fixture_alias
 from godfather_jepa.utils.seed_guard import LOCKED_BENCHMARK_MIN, LOCKED_BENCHMARK_MAX
 
 
@@ -105,16 +106,19 @@ class BenchmarkRunner:
                         ep_unlocked.add(ach_name)
                         if isinstance(state, dict):
                             state.setdefault("completed_milestones", set()).add(ach_name)
-                            if "place_" in ach_name:
-                                fixture_name = ach_name.replace("place_", "")
-                                state.setdefault("workstations", set()).add(f"{fixture_name}_placed")
-                                state.setdefault("workstations", set()).add(fixture_name)
+                            agent_cards = getattr(getattr(agent, "causal_hypergraph", None), "cards", {})
+                            card = agent_cards.get(ach_name)
+                            alias = get_fixture_alias(ach_name)
+                            is_fixture = (card is not None and card.is_fixture) or (alias != ach_name)
+                            if is_fixture:
                                 state.setdefault("workstations", set()).add(ach_name)
+                                if alias != ach_name:
+                                    state.setdefault("workstations", set()).add(alias)
                                 if "anchor_graph" in state and "prev_z" in state and state["prev_z"] is not None:
                                     z_lm = state["prev_z"].detach().cpu().numpy()
-                                    state["anchor_graph"].register_landmark(f"{fixture_name}_placed", latent_key=z_lm)
                                     state["anchor_graph"].register_landmark(ach_name, latent_key=z_lm)
-                                    state["anchor_graph"].register_landmark(fixture_name, latent_key=z_lm)
+                                    if alias != ach_name:
+                                        state["anchor_graph"].register_landmark(alias, latent_key=z_lm)
 
             for ach in ep_unlocked:
                 achievements_unlocked_counts[ach] = achievements_unlocked_counts.get(ach, 0) + 1

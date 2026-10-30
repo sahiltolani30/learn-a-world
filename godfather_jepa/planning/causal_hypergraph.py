@@ -21,46 +21,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 
 
-KNOWN_FIXTURES: Dict[str, str] = {
-    "place_table": "table_placed",
-    "place_furnace": "furnace_placed",
-    "place_plant": "plant_placed",
-    "place_stone": "stone_placed",
-}
-REVERSE_FIXTURES: Dict[str, str] = {v: k for k, v in KNOWN_FIXTURES.items()}
-
-SEMANTIC_MILESTONE_PRODUCTS: Dict[str, str] = {
-    # World Fixtures
-    "place_table": "table_placed",
-    "place_furnace": "furnace_placed",
-    "place_plant": "plant_placed",
-    "place_stone": "stone_placed",
-    # Tools & Weapons
-    "make_wood_pickaxe": "wood_pickaxe",
-    "make_stone_pickaxe": "stone_pickaxe",
-    "make_iron_pickaxe": "iron_pickaxe",
-    "make_wood_sword": "wood_sword",
-    "make_stone_sword": "stone_sword",
-    "make_iron_sword": "iron_sword",
-    # Resources
-    "collect_wood": "wood",
-    "collect_stone": "stone",
-    "collect_coal": "coal",
-    "collect_iron": "iron",
-    "collect_diamond": "diamond",
-    "collect_drink": "drink",
-    "collect_sapling": "sapling",
-    "eat_cow": "food",
-    "eat_plant": "food",
-}
-
-
 def get_fixture_alias(name: str) -> str:
-    """Returns canonical alias for known spatial fixtures, or the name itself."""
-    if name in KNOWN_FIXTURES:
-        return KNOWN_FIXTURES[name]
-    if name in REVERSE_FIXTURES:
-        return REVERSE_FIXTURES[name]
+    """Returns canonical morphological alias for spatial fixtures dynamically without hardcoded lookup tables."""
+    if name.startswith("place_"):
+        return f"{name[6:]}_placed"
+    if name.endswith("_placed"):
+        return f"place_{name[:-7]}"
     return name
 
 

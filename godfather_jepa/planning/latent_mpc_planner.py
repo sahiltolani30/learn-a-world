@@ -27,7 +27,7 @@ from godfather_jepa.models.symlog_critic import SymlogCategoricalCritic, SymlogT
 from godfather_jepa.models.belief import SpatialConvGRU, VectorBeliefCore
 from godfather_jepa.models.ensemble import EpistemicPredictorEnsemble
 from godfather_jepa.models.odometry import TopologicalAnchorGraph
-from godfather_jepa.planning.causal_hypergraph import CausalHypergraph
+from godfather_jepa.planning.causal_hypergraph import CausalHypergraph, get_fixture_alias
 
 
 class LatentMPCPlanner:
@@ -116,27 +116,26 @@ class LatentMPCPlanner:
 
         # 2. Executable causal assembly/placement action or topological workstation return
         target_card = self.causal_hypergraph.cards.get(subgoal) if subgoal else None
-        # Discrete crafting and fixture placement primitive actions (actions 7..16: place_*, make_*).
-        # World-gathering and mining (action 5: collect_*, eat_*, defeat_*) require spatial CEM navigation.
         is_assembly_or_placement = (
             target_card is not None
-            and determined_action > 5
-            and (bool(target_card.consumes) or target_card.is_fixture or "make_" in subgoal or "place_" in subgoal)
+            and (bool(target_card.consumes) or target_card.is_fixture)
         )
 
         if subgoal != "explore" and determined_action != 0 and is_assembly_or_placement:
-            if target_card and target_card.catalyst_needed and target_card.catalyst_needed in workstations:
+            if target_card and target_card.catalyst_needed and (target_card.catalyst_needed in workstations or get_fixture_alias(target_card.catalyst_needed) in workstations):
                 cat = target_card.catalyst_needed
-                landmark_key = cat.replace("_placed", "").replace("place_", "")
+                alias = get_fixture_alias(cat)
+                stem = cat.replace("_placed", "").replace("place_", "")
                 return_act = (
                     anchor_graph.get_return_action(cat)
-                    or anchor_graph.get_return_action(f"place_{landmark_key}")
-                    or anchor_graph.get_return_action(f"{landmark_key}_placed")
-                    or anchor_graph.get_return_action(landmark_key)
+                    or anchor_graph.get_return_action(alias)
+                    or anchor_graph.get_return_action(stem)
+                    or anchor_graph.get_return_action(f"place_{stem}")
+                    or anchor_graph.get_return_action(f"{stem}_placed")
                 )
                 if return_act is not None and return_act != 0:
                     return return_act, {
-                        "subgoal": f"return_to_{landmark_key}",
+                        "subgoal": f"return_to_{stem}",
                         "mode": "topological_return",
                         "score": 5.0,
                     }
@@ -146,22 +145,38 @@ class LatentMPCPlanner:
                 "score": 10.0,
             }
 
-        # 4. For gathering and exploration (e.g. collect_wood, collect_stone):
-        # Run Cross-Entropy Method (CEM) trajectory search over horizon H
+        # 4. Cross-Entropy Method (CEM) trajectory search over horizon H
         H = self.horizon
         N = self.num_candidates
         N_elite = max(2, int(N * self.elite_ratio))
 
-        # Proposal distribution: for spatial navigation and gathering, focus strictly on
-        # physically valid motor actions (1..4: movement, 5: interaction) in the wilderness
-        action_probs = torch.zeros((H, self.num_actions), device=self.device)
-        action_probs[:, 1:6] = 0.2
+        # Proposal distribution: derived purely from policy actor and learned causal card affordances
+        action_has_affordable_card = {a: False for a in range(self.num_actions)}
+        action_in_any_card = {a: False for a in range(self.num_actions)}
 
-        if policy_action is not None and 1 <= policy_action <= 5:
-            action_probs[0, policy_action] += 0.3
-            action_probs[0, 1:6] /= action_probs[0, 1:6].sum()
+        for card in self.causal_hypergraph.cards.values():
+            action_in_any_card[card.action] = True
+            has_mats = all(inventory.get(res, 0) >= amt for res, amt in card.consumes.items())
+            has_cat = (
+                card.catalyst_needed is None
+                or card.catalyst_needed in workstations
+                or inventory.get(card.catalyst_needed, 0) > 0
+            )
+            if has_mats and has_cat:
+                action_has_affordable_card[card.action] = True
 
-        best_action = policy_action if (policy_action is not None and 1 <= policy_action <= 5) else 5
+        affordance_mask = torch.ones(self.num_actions, dtype=torch.bool, device=self.device)
+        for a in range(self.num_actions):
+            if action_in_any_card[a] and not action_has_affordable_card[a]:
+                affordance_mask[a] = False
+
+        base_probs = affordance_mask.float()
+        if policy_action is not None and 0 <= policy_action < self.num_actions and affordance_mask[policy_action]:
+            base_probs[policy_action] += 2.0
+        base_probs = base_probs / base_probs.sum()
+
+        action_probs = base_probs.unsqueeze(0).expand(H, -1).clone()
+        best_action = policy_action if (policy_action is not None and 0 <= policy_action < self.num_actions and affordance_mask[policy_action]) else int(torch.argmax(base_probs).item())
         best_score = -float("inf")
 
         with torch.no_grad():
@@ -225,12 +240,16 @@ class LatentMPCPlanner:
                     best_score = top_scores[0].item()
                     best_action = int(elite_trajectories[0, 0].item())
 
-                # Update CEM distribution strictly over motor actions 1..5
+                # Update CEM distribution over all actions satisfying affordances
                 new_probs = torch.zeros_like(action_probs)
                 for t in range(H):
                     counts = torch.bincount(elite_trajectories[:, t], minlength=self.num_actions).float()
-                    m_counts = counts[1:6]
-                    new_probs[t, 1:6] = (m_counts + 0.05) / (m_counts.sum() + 0.25)
+                    counts = counts * affordance_mask.float()
+                    total_c = counts.sum()
+                    if total_c > 0:
+                        new_probs[t] = (counts + 0.05 * affordance_mask.float()) / (total_c + 0.05 * affordance_mask.float().sum())
+                    else:
+                        new_probs[t] = base_probs
 
                 action_probs = 0.5 * action_probs + 0.5 * new_probs
 

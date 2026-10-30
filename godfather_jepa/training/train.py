@@ -58,8 +58,6 @@ from godfather_jepa.memory import (
 )
 from godfather_jepa.planning.causal_hypergraph import (
     CausalHypergraph,
-    KNOWN_FIXTURES,
-    REVERSE_FIXTURES,
     get_fixture_alias,
 )
 from godfather_jepa.planning.homeostatic_arbiter import HomeostaticArbiter
@@ -323,18 +321,23 @@ class GodfatherJEPAPipeline:
                         completed.add(c_name)
 
         # Check if previous fixture placement action succeeded
-        if prev_act == 8:  # place_table
-            prev_wood = state.get("prev_wood", 0)
-            wood_dropped = (prev_wood - inv.get("wood", 0)) >= 2
-            if wood_dropped or "place_table" in completed:
-                ws.add("table_placed")
-                ws.add("table")
-                ws.add("place_table")
-                completed.add("place_table")
-                if prev_z is not None:
-                    anchor.register_landmark("table_placed", latent_key=prev_z.detach().cpu().numpy())
-                    anchor.register_landmark("place_table", latent_key=prev_z.detach().cpu().numpy())
-                    anchor.register_landmark("table", latent_key=prev_z.detach().cpu().numpy())
+        for c_name, card in self.causal_hypergraph.cards.items():
+            if card.is_fixture and card.action == prev_act:
+                prev_inv = state.get("prev_inventory", {})
+                mats_consumed = bool(card.consumes) and all(
+                    (prev_inv.get(res, 0) - inv.get(res, 0)) >= amt
+                    for res, amt in card.consumes.items()
+                )
+                if mats_consumed or c_name in completed:
+                    ws.add(c_name)
+                    completed.add(c_name)
+                    alias = get_fixture_alias(c_name)
+                    if alias != c_name:
+                        ws.add(alias)
+                    if prev_z is not None:
+                        anchor.register_landmark(c_name, latent_key=prev_z.detach().cpu().numpy())
+                        if alias != c_name:
+                            anchor.register_landmark(alias, latent_key=prev_z.detach().cpu().numpy())
 
         self.encoder.eval()
         self.actor.eval()
@@ -389,15 +392,14 @@ class GodfatherJEPAPipeline:
                 )
                 teleo_action = determined_action if (determined_action != 0 and subgoal != "explore") else actor_action
 
-            # If previous placement action was attempted but failed (e.g. facing tree trunk or water),
-            # take an evasive motor step (1..4) to face open ground instead of repeating into obstacle
-            if teleo_action == 8 and prev_act == 8 and "table_placed" not in ws and "place_table" not in completed:
-                teleo_action = actor_action if (1 <= actor_action <= 4) else ((step % 4) + 1)
-
-            # If action 5 was executed on the previous step and nothing was collected (empty tile),
-            # do not swing into thin air on repeat—take a motor movement step (1..4) to approach resources
-            if teleo_action == 5 and prev_act == 5 and state.get("last_reward", 0.0) == 0.0:
-                teleo_action = actor_action if (1 <= actor_action <= 4) else ((step % 4) + 1)
+            # If an action repeated without progress (no reward, no inventory change),
+            # stochastically sample from policy actor to escape deadlocks naturally
+            if teleo_action == prev_act and state.get("last_reward", 0.0) == 0.0 and inv == state.get("prev_inventory", {}):
+                state["repeat_count"] = state.get("repeat_count", 0) + 1
+                if state["repeat_count"] >= 2:
+                    teleo_action = int(self.actor.sample_action(composite, deterministic=False).item())
+            else:
+                state["repeat_count"] = 0
 
             # 5. Visual darkness signal from world view
             visual_darkness = compute_visual_darkness(obs)
@@ -415,14 +417,14 @@ class GodfatherJEPAPipeline:
 
             # 7. Register landmark and workstation when placement action is executed with required inputs
             for c_name, card in self.causal_hypergraph.cards.items():
-                if card.action == final_action:
-                    is_fixture_action = (
-                        card.is_fixture
-                        or (c_name in KNOWN_FIXTURES or c_name in REVERSE_FIXTURES)
-                        or any(p in KNOWN_FIXTURES or p in REVERSE_FIXTURES for p in card.produces)
-                    )
+                is_fixture = (
+                    card.is_fixture
+                    or c_name.startswith("place_")
+                    or any("placed" in p or "place_" in p for p in card.produces)
+                )
+                if card.action == final_action and is_fixture:
                     has_materials = all(inv.get(res, 0) >= amt for res, amt in card.consumes.items())
-                    if is_fixture_action and has_materials:
+                    if has_materials:
                         for prod in card.produces:
                             ws.add(prod)
                             alias = get_fixture_alias(prod)
@@ -441,6 +443,7 @@ class GodfatherJEPAPipeline:
             "completed_milestones": completed,
             "internal_vitals": vitals,
             "prev_wood": inv.get("wood", 0),
+            "prev_inventory": inv.copy(),
             "step": step + 1,
         }
         return final_action, next_state

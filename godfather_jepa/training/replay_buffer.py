@@ -48,13 +48,10 @@ class MilestoneReplayBuffer:
             # Rebuild milestone index map
             self.milestone_indices = [
                 i for i, ep in enumerate(self.episodes)
-                if any(np.any(v) for k, v in ep["achievements"].items() if k not in ("wake_up", "collect_sapling"))
+                if float(np.sum(ep["rewards"])) >= 1.0
             ]
 
-        has_milestone = any(
-            np.any(v) for k, v in achievements.items()
-            if k not in ("wake_up", "collect_sapling")
-        )
+        has_milestone = bool(float(np.sum(rewards)) >= 1.0)
 
         ep_idx = len(self.episodes)
         self.episodes.append({

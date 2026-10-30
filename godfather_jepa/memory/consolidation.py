@@ -23,9 +23,6 @@ from godfather_jepa.memory.online_store import OnlineEpisodicStore, TransitionSt
 from godfather_jepa.memory.semantic_bank import SemanticConsolidatedBank
 from godfather_jepa.planning.causal_hypergraph import (
     CausalCard,
-    KNOWN_FIXTURES,
-    REVERSE_FIXTURES,
-    SEMANTIC_MILESTONE_PRODUCTS,
     get_fixture_alias,
 )
 
@@ -70,24 +67,27 @@ class OfflineConsolidationEngine:
 
                 phi_minus = sum(step_consumes.values())
                 phi_plus = sum(step_produces.values())
-                is_fixture = (phi_minus > 0 and phi_plus == 0) or (ach in KNOWN_FIXTURES) or (ach in REVERSE_FIXTURES)
+                is_fixture = (phi_minus > 0 and phi_plus == 0) or ach.startswith("place_")
 
                 if not step_produces:
-                    if ach in SEMANTIC_MILESTONE_PRODUCTS:
-                        prod_item = SEMANTIC_MILESTONE_PRODUCTS[ach]
+                    if ach.startswith("collect_"):
+                        prod_item = ach[len("collect_"):]
                         step_produces = {prod_item: 1}
-                        if is_fixture:
-                            alias = get_fixture_alias(ach)
-                            step_produces[ach] = 1
-                            if alias != ach:
-                                step_produces[alias] = 1
-                    elif is_fixture:
-                        alias = get_fixture_alias(ach)
-                        step_produces = {ach: 1}
-                        if alias != ach:
-                            step_produces[alias] = 1
+                    elif ach.startswith("make_"):
+                        prod_item = ach[len("make_"):]
+                        step_produces = {prod_item: 1}
                     else:
                         step_produces = {ach: 1}
+
+                if is_fixture:
+                    alias = get_fixture_alias(ach)
+                    step_produces[ach] = 1
+                    if alias != ach:
+                        step_produces[alias] = 1
+
+                # Never consume what this milestone produces or gathers
+                for prod in list(step_produces.keys()):
+                    step_consumes.pop(prod, None)
 
                 # Popperian Falsification Tracker for Catalyst Induction:
                 # Identify all candidate entities present at this transition:

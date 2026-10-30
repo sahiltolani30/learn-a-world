@@ -36,6 +36,16 @@ EXTENDED_LEGACY_MODULES: frozenset[str] = frozenset({
 # Default comprehensive set of forbidden modules
 ALL_FORBIDDEN_MODULES: frozenset[str] = FORBIDDEN_LEGACY_MODULES | EXTENDED_LEGACY_MODULES
 
+# Banned hardcoded cheat dictionaries and recipe tables (Project ATLAS Rule 1)
+BANNED_CHEAT_NAMES: frozenset[str] = frozenset({
+    "KNOWN_FIXTURES",
+    "SEMANTIC_MILESTONE_PRODUCTS",
+    "CRAFT_REQUIRED_MATERIALS",
+    "CRAFTING_RECIPES",
+    "RECIPES",
+    "RECIPE_TABLE",
+})
+
 
 class ImportViolation(NamedTuple):
     """Represents an isolation import violation discovered by the AST auditor."""
@@ -269,6 +279,21 @@ class IsolationASTVisitor(ast.NodeVisitor):
                 )
             )
 
+        self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Detects assignment to banned cheat table names."""
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in BANNED_CHEAT_NAMES:
+                self.violations.append(
+                    ImportViolation(
+                        file_path=self.file_path,
+                        line_number=node.lineno,
+                        module=target.id,
+                        source_line=self._get_source_line(node.lineno),
+                        reason=f"Banned cheat table/dictionary '{target.id}' violates Project ATLAS anti-cheating protocol",
+                    )
+                )
         self.generic_visit(node)
 
 
