@@ -236,17 +236,25 @@ class SeniorForensicSuite:
             self.log(f"  Target 'do':          Q={q_vals[act_do]:+.4f} | Prob={probs[act_do]:.3f} | Disagree={disagreements[act_do]:.4f}")
             self.log(f"  Target 'place_table': Q={q_vals[act_pt]:+.4f} | Prob={probs[act_pt]:.3f} | Disagree={disagreements[act_pt]:.4f}")
 
-        # The Smoking Gun Evaluation
-        q_pt_b = diagnostics["(b) Facing grass with Wood=2"]["q_vals"][CRAFTER_ACTION_NAMES.index("place_table")]
-        q_pt_c = diagnostics["(c) Facing grass with Wood=0"]["q_vals"][CRAFTER_ACTION_NAMES.index("place_table")]
-        self.log("\n>>> SMOKING GUN AUDIT: PRECONDITION AWARENESS <<<")
-        self.log(f"  Q(place_table | Wood=2): {q_pt_b:+.4f}")
-        self.log(f"  Q(place_table | Wood=0): {q_pt_c:+.4f}")
-        self.log(f"  Delta |Q(Wood=2) - Q(Wood=0)|: {abs(q_pt_b - q_pt_c):.4f}")
-        if abs(q_pt_b - q_pt_c) < 0.10:
-            self.log("  [!] VERDICT: Critic is BLIND to the wood precondition. It assigns identical value whether the agent holds wood or not.")
+        # The Smoking Gun Evaluation (Within-Scene Ranking Only - ROOT_CAUSE_FIX_PLAN.md §6.3 / §9)
+        act_pt_idx = CRAFTER_ACTION_NAMES.index("place_table")
+        q_b = diagnostics["(b) Facing grass with Wood=2"]["q_vals"]
+        q_c = diagnostics["(c) Facing grass with Wood=0"]["q_vals"]
+
+        # Calculate within-scene rank (1-indexed)
+        rank_b = int(np.where(np.argsort(q_b)[::-1] == act_pt_idx)[0][0]) + 1
+        rank_c = int(np.where(np.argsort(q_c)[::-1] == act_pt_idx)[0][0]) + 1
+
+        self.log("\n>>> SMOKING GUN AUDIT: PRECONDITION AWARENESS (WITHIN-SCENE RANKS) <<<")
+        self.log(f"  Scene (b) Wood=2: Q(place_table) = {q_b[act_pt_idx]:+.4f} | Rank = #{rank_b} / 17")
+        self.log(f"  Scene (c) Wood=0: Q(place_table) = {q_c[act_pt_idx]:+.4f} | Rank = #{rank_c} / 17")
+        
+        if rank_b <= 3 and rank_c > rank_b:
+            self.log(f"  [+] VERDICT: Critic recognizes the wood precondition! place_table is prioritized with Wood=2 (Rank #{rank_b}) and suppressed with Wood=0 (Rank #{rank_c}).")
+        elif rank_b <= 3 and rank_c <= 3:
+            self.log(f"  [!] VERDICT: Partial consolidation. place_table is top-ranked facing grass (Rank #{rank_b}), but not yet suppressed when Wood=0 (Rank #{rank_c}). Precondition inhibition is still forming.")
         else:
-            self.log("  [+] VERDICT: Critic recognizes the wood precondition!")
+            self.log(f"  [!] VERDICT: Critic has not consolidated place_table (Rank #{rank_b} > 3).")
 
         return diagnostics
 
@@ -286,6 +294,13 @@ class SeniorForensicSuite:
 
             # Tree in view: check if tree is in 3x3 surrounding
             px, py = p.pos
+            # Synthesize balanced distribution: on alternating frames, ensure clear area without trees
+            if i % 2 == 1:
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        if env._world[px + dx, py + dy] == "tree":
+                            env._world[px + dx, py + dy] = "grass"
+
             has_tree = any(env._world[px + dx, py + dy] == "tree" for dx in (-1, 0, 1) for dy in (-1, 0, 1))
             labels_tree.append(int(has_tree))
 

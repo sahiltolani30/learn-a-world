@@ -877,8 +877,6 @@ class TrainingPipeline:
                     ac_metrics = self.update_actor_critic()
                     combined_metrics = {**wm_metrics, **ac_metrics}
                     self.loss_history.append(combined_metrics)
-                    if len(self.loss_history) > 500:
-                        self.loss_history = self.loss_history[-500:]
 
                 # 3. Periodic Progress Logging
                 if self.current_step % self.log_interval == 0:

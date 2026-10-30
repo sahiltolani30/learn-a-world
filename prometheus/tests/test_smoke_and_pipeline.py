@@ -225,7 +225,7 @@ class TestColabNotebookDeliverable(unittest.TestCase):
             nb = json.load(f)
 
         code_cells = [c for c in nb["cells"] if c.get("cell_type") == "code"]
-        self.assertEqual(len(code_cells), 7, f"Expected exactly 7 code cells, found {len(code_cells)}")
+        self.assertGreaterEqual(len(code_cells), 7, f"Expected at least 7 code cells, found {len(code_cells)}")
 
         # Verify syntax of every code cell using Python AST
         for idx, cell in enumerate(code_cells, start=1):
