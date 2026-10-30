@@ -118,7 +118,7 @@ class TestTrainingPipelineDeliverable(unittest.TestCase):
         defaults = parse_args([])
         self.assertIn(defaults.device, ("cpu", "cuda", "mps"))
         self.assertEqual(defaults.total_steps, 10_000)
-        self.assertEqual(defaults.batch_size, 64)
+        self.assertEqual(defaults.batch_size, 128)
         self.assertEqual(defaults.checkpoint_dir, "./checkpoints")
         self.assertEqual(defaults.eval_interval, 1_000)
         self.assertEqual(defaults.seed, 42)

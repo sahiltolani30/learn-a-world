@@ -1,14 +1,15 @@
 """
 src/memory/buffer.py
 
-Two-Tier Persistent Replay Buffer for Crafter & Atari JEPA World Model.
-
-Fulfills requirements:
-- R2: Cross-episode persistent replay memory preventing catastrophic forgetting.
-- Tier 1 (Rolling FIFO, default capacity 100,000): stores recent trajectory transitions.
+Two-Tier Persistent Replay Buffer for Crafter & Atari JEPA World Model
+with Milestone-Prioritized Sampling and n-step Trajectory Support (ROOT_CAUSE_FIX_PLAN.md):
+- Tier 1 (Rolling FIFO, default capacity 50,000-100,000): stores recent trajectory transitions.
 - Tier 2 (Curated Milestone Archive, default capacity 20,000): permanently captures
-  high-novelty transitions (top 5% epistemic curiosity) and milestone discoveries.
-- Mixed Sampling: samples 70% from Tier 1 and 30% from Tier 2 per batch.
+  milestone discoveries and high-novelty breakthroughs.
+- Milestone Prioritization (C2): samples milestones with elevated priority in T1 (25%) and T2 (80%),
+  with retroactive 30-step trailing context window flagging.
+- Sequence Metadata & n-step Sampling (C3): stores episode_id and step_in_ep to enable
+  multi-step (5-step) discounted returns and bootstrap states along trajectories.
 - RAM Optimization: stores observations as compact uint8 (C, H, W), decompressing
   to normalized float32 [0.0, 1.0] only upon batch sampling.
 """
@@ -73,6 +74,8 @@ class TwoTierReplayBuffer:
         tier2_capacity: int = 20_000,
         novelty_percentile: float = 0.95,
         default_tier2_ratio: float = 0.3,
+        milestone_t1_priority: float = 0.25,
+        milestone_t2_priority: float = 0.80,
         seed: Optional[int] = None,
     ):
         """
@@ -83,6 +86,8 @@ class TwoTierReplayBuffer:
             tier2_capacity: Max capacity for curated milestone archive (Tier 2).
             novelty_percentile: Epistemic novelty quantile threshold for Tier 2 (default top 5% = 0.95).
             default_tier2_ratio: Default ratio of Tier 2 samples in mixed batch (default 0.3 = 30%).
+            milestone_t1_priority: Sampling priority for milestone transitions in Tier 1.
+            milestone_t2_priority: Sampling priority for milestone transitions in Tier 2.
             seed: Optional random seed for reproducible sampling.
         """
         if tier1_capacity <= 0:
@@ -94,6 +99,8 @@ class TwoTierReplayBuffer:
         self.tier2_capacity = tier2_capacity
         self.novelty_percentile = novelty_percentile
         self.default_tier2_ratio = default_tier2_ratio
+        self.milestone_t1_priority = milestone_t1_priority
+        self.milestone_t2_priority = milestone_t2_priority
         self.rng = np.random.RandomState(seed)
 
         # Lazy allocation placeholders for Tier 1 preallocated storage
@@ -107,6 +114,9 @@ class TwoTierReplayBuffer:
         self.t1_dones: Optional[np.ndarray] = None
         self.t1_int_rewards: Optional[np.ndarray] = None
         self.t1_epistemic_errors: Optional[np.ndarray] = None
+        self.t1_is_milestone: Optional[np.ndarray] = None
+        self.t1_episode_id: Optional[np.ndarray] = None
+        self.t1_step_in_ep: Optional[np.ndarray] = None
 
         self.t1_ptr: int = 0
         self.t1_size: int = 0
@@ -121,6 +131,8 @@ class TwoTierReplayBuffer:
         self.t2_int_rewards: Optional[np.ndarray] = None
         self.t2_epistemic_errors: Optional[np.ndarray] = None
         self.t2_is_milestone: Optional[np.ndarray] = None
+        self.t2_episode_id: Optional[np.ndarray] = None
+        self.t2_step_in_ep: Optional[np.ndarray] = None
 
         self.t2_size: int = 0
 
@@ -137,6 +149,9 @@ class TwoTierReplayBuffer:
         self.t1_dones = np.empty(self.tier1_capacity, dtype=np.bool_)
         self.t1_int_rewards = np.empty(self.tier1_capacity, dtype=np.float32)
         self.t1_epistemic_errors = np.empty(self.tier1_capacity, dtype=np.float32)
+        self.t1_is_milestone = np.empty(self.tier1_capacity, dtype=np.bool_)
+        self.t1_episode_id = np.empty(self.tier1_capacity, dtype=np.int64)
+        self.t1_step_in_ep = np.empty(self.tier1_capacity, dtype=np.int64)
         self._t1_allocated = True
 
     def _allocate_tier2(self, obs_shape: Tuple[int, ...]) -> None:
@@ -149,7 +164,14 @@ class TwoTierReplayBuffer:
         self.t2_int_rewards = np.empty(self.tier2_capacity, dtype=np.float32)
         self.t2_epistemic_errors = np.empty(self.tier2_capacity, dtype=np.float32)
         self.t2_is_milestone = np.empty(self.tier2_capacity, dtype=np.bool_)
+        self.t2_episode_id = np.empty(self.tier2_capacity, dtype=np.int64)
+        self.t2_step_in_ep = np.empty(self.tier2_capacity, dtype=np.int64)
         self._t2_allocated = True
+
+    def flag_milestone_at(self, index: int) -> None:
+        """Mark the T1 slot at `index` as milestone (backward credit window)."""
+        if 0 <= index < self.tier1_capacity and self.t1_is_milestone is not None:
+            self.t1_is_milestone[index] = True
 
     @property
     def size(self) -> int:
@@ -189,6 +211,8 @@ class TwoTierReplayBuffer:
         r_int: Union[float, np.floating, torch.Tensor] = 0.0,
         is_milestone: bool = False,
         epistemic_error: Optional[float] = None,
+        episode_id: int = -1,
+        step_in_ep: int = -1,
     ) -> bool:
         """
         Insert transition into TwoTierReplayBuffer.
@@ -235,6 +259,9 @@ class TwoTierReplayBuffer:
         self.t1_dones[idx] = d
         self.t1_int_rewards[idx] = r_i
         self.t1_epistemic_errors[idx] = e_err
+        self.t1_is_milestone[idx] = is_milestone
+        self.t1_episode_id[idx] = int(episode_id)
+        self.t1_step_in_ep[idx] = int(step_in_ep)
 
         self.t1_ptr = (self.t1_ptr + 1) % self.tier1_capacity
         self.t1_size = min(self.t1_size + 1, self.tier1_capacity)
@@ -256,6 +283,8 @@ class TwoTierReplayBuffer:
                 r_int=r_i,
                 epistemic_error=e_err,
                 is_milestone=is_milestone,
+                episode_id=int(episode_id),
+                step_in_ep=int(step_in_ep),
             )
 
         return admit_to_tier2
@@ -270,6 +299,8 @@ class TwoTierReplayBuffer:
         r_int: float,
         epistemic_error: float,
         is_milestone: bool,
+        episode_id: int = -1,
+        step_in_ep: int = -1,
     ) -> None:
         """Insert or replace transition in Tier 2 Milestone Archive."""
         if self.t2_size < self.tier2_capacity:
@@ -303,6 +334,8 @@ class TwoTierReplayBuffer:
         self.t2_int_rewards[idx] = r_int
         self.t2_epistemic_errors[idx] = epistemic_error
         self.t2_is_milestone[idx] = is_milestone
+        self.t2_episode_id[idx] = int(episode_id)
+        self.t2_step_in_ep[idx] = int(step_in_ep)
 
     def sample(
         self,
@@ -359,8 +392,37 @@ class TwoTierReplayBuffer:
             )
 
         # Sample indices
-        t1_indices = self.rng.randint(0, self.t1_size, size=actual_n1) if actual_n1 > 0 else np.array([], dtype=np.int64)
-        t2_indices = self.rng.randint(0, self.t2_size, size=actual_n2) if actual_n2 > 0 else np.array([], dtype=np.int64)
+        if actual_n1 > 0:
+            ms1 = np.nonzero(self.t1_is_milestone[:self.t1_size])[0]
+            if len(ms1) > 0 and self.milestone_t1_priority > 0.0:
+                rand_vals = self.rng.random_sample(size=actual_n1)
+                pick_ms = rand_vals < self.milestone_t1_priority
+                t1_indices = np.empty(actual_n1, dtype=np.int64)
+                n_ms = int(np.sum(pick_ms))
+                if n_ms > 0:
+                    t1_indices[pick_ms] = ms1[self.rng.randint(0, len(ms1), size=n_ms)]
+                if actual_n1 - n_ms > 0:
+                    t1_indices[~pick_ms] = self.rng.randint(0, self.t1_size, size=actual_n1 - n_ms)
+            else:
+                t1_indices = self.rng.randint(0, self.t1_size, size=actual_n1)
+        else:
+            t1_indices = np.array([], dtype=np.int64)
+
+        if actual_n2 > 0:
+            ms2 = np.nonzero(self.t2_is_milestone[:self.t2_size])[0]
+            if len(ms2) > 0 and self.milestone_t2_priority > 0.0:
+                rand_vals = self.rng.random_sample(size=actual_n2)
+                pick_ms = rand_vals < self.milestone_t2_priority
+                t2_indices = np.empty(actual_n2, dtype=np.int64)
+                n_ms = int(np.sum(pick_ms))
+                if n_ms > 0:
+                    t2_indices[pick_ms] = ms2[self.rng.randint(0, len(ms2), size=n_ms)]
+                if actual_n2 - n_ms > 0:
+                    t2_indices[~pick_ms] = self.rng.randint(0, self.t2_size, size=actual_n2 - n_ms)
+            else:
+                t2_indices = self.rng.randint(0, self.t2_size, size=actual_n2)
+        else:
+            t2_indices = np.array([], dtype=np.int64)
 
         # Gather data slices
         if actual_n1 > 0 and actual_n2 > 0:
@@ -372,6 +434,7 @@ class TwoTierReplayBuffer:
             b_int_rewards = np.concatenate([self.t1_int_rewards[t1_indices], self.t2_int_rewards[t2_indices]], axis=0)
             b_errors = np.concatenate([self.t1_epistemic_errors[t1_indices], self.t2_epistemic_errors[t2_indices]], axis=0)
             b_is_t2 = np.concatenate([np.zeros(actual_n1, dtype=np.bool_), np.ones(actual_n2, dtype=np.bool_)], axis=0)
+            b_is_ms = np.concatenate([self.t1_is_milestone[t1_indices], self.t2_is_milestone[t2_indices]], axis=0)
         elif actual_n1 > 0:
             b_obs = self.t1_obs[t1_indices]
             b_next_obs = self.t1_next_obs[t1_indices]
@@ -381,6 +444,7 @@ class TwoTierReplayBuffer:
             b_int_rewards = self.t1_int_rewards[t1_indices]
             b_errors = self.t1_epistemic_errors[t1_indices]
             b_is_t2 = np.zeros(actual_n1, dtype=np.bool_)
+            b_is_ms = self.t1_is_milestone[t1_indices]
         else:
             b_obs = self.t2_obs[t2_indices]
             b_next_obs = self.t2_next_obs[t2_indices]
@@ -390,6 +454,7 @@ class TwoTierReplayBuffer:
             b_int_rewards = self.t2_int_rewards[t2_indices]
             b_errors = self.t2_epistemic_errors[t2_indices]
             b_is_t2 = np.ones(actual_n2, dtype=np.bool_)
+            b_is_ms = self.t2_is_milestone[t2_indices]
 
         # RAM-optimized lazy conversion to float32 [0.0, 1.0] upon sampling
         dev = torch.device(device)
@@ -402,6 +467,188 @@ class TwoTierReplayBuffer:
             "int_rewards": torch.from_numpy(b_int_rewards).to(device=dev, dtype=torch.float32),
             "epistemic_errors": torch.from_numpy(b_errors).to(device=dev, dtype=torch.float32),
             "is_tier2": torch.from_numpy(b_is_t2).to(device=dev, dtype=torch.bool),
+            "is_milestone": torch.from_numpy(b_is_ms).to(device=dev, dtype=torch.bool),
+        }
+
+    def sample_nstep(
+        self,
+        batch_size: int = 64,
+        n: int = 5,
+        gamma: float = 0.99,
+        tier2_ratio: Optional[float] = None,
+        device: Union[str, torch.device] = "cpu",
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Sample a mixed batch of transitions with n-step discounted returns and bootstrap states.
+
+        For Tier 1 entries with valid sequence metadata (episode_id >= 0), walks up to n steps forward
+        along the same episode trajectory, accumulating discounted rewards and identifying the bootstrap observation.
+        Falls back cleanly to 1-step for Tier 2 transitions or invalid/interrupted trajectories.
+        """
+        if self.t1_size == 0 and self.t2_size == 0:
+            raise ValueError("Cannot sample from empty TwoTierReplayBuffer.")
+
+        ratio = tier2_ratio if tier2_ratio is not None else self.default_tier2_ratio
+        if not (0.0 <= ratio <= 1.0):
+            raise ValueError(f"tier2_ratio must be in [0.0, 1.0], got {ratio}")
+
+        target_n2 = int(round(batch_size * ratio))
+        actual_n2 = min(target_n2, self.t2_size)
+        actual_n1 = batch_size - actual_n2
+
+        if actual_n1 > self.t1_size:
+            shortfall = actual_n1 - self.t1_size
+            can_borrow = min(shortfall, self.t2_size - actual_n2)
+            actual_n2 += can_borrow
+            actual_n1 = batch_size - actual_n2
+
+        if actual_n1 > self.t1_size or (actual_n1 + actual_n2) < batch_size:
+            total_avail = self.t1_size + self.t2_size
+            raise ValueError(
+                f"Requested batch_size={batch_size}, but buffer contains only "
+                f"{total_avail} total transitions (Tier 1: {self.t1_size}, Tier 2: {self.t2_size})."
+            )
+
+        # 1. Sample indices respecting C2 milestone priorities
+        if actual_n1 > 0:
+            ms1 = np.nonzero(self.t1_is_milestone[:self.t1_size])[0]
+            if len(ms1) > 0 and self.milestone_t1_priority > 0.0:
+                rand_vals = self.rng.random_sample(size=actual_n1)
+                pick_ms = rand_vals < self.milestone_t1_priority
+                t1_indices = np.empty(actual_n1, dtype=np.int64)
+                n_ms = int(np.sum(pick_ms))
+                if n_ms > 0:
+                    t1_indices[pick_ms] = ms1[self.rng.randint(0, len(ms1), size=n_ms)]
+                if actual_n1 - n_ms > 0:
+                    t1_indices[~pick_ms] = self.rng.randint(0, self.t1_size, size=actual_n1 - n_ms)
+            else:
+                t1_indices = self.rng.randint(0, self.t1_size, size=actual_n1)
+        else:
+            t1_indices = np.array([], dtype=np.int64)
+
+        if actual_n2 > 0:
+            ms2 = np.nonzero(self.t2_is_milestone[:self.t2_size])[0]
+            if len(ms2) > 0 and self.milestone_t2_priority > 0.0:
+                rand_vals = self.rng.random_sample(size=actual_n2)
+                pick_ms = rand_vals < self.milestone_t2_priority
+                t2_indices = np.empty(actual_n2, dtype=np.int64)
+                n_ms = int(np.sum(pick_ms))
+                if n_ms > 0:
+                    t2_indices[pick_ms] = ms2[self.rng.randint(0, len(ms2), size=n_ms)]
+                if actual_n2 - n_ms > 0:
+                    t2_indices[~pick_ms] = self.rng.randint(0, self.t2_size, size=actual_n2 - n_ms)
+            else:
+                t2_indices = self.rng.randint(0, self.t2_size, size=actual_n2)
+        else:
+            t2_indices = np.array([], dtype=np.int64)
+
+        # Base arrays
+        if actual_n1 > 0 and actual_n2 > 0:
+            b_obs = np.concatenate([self.t1_obs[t1_indices], self.t2_obs[t2_indices]], axis=0)
+            b_next_obs = np.concatenate([self.t1_next_obs[t1_indices], self.t2_next_obs[t2_indices]], axis=0)
+            b_actions = np.concatenate([self.t1_actions[t1_indices], self.t2_actions[t2_indices]], axis=0)
+            b_rewards = np.concatenate([self.t1_rewards[t1_indices], self.t2_rewards[t2_indices]], axis=0)
+            b_dones = np.concatenate([self.t1_dones[t1_indices], self.t2_dones[t2_indices]], axis=0)
+            b_int_rewards = np.concatenate([self.t1_int_rewards[t1_indices], self.t2_int_rewards[t2_indices]], axis=0)
+            b_errors = np.concatenate([self.t1_epistemic_errors[t1_indices], self.t2_epistemic_errors[t2_indices]], axis=0)
+            b_is_t2 = np.concatenate([np.zeros(actual_n1, dtype=np.bool_), np.ones(actual_n2, dtype=np.bool_)], axis=0)
+            b_is_ms = np.concatenate([self.t1_is_milestone[t1_indices], self.t2_is_milestone[t2_indices]], axis=0)
+        elif actual_n1 > 0:
+            b_obs = self.t1_obs[t1_indices]
+            b_next_obs = self.t1_next_obs[t1_indices]
+            b_actions = self.t1_actions[t1_indices]
+            b_rewards = self.t1_rewards[t1_indices]
+            b_dones = self.t1_dones[t1_indices]
+            b_int_rewards = self.t1_int_rewards[t1_indices]
+            b_errors = self.t1_epistemic_errors[t1_indices]
+            b_is_t2 = np.zeros(actual_n1, dtype=np.bool_)
+            b_is_ms = self.t1_is_milestone[t1_indices]
+        else:
+            b_obs = self.t2_obs[t2_indices]
+            b_next_obs = self.t2_next_obs[t2_indices]
+            b_actions = self.t2_actions[t2_indices]
+            b_rewards = self.t2_rewards[t2_indices]
+            b_dones = self.t2_dones[t2_indices]
+            b_int_rewards = self.t2_int_rewards[t2_indices]
+            b_errors = self.t2_epistemic_errors[t2_indices]
+            b_is_t2 = np.ones(actual_n2, dtype=np.bool_)
+            b_is_ms = self.t2_is_milestone[t2_indices]
+
+        # 2. Compute n-step returns and bootstrap states
+        nstep_returns = np.empty(batch_size, dtype=np.float32)
+        boot_obs = np.empty_like(b_next_obs)
+        boot_gamma = np.empty(batch_size, dtype=np.float32)
+        boot_valid = np.empty(batch_size, dtype=np.bool_)
+
+        cap = self.tier1_capacity
+
+        # Process Tier 1 items
+        for batch_i in range(actual_n1):
+            idx = int(t1_indices[batch_i])
+            base_ep = int(self.t1_episode_id[idx]) if self.t1_episode_id is not None else -1
+            base_step = int(self.t1_step_in_ep[idx]) if self.t1_step_in_ep is not None else -1
+
+            # If no sequence metadata available, 1-step fallback
+            if base_ep < 0 or base_step < 0:
+                nstep_returns[batch_i] = self.t1_rewards[idx]
+                boot_obs[batch_i] = self.t1_next_obs[idx]
+                boot_gamma[batch_i] = gamma
+                boot_valid[batch_i] = not self.t1_dones[idx]
+                continue
+
+            # Start chain at k=0
+            R = float(self.t1_rewards[idx])
+            last_valid_slot = idx
+            num_terms = 1
+            is_terminal = bool(self.t1_dones[idx])
+
+            if not is_terminal:
+                for k in range(1, n):
+                    if k >= self.t1_size:
+                        break
+                    cand_slot = (idx + k) % cap
+                    # Chain must belong to same episode and sequential step
+                    if (
+                        self.t1_episode_id[cand_slot] != base_ep
+                        or self.t1_step_in_ep[cand_slot] != base_step + k
+                    ):
+                        break
+                    R += (gamma ** k) * float(self.t1_rewards[cand_slot])
+                    last_valid_slot = cand_slot
+                    num_terms += 1
+                    if self.t1_dones[cand_slot]:
+                        is_terminal = True
+                        break
+
+            nstep_returns[batch_i] = R
+            boot_obs[batch_i] = self.t1_next_obs[last_valid_slot]
+            boot_gamma[batch_i] = float(gamma ** num_terms)
+            boot_valid[batch_i] = not is_terminal
+
+        # Process Tier 2 items (1-step fallback)
+        for t2_i in range(actual_n2):
+            batch_i = actual_n1 + t2_i
+            idx = int(t2_indices[t2_i])
+            nstep_returns[batch_i] = self.t2_rewards[idx]
+            boot_obs[batch_i] = self.t2_next_obs[idx]
+            boot_gamma[batch_i] = gamma
+            boot_valid[batch_i] = not self.t2_dones[idx]
+
+        dev = torch.device(device)
+        return {
+            "obs": torch.from_numpy(b_obs).to(device=dev, dtype=torch.float32) / 255.0,
+            "actions": torch.from_numpy(b_actions).to(device=dev, dtype=torch.int64),
+            "rewards": torch.from_numpy(b_rewards).to(device=dev, dtype=torch.float32),
+            "next_obs": torch.from_numpy(b_next_obs).to(device=dev, dtype=torch.float32) / 255.0,
+            "dones": torch.from_numpy(b_dones).to(device=dev, dtype=torch.bool),
+            "int_rewards": torch.from_numpy(b_int_rewards).to(device=dev, dtype=torch.float32),
+            "epistemic_errors": torch.from_numpy(b_errors).to(device=dev, dtype=torch.float32),
+            "is_tier2": torch.from_numpy(b_is_t2).to(device=dev, dtype=torch.bool),
+            "is_milestone": torch.from_numpy(b_is_ms).to(device=dev, dtype=torch.bool),
+            "nstep_return": torch.from_numpy(nstep_returns).to(device=dev, dtype=torch.float32),
+            "boot_obs": torch.from_numpy(boot_obs).to(device=dev, dtype=torch.float32) / 255.0,
+            "boot_gamma": torch.from_numpy(boot_gamma).to(device=dev, dtype=torch.float32),
+            "boot_valid": torch.from_numpy(boot_valid).to(device=dev, dtype=torch.bool),
         }
 
     def state_dict(self) -> Dict[str, Any]:
@@ -415,6 +662,8 @@ class TwoTierReplayBuffer:
             "t1_size": self.t1_size,
             "t2_size": self.t2_size,
             "obs_shape": self._obs_shape,
+            "milestone_t1_priority": self.milestone_t1_priority,
+            "milestone_t2_priority": self.milestone_t2_priority,
             "t1_obs": self.t1_obs[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_next_obs": self.t1_next_obs[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_actions": self.t1_actions[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
@@ -422,6 +671,9 @@ class TwoTierReplayBuffer:
             "t1_dones": self.t1_dones[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_int_rewards": self.t1_int_rewards[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_epistemic_errors": self.t1_epistemic_errors[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
+            "t1_is_milestone": self.t1_is_milestone[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
+            "t1_episode_id": self.t1_episode_id[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
+            "t1_step_in_ep": self.t1_step_in_ep[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t2_obs": self.t2_obs[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_next_obs": self.t2_next_obs[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_actions": self.t2_actions[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
@@ -430,6 +682,8 @@ class TwoTierReplayBuffer:
             "t2_int_rewards": self.t2_int_rewards[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_epistemic_errors": self.t2_epistemic_errors[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_is_milestone": self.t2_is_milestone[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
+            "t2_episode_id": self.t2_episode_id[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
+            "t2_step_in_ep": self.t2_step_in_ep[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "recent_novelties": list(self._recent_novelties),
         }
 
@@ -440,6 +694,8 @@ class TwoTierReplayBuffer:
         self.tier2_capacity = state.get("tier2_capacity", self.tier2_capacity)
         self.novelty_percentile = state.get("novelty_percentile", self.novelty_percentile)
         self.default_tier2_ratio = state.get("default_tier2_ratio", self.default_tier2_ratio)
+        self.milestone_t1_priority = state.get("milestone_t1_priority", self.milestone_t1_priority)
+        self.milestone_t2_priority = state.get("milestone_t2_priority", self.milestone_t2_priority)
         self.t1_ptr = state.get("t1_ptr", 0)
         self.t1_size = state.get("t1_size", 0)
         self.t2_size = state.get("t2_size", 0)
@@ -461,6 +717,21 @@ class TwoTierReplayBuffer:
                 self.t1_dones[:self.t1_size] = state.pop("t1_dones")
                 self.t1_int_rewards[:self.t1_size] = state.pop("t1_int_rewards")
                 self.t1_epistemic_errors[:self.t1_size] = state.pop("t1_epistemic_errors")
+                t1_ms = state.pop("t1_is_milestone", None)
+                if t1_ms is not None:
+                    self.t1_is_milestone[:self.t1_size] = t1_ms
+                else:
+                    self.t1_is_milestone[:self.t1_size] = False
+                t1_ep = state.pop("t1_episode_id", None)
+                if t1_ep is not None:
+                    self.t1_episode_id[:self.t1_size] = t1_ep
+                else:
+                    self.t1_episode_id[:self.t1_size] = -1
+                t1_st = state.pop("t1_step_in_ep", None)
+                if t1_st is not None:
+                    self.t1_step_in_ep[:self.t1_size] = t1_st
+                else:
+                    self.t1_step_in_ep[:self.t1_size] = -1
 
             if self.t2_size > 0 and "t2_obs" in state:
                 t2_o = state.pop("t2_obs")
@@ -475,6 +746,16 @@ class TwoTierReplayBuffer:
                 self.t2_int_rewards[:self.t2_size] = state.pop("t2_int_rewards")
                 self.t2_epistemic_errors[:self.t2_size] = state.pop("t2_epistemic_errors")
                 self.t2_is_milestone[:self.t2_size] = state.pop("t2_is_milestone")
+                t2_ep = state.pop("t2_episode_id", None)
+                if t2_ep is not None:
+                    self.t2_episode_id[:self.t2_size] = t2_ep
+                else:
+                    self.t2_episode_id[:self.t2_size] = -1
+                t2_st = state.pop("t2_step_in_ep", None)
+                if t2_st is not None:
+                    self.t2_step_in_ep[:self.t2_size] = t2_st
+                else:
+                    self.t2_step_in_ep[:self.t2_size] = -1
 
         if "recent_novelties" in state:
             self._recent_novelties = deque(state["recent_novelties"], maxlen=2000)

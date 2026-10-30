@@ -9,9 +9,11 @@ from src.curiosity.ensemble import (
     EpistemicCuriosityEngine,
 )
 from src.curiosity.rnd import LatentRND
+from src.curiosity.episodic import EpisodicNovelty
 
 __all__ = [
     "RunningMeanStd",
     "EpistemicCuriosityEngine",
     "LatentRND",
+    "EpisodicNovelty",
 ]

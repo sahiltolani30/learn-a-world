@@ -316,11 +316,6 @@ class CheckpointManager:
         if keep_last_n <= 0:
             return []
 
-        # Rule 3: Prioritize active verified checkpoint 'state.pt' if present
-        state_file = self.checkpoint_dir / "state.pt"
-        if state_file.exists():
-            return str(state_file.resolve())
-
         search_path = str(self.checkpoint_dir / pattern)
         files = glob.glob(search_path)
 

@@ -287,6 +287,7 @@ class AgentForensics:
         num_episodes: int = 20,
         planning: bool = False,
         base_seed: int = 1000,
+        stochastic: bool = False,
     ) -> Dict[str, Any]:
         """
         Runs N independent benchmark evaluation games to compute:
@@ -313,7 +314,7 @@ class AgentForensics:
             unlocked_this_ep = set()
 
             while not done:
-                action = self.agent.act(obs, eval_mode=True, planning=planning)
+                action = self.agent.act(obs, eval_mode=not stochastic, planning=planning)
                 obs, reward, term, trunc, info = env.step(action)
                 ep_ret += float(reward)
                 ep_steps += 1
@@ -339,8 +340,10 @@ class AgentForensics:
         mean_achs_per_game = float(np.mean([len(s) for s in ep_achievements]))
         all_unlocked = sorted(list(set.union(*ep_achievements))) if ep_achievements else []
 
+        print(f"Policy: {'stochastic' if stochastic else 'greedy'}")
         return {
             "num_episodes": num_episodes,
+            "policy": "stochastic" if stochastic else "greedy",
             "crafter_score": crafter_score,
             "mean_return": float(np.mean(ep_returns)),
             "std_return": float(np.std(ep_returns)),

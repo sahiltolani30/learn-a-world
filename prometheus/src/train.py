@@ -1,33 +1,35 @@
 """
 src/train.py
 
-Production-Grade, Modular Training Pipeline for Crafter Tabula Rasa JEPA World Model.
-Coordinates environment stepping, experience accumulation, world model updates,
-actor-critic policy updates, episodic evaluation, and preemption-resilient checkpointing.
+Production-Grade, Modular Training Pipeline for Crafter Tabula Rasa JEPA World Model
+with Consolidation Redesign (ROOT_CAUSE_FIX_PLAN.md):
+- C1: Critic learns pure external reward (critic_intrinsic_weight=0.0) preventing Q fossilization.
+- C2: Milestone-prioritized sampling with retroactive 30-step trailing credit window.
+- C3: n-step (5-step) Bellman critic targets propagating external rewards along trajectories.
+- C4: Per-action normalized predictor disagreement in actor loss + episodic k-NN novelty-modulated epsilon.
+- C5: High-throughput gradient update interval (update_every=2, batch_size=128, optional action_repeat).
+- C6: Dual stochastic and greedy evaluation reporting.
+- C7: Telemetry tracking Q spread, external Q mean, intrinsic curiosity, and non-collapse invariants.
 
 CLI Arguments:
   --device: Computing device ('cpu', 'cuda', 'mps', or auto-detect).
   --total_steps: Total environment interaction steps (default: 10,000).
-  --batch_size: Replay buffer training batch size (default: 64).
+  --batch_size: Replay buffer training batch size (default: 128).
   --checkpoint_dir: Path to directory for persistent checkpoints (default: './checkpoints').
   --eval_interval: Frequency of evaluation episodes in steps (default: 1,000).
   --seed: Random seed for environment, buffers, and network initialization (default: 42).
   --eval_episodes: Number of episodes per evaluation cycle (default: 3).
-  --lr: Learning rate for visual encoder and world model predictor (default: 1e-4).
-  --critic_lr: Learning rate for twin critic heads (default: 3e-4).
-  --warmup_steps: Initial random interaction steps before gradient updates (default: 100).
-  --save_interval: Step interval for saving persistent checkpoints (default: 1,000).
-  --no_resume: Flag to disable auto-resumption from latest checkpoint in checkpoint_dir.
-
-Guarantees:
-- R2, R3: Tabula rasa learning from raw pixels without cheats or privileged states.
-- R2: Two-Tier persistent memory (70% FIFO, 30% Milestone Archive) preventing catastrophic forgetting.
-- R3: Zero-cheat compliance: info dict is completely scrubbed of internal game state.
-- R5: Atomic, preemption-resilient checkpoint saving via CheckpointManager.
-- Evaluator telemetry: Tracks achievement unlock progression curves without leaking state to the agent.
+  --critic_intrinsic_weight: Weight for intrinsic reward in critic TD backup (default: 0.0).
+  --nstep: Lookahead horizon for n-step TD critic targets (default: 5).
+  --actor_intrinsic_weight: Weight for per-action normalized curiosity in actor loss (default: 0.1).
+  --eps_base, --eps_novelty_coef, --eps_max: Novelty-modulated epsilon exploration parameters.
+  --milestone_t1_priority, --milestone_t2_priority: Priority sampling rates for milestones in T1 and T2.
+  --update_every: Environment steps between gradient update steps (default: 2).
+  --action_repeat: Environment frames per agent action (default: 1).
 """
 
 from typing import Dict, Any, List, Optional, Tuple, Union, Set
+from collections import deque
 from pathlib import Path
 import os
 import sys
@@ -43,7 +45,8 @@ import torch.nn.functional as F
 
 from src.env.wrapper import make_crafter_env, FORBIDDEN_CHEAT_KEYS
 from src.agent.agent import JEPAAgent
-from src.curiosity.ensemble import EpistemicCuriosityEngine
+from src.curiosity.ensemble import EpistemicCuriosityEngine, RunningMeanStd
+from src.curiosity.episodic import EpisodicNovelty
 from src.memory.buffer import TwoTierReplayBuffer
 from src.memory.storage import CheckpointManager
 from src.models.losses import VICRegLoss, verify_non_collapse
@@ -71,7 +74,7 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=64,
+        default=128,
         help="Batch size for world model and policy updates",
     )
     parser.add_argument(
@@ -136,6 +139,24 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Proportion of Tier 2 milestone samples in mixed batches",
     )
     parser.add_argument(
+        "--milestone_t1_priority",
+        type=float,
+        default=0.25,
+        help="Sampling priority for milestone transitions in Tier 1 (default 0.25)",
+    )
+    parser.add_argument(
+        "--milestone_t2_priority",
+        type=float,
+        default=0.80,
+        help="Sampling priority for milestone transitions in Tier 2 (default 0.80)",
+    )
+    parser.add_argument(
+        "--critic_intrinsic_weight",
+        type=float,
+        default=0.0,
+        help="Weight for intrinsic curiosity rewards inside critic Bellman target (default 0.0 = pure external reward)",
+    )
+    parser.add_argument(
         "--gamma",
         type=float,
         default=0.99,
@@ -152,6 +173,48 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         type=int,
         default=100,
         help="Interval in steps for printing training progress",
+    )
+    parser.add_argument(
+        "--update_every",
+        type=int,
+        default=2,
+        help="Gradient update interval in env steps (default 2)",
+    )
+    parser.add_argument(
+        "--action_repeat",
+        type=int,
+        default=1,
+        help="Action repeat count per env interaction (default 1)",
+    )
+    parser.add_argument(
+        "--actor_intrinsic_weight",
+        type=float,
+        default=0.1,
+        help="Weight for per-action normalized disagreement in actor loss (default 0.1)",
+    )
+    parser.add_argument(
+        "--eps_base",
+        type=float,
+        default=0.05,
+        help="Base epsilon exploration rate (default 0.05)",
+    )
+    parser.add_argument(
+        "--eps_novelty_coef",
+        type=float,
+        default=0.20,
+        help="Coefficient scaling episodic novelty for epsilon modulation (default 0.20)",
+    )
+    parser.add_argument(
+        "--eps_max",
+        type=float,
+        default=0.50,
+        help="Maximum epsilon exploration ceiling (default 0.50)",
+    )
+    parser.add_argument(
+        "--nstep",
+        type=int,
+        default=5,
+        help="Horizon n for n-step TD critic targets (default 5)",
     )
 
     return parser.parse_args(args)
@@ -181,7 +244,7 @@ class TrainingPipeline:
         self.device = torch.device(self.device_str)
 
         self.total_steps: int = int(self.cfg.get("total_steps", 10_000))
-        self.batch_size: int = int(self.cfg.get("batch_size", 64))
+        self.batch_size: int = int(self.cfg.get("batch_size", 128))
         self.checkpoint_dir: Path = Path(self.cfg.get("checkpoint_dir", "./checkpoints")).expanduser()
         self.eval_interval: int = int(self.cfg.get("eval_interval", 1_000))
         self.seed: int = int(self.cfg.get("seed", 42))
@@ -192,9 +255,28 @@ class TrainingPipeline:
         self.save_interval: int = int(self.cfg.get("save_interval", 1_000))
         self.resume: bool = not bool(self.cfg.get("no_resume", False))
         self.tier2_ratio: float = float(self.cfg.get("tier2_ratio", 0.30))
+        self.milestone_t1_priority: float = float(self.cfg.get("milestone_t1_priority", 0.25))
+        self.milestone_t2_priority: float = float(self.cfg.get("milestone_t2_priority", 0.80))
+        self.critic_intrinsic_weight: float = float(self.cfg.get("critic_intrinsic_weight", 0.0))
         self.gamma: float = float(self.cfg.get("gamma", 0.99))
         self.tau: float = float(self.cfg.get("tau", 0.99))
         self.log_interval: int = int(self.cfg.get("log_interval", 100))
+        self.update_every: int = int(self.cfg.get("update_every", 2))
+        self.action_repeat: int = int(self.cfg.get("action_repeat", 1))
+        self.actor_intrinsic_weight: float = float(self.cfg.get("actor_intrinsic_weight", 0.1))
+        self.eps_base: float = float(self.cfg.get("eps_base", 0.05))
+        self.eps_novelty_coef: float = float(self.cfg.get("eps_novelty_coef", 0.20))
+        self.eps_max: float = float(self.cfg.get("eps_max", 0.50))
+        self.nstep: int = int(self.cfg.get("nstep", 5))
+        self.recent_t1_indices: deque = deque(maxlen=30)
+        self.total_milestones: int = 0
+        self.success_counts: Dict[str, int] = {}
+        self.recent_eps: deque = deque(maxlen=1000)
+
+        # C4: Per-action normalized curiosity running statistics and episodic novelty
+        self.per_action_disc_stats = RunningMeanStd(shape=(17,)).to(self.device)
+        self.episodic_novelty = EpisodicNovelty(latent_dim=256, seed=self.seed)
+        self.episodic_stats = RunningMeanStd(shape=())
 
         # Set seeds for reproducibility
         torch.manual_seed(self.seed)
@@ -220,6 +302,8 @@ class TrainingPipeline:
             tier1_capacity=int(self.cfg.get("tier1_capacity", 50_000)),
             tier2_capacity=20_000,
             default_tier2_ratio=self.tier2_ratio,
+            milestone_t1_priority=self.milestone_t1_priority,
+            milestone_t2_priority=self.milestone_t2_priority,
             seed=self.seed,
         )
 
@@ -302,6 +386,8 @@ class TrainingPipeline:
         self,
         obs: torch.Tensor,
         episode_achievements: Set[str],
+        episode_id: int = -1,
+        step_in_ep: int = -1,
     ) -> Tuple[torch.Tensor, float, bool, Dict[str, Any]]:
         """
         Interacts with Crafter for 1 step, computes intrinsic curiosity,
@@ -310,47 +396,83 @@ class TrainingPipeline:
         Args:
             obs: Normalized observation tensor (3, 64, 64).
             episode_achievements: Set tracking achievements unlocked in current episode.
+            episode_id: Unique identifier for current life/episode.
+            step_in_ep: Sequential timestep offset within current episode.
 
         Returns:
             next_obs, reward, done, step_metrics
         """
-        # Select action
-        if self.current_step < self.warmup_steps:
-            action = int(self.env.action_space.sample())
-        else:
-            action = self.agent.act(obs, eval_mode=False, planning=False)
-
-        next_obs, ext_reward, terminated, truncated, info = self.env.step(action)
-        done = terminated or truncated
-
-        # Assert Zero-Cheat: Info contains no internal game state
-        for forbidden in FORBIDDEN_CHEAT_KEYS:
-            if forbidden in info:
-                raise AssertionError(
-                    f"CRITICAL ZERO-CHEAT LEAK: Forbidden key '{forbidden}' found in env info!"
-                )
-
-        # Compute epistemic curiosity reward for exploration
+        # C4.2: Latent encoding, episodic novelty, and novelty-modulated exploration
         with torch.no_grad():
             z_t = self.agent.encode(obs)
             if z_t.dim() == 1:
                 z_t = z_t.unsqueeze(0)
+
+        nov_raw = self.episodic_novelty.novelty_and_insert(z_t.detach().squeeze(0).cpu().numpy())
+        self.episodic_stats.update(nov_raw)
+        nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
+
+        # Select action via novelty-modulated epsilon-greedy
+        if self.current_step < self.warmup_steps:
+            action = int(self.env.action_space.sample())
+        else:
+            eps = min(self.eps_max, self.eps_base + self.eps_novelty_coef * nov)
+            self.recent_eps.append(eps)
+            if float(np.random.random_sample()) < eps:
+                action = int(self.env.action_space.sample())
+            else:
+                action = self.agent.act(obs, eval_mode=False, planning=False)
+
+        # Step environment (supporting action_repeat)
+        is_milestone = False
+        if self.action_repeat <= 1:
+            next_obs, ext_reward, terminated, truncated, info = self.env.step(action)
+            done = bool(terminated or truncated)
+            for forbidden in FORBIDDEN_CHEAT_KEYS:
+                if forbidden in info:
+                    raise AssertionError(
+                        f"CRITICAL ZERO-CHEAT LEAK: Forbidden key '{forbidden}' found in env info!"
+                    )
+            eval_info = info.get("eval_info", {})
+            unlocked = eval_info.get("unlocked_achievements", [])
+            for ach in unlocked:
+                if ach not in episode_achievements:
+                    episode_achievements.add(ach)
+                    is_milestone = True
+                    if ach not in self.all_unlocked_achievements:
+                        self.all_unlocked_achievements.add(ach)
+                        print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
+        else:
+            total_ext_reward = 0.0
+            done = False
+            for _ in range(self.action_repeat):
+                next_obs, step_reward, terminated, truncated, info = self.env.step(action)
+                total_ext_reward += float(step_reward)
+                done = bool(terminated or truncated)
+                for forbidden in FORBIDDEN_CHEAT_KEYS:
+                    if forbidden in info:
+                        raise AssertionError(
+                            f"CRITICAL ZERO-CHEAT LEAK: Forbidden key '{forbidden}' found in env info!"
+                        )
+                eval_info = info.get("eval_info", {})
+                unlocked = eval_info.get("unlocked_achievements", [])
+                for ach in unlocked:
+                    if ach not in episode_achievements:
+                        episode_achievements.add(ach)
+                        is_milestone = True
+                        if ach not in self.all_unlocked_achievements:
+                            self.all_unlocked_achievements.add(ach)
+                            print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
+                if done:
+                    break
+            ext_reward = total_ext_reward
+
+        # Compute epistemic curiosity reward for exploration
+        with torch.no_grad():
             a_t = torch.tensor([action], device=self.device, dtype=torch.long)
             _, all_preds = self.agent.predictor(z_t, a_t)
             r_int_tensor = self.agent.curiosity_engine.compute_intrinsic_reward(all_preds, update_stats=True)
             r_int = float(r_int_tensor.item() if r_int_tensor.numel() == 1 else r_int_tensor[0].item())
-
-        # Inspect sanitized eval_info for new milestone discoveries
-        is_milestone = False
-        eval_info = info.get("eval_info", {})
-        unlocked = eval_info.get("unlocked_achievements", [])
-        for ach in unlocked:
-            if ach not in episode_achievements:
-                episode_achievements.add(ach)
-                is_milestone = True
-                if ach not in self.all_unlocked_achievements:
-                    self.all_unlocked_achievements.add(ach)
-                    print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
 
         # High epistemic disagreement also qualifies as milestone discovery
         if r_int > 0.5:
@@ -366,7 +488,23 @@ class TrainingPipeline:
             r_int=r_int,
             is_milestone=is_milestone,
             epistemic_error=r_int,
+            episode_id=episode_id,
+            step_in_ep=step_in_ep,
         )
+
+        # C2.2: Capture written T1 slot and retroactively flag trailing 30-step window on milestone
+        written_slot = (self.buffer.t1_ptr - 1) % self.buffer.tier1_capacity
+        self.recent_t1_indices.append(written_slot)
+        if is_milestone:
+            for slot_idx in self.recent_t1_indices:
+                self.buffer.flag_milestone_at(slot_idx)
+            self.total_milestones += 1
+
+        # C7: Track external reward successes (e.g. chop wood, place table)
+        if ext_reward >= 0.5:
+            act_names = getattr(self.env, "action_names", None)
+            act_label = act_names[action] if act_names is not None else str(action)
+            self.success_counts[act_label] = self.success_counts.get(act_label, 0) + 1
 
         step_metrics = {
             "ext_reward": ext_reward,
@@ -434,29 +572,24 @@ class TrainingPipeline:
         using latent representations and blended extrinsic + intrinsic rewards.
         """
         self.agent.train()
-        batch = self.buffer.sample(
+        batch = self.buffer.sample_nstep(
             batch_size=self.batch_size,
+            n=self.nstep,
+            gamma=self.gamma,
             tier2_ratio=self.tier2_ratio,
             device=self.device,
         )
 
         with torch.no_grad():
             z_curr = self.agent.encoder(batch["obs"])
-            z_next = self.agent.target_encoder(batch["next_obs"])
+            z_boot = self.agent.target_encoder(batch["boot_obs"])
 
-            # Compute blended reward: r_total = r_ext + beta * r_int
-            r_total = self.agent.curiosity_engine.blend_rewards(
-                batch["rewards"],
-                batch["int_rewards"],
-            )
-
-            # Discrete Double-Q Target: greedy optimal next action from online critic
-            # evaluated by clipped double target critic to prevent overestimation
-            q1_next, q2_next = self.agent.critic(z_next)
-            best_next_actions = torch.argmax(torch.min(q1_next, q2_next), dim=-1)
-            target_q_min = self.agent.critic.target_q_min(z_next, best_next_actions)
-            not_done = (~batch["dones"]).float()
-            target_q = r_total + self.gamma * not_done * target_q_min
+            # Discrete Double-Q Target with n-step discounted return & bootstrapped future value
+            q1b, q2b = self.agent.critic(z_boot)
+            best_boot_actions = torch.argmax(torch.min(q1b, q2b), dim=-1)
+            boot_q = self.agent.critic.target_q_min(z_boot, best_boot_actions)
+            r_total = batch["nstep_return"] + self.critic_intrinsic_weight * batch["int_rewards"]
+            target_q = r_total + batch["boot_gamma"] * batch["boot_valid"].float() * boot_q
 
         # 1. Update Twin Critic
         critic_loss, c_metrics = self.agent.critic.compute_loss(
@@ -472,6 +605,17 @@ class TrainingPipeline:
         # Update Target Critic EMA
         self.agent.critic.update_target(tau=self.tau)
 
+        # C4.1: Compute per-action ensemble disagreement under no_grad (exploration term)
+        with torch.no_grad():
+            B = z_curr.shape[0]
+            z_rep = z_curr.unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
+            a_rep = torch.arange(self.agent.num_actions, device=z_curr.device).repeat(B)
+            _, all_preds = self.agent.predictor(z_rep, a_rep)  # (K, B*17, D)
+            disc = self.agent.predictor.compute_epistemic_disagreement(all_preds).view(B, -1)  # (B, 17)
+            self.per_action_disc_stats.update(disc)
+            disc_norm = disc / (self.per_action_disc_stats.std + self.per_action_disc_stats.epsilon)  # ÷std per action column
+            disc_norm = torch.clamp(disc_norm, min=0.0, max=5.0)
+
         # 2. Update Actor Policy Prior via Exact Discrete Expectation
         # Since action space is discrete (17), compute exact expectation under policy
         # allowing direct, rich gradient flow from TwinCritic Q-values into Actor weights
@@ -483,37 +627,52 @@ class TrainingPipeline:
         q_all = torch.min(q1_all, q2_all).detach()
 
         expected_q = (probs * q_all).sum(dim=-1)
+        expected_int = (probs * disc_norm).sum(dim=-1)
         entropy = -(probs * log_probs).sum(dim=-1)
-        actor_loss = -(expected_q + 0.05 * entropy).mean()
+        actor_loss = -(expected_q + self.actor_intrinsic_weight * expected_int + 0.05 * entropy).mean()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.actor.parameters(), max_norm=1.0)
         self.actor_optimizer.step()
 
+        q_spread = (q_all.max(dim=-1).values - q_all.min(dim=-1).values).mean()
+        q_mean_ext = expected_q.mean()
+
         return {
             "critic_loss": float(critic_loss.item()),
             "actor_loss": float(actor_loss.item()),
             "entropy": float(entropy.mean().item()),
             "q_mean": float(expected_q.mean().item()),
+            "q_spread": float(q_spread.item()),
+            "q_mean_ext": float(q_mean_ext.item()),
+            "expected_int_mean": float(expected_int.mean().item()),
+            "eps_mean": float(np.mean(self.recent_eps)) if len(self.recent_eps) > 0 else 0.0,
         }
 
-    def evaluate(self, num_episodes: Optional[int] = None) -> Dict[str, Any]:
+    def evaluate(
+        self,
+        num_episodes: Optional[int] = None,
+        stochastic: bool = False,
+    ) -> Dict[str, Any]:
         """
-        Runs evaluation episodes with deterministic action selection (eval_mode=True).
+        Runs evaluation episodes recording both greedy (deterministic) and stochastic policy variants.
         Collects survival time, episodic returns, and sanitized Crafter achievements.
 
         Args:
-            num_episodes: Number of episodes (defaults to self.eval_episodes).
+            num_episodes: Number of episodes per variant (defaults to self.eval_episodes).
+            stochastic: If True, primary top-level return metrics point to stochastic results.
 
         Returns:
-            Dictionary with mean return, mean length, and unlocked achievements.
+            Dictionary with mean return, mean length, unlocked achievements, and dual variant keys.
         """
         self.agent.eval()
         n_eps = num_episodes if num_episodes is not None else self.eval_episodes
-        returns: List[float] = []
-        lengths: List[int] = []
-        eval_achievements: Set[str] = set()
+
+        # 1. Greedy evaluation episodes (eval_mode=True)
+        greedy_returns: List[float] = []
+        greedy_lengths: List[int] = []
+        greedy_achievements: Set[str] = set()
 
         for ep_i in range(n_eps):
             ep_seed = self.seed + 1000 + self.current_step + ep_i
@@ -529,26 +688,81 @@ class TrainingPipeline:
                 ep_len += 1
                 done = term or trunc
 
-                # Collect unlocked achievements from sanitized eval_info
                 eval_info = info.get("eval_info", {})
                 unlocked = eval_info.get("unlocked_achievements", [])
-                eval_achievements.update(unlocked)
+                greedy_achievements.update(unlocked)
 
-            returns.append(ep_ret)
-            lengths.append(ep_len)
+            greedy_returns.append(ep_ret)
+            greedy_lengths.append(ep_len)
 
-        mean_return = float(np.mean(returns)) if returns else 0.0
-        mean_length = float(np.mean(lengths)) if lengths else 0.0
-        ach_list = sorted(list(eval_achievements))
+        # 2. Stochastic evaluation episodes (eval_mode=False)
+        stoch_returns: List[float] = []
+        stoch_lengths: List[int] = []
+        stoch_achievements: Set[str] = set()
 
-        # Record in persistent achievement curve history
+        for ep_i in range(n_eps):
+            ep_seed = self.seed + 2000 + self.current_step + ep_i
+            obs = self.eval_env.reset(seed=ep_seed)
+            ep_ret = 0.0
+            ep_len = 0
+            done = False
+
+            while not done:
+                action = self.agent.act(obs, eval_mode=False, planning=False)
+                obs, reward, term, trunc, info = self.eval_env.step(action)
+                ep_ret += float(reward)
+                ep_len += 1
+                done = term or trunc
+
+                eval_info = info.get("eval_info", {})
+                unlocked = eval_info.get("unlocked_achievements", [])
+                stoch_achievements.update(unlocked)
+
+            stoch_returns.append(ep_ret)
+            stoch_lengths.append(ep_len)
+
+        g_mean_ret = float(np.mean(greedy_returns)) if greedy_returns else 0.0
+        g_mean_len = float(np.mean(greedy_lengths)) if greedy_lengths else 0.0
+        g_ach_list = sorted(list(greedy_achievements))
+
+        s_mean_ret = float(np.mean(stoch_returns)) if stoch_returns else 0.0
+        s_mean_len = float(np.mean(stoch_lengths)) if stoch_lengths else 0.0
+        s_ach_list = sorted(list(stoch_achievements))
+
+        primary_ret = s_mean_ret if stochastic else g_mean_ret
+        primary_len = s_mean_len if stochastic else g_mean_len
+        primary_achs = s_ach_list if stochastic else g_ach_list
+
         eval_summary = {
             "step": self.current_step,
-            "mean_return": mean_return,
-            "mean_length": mean_length,
-            "achievement_count": len(ach_list),
-            "achievements": ach_list,
+            "mean_return": primary_ret,
+            "mean_length": primary_len,
+            "achievement_count": len(primary_achs),
+            "achievements": primary_achs,
+            "greedy_mean_return": g_mean_ret,
+            "greedy_mean_length": g_mean_len,
+            "greedy_achievement_count": len(g_ach_list),
+            "greedy_achievements": g_ach_list,
+            "stochastic_mean_return": s_mean_ret,
+            "stochastic_mean_length": s_mean_len,
+            "stochastic_achievement_count": len(s_ach_list),
+            "stochastic_achievements": s_ach_list,
         }
+
+        # C7: Audit representation health / non-collapse
+        if self.buffer.size >= min(self.batch_size, 32):
+            try:
+                sample_sz = min(self.buffer.size, self.batch_size)
+                sample_batch = self.buffer.sample(batch_size=sample_sz, device=self.device)
+                with torch.no_grad():
+                    z_sample = self.agent.encoder(sample_batch["obs"])
+                    nc_report = verify_non_collapse(z_sample, strict=False)
+                    eval_summary["min_variance"] = float(nc_report.get("min_variance", 0.0))
+                    eval_summary["num_collapsed_dims"] = int(nc_report.get("num_collapsed_dims", 0))
+                    eval_summary["effective_rank"] = float(nc_report.get("effective_rank", 0.0))
+            except Exception:
+                pass
+
         self.achievement_history[self.current_step] = eval_summary
 
         return eval_summary
@@ -636,7 +850,12 @@ class TrainingPipeline:
                 self.current_step += 1
 
                 # 1. Environment step and experience accumulation
-                obs, ext_r, done, step_metrics = self.collect_step(obs, ep_achievements)
+                obs, ext_r, done, step_metrics = self.collect_step(
+                    obs,
+                    ep_achievements,
+                    episode_id=self.current_episode,
+                    step_in_ep=ep_length,
+                )
                 ep_reward += ext_r
                 ep_length += 1
 
@@ -646,9 +865,14 @@ class TrainingPipeline:
                     ep_achievements = set()
                     ep_reward = 0.0
                     ep_length = 0
+                    self.episodic_novelty.reset()
 
-                # 2. Interleaved Model & Policy Updates (once buffer has enough samples)
-                if self.buffer.size >= self.batch_size and self.current_step >= self.warmup_steps:
+                # 2. Interleaved Model & Policy Updates (halved gradient frequency via update_every)
+                if (
+                    self.buffer.size >= self.batch_size
+                    and self.current_step >= self.warmup_steps
+                    and (self.current_step % self.update_every == 0)
+                ):
                     wm_metrics = self.update_world_model()
                     ac_metrics = self.update_actor_critic()
                     combined_metrics = {**wm_metrics, **ac_metrics}
@@ -674,6 +898,7 @@ class TrainingPipeline:
                     print(
                         f"Step {self.current_step:6d}/{self.total_steps} | "
                         f"Buf: {self.buffer.size:5d} (T1:{self.buffer.t1_size}, T2:{self.buffer.t2_size}) | "
+                        f"MS: {self.total_milestones:4d} | "
                         f"Ach: {len(self.all_unlocked_achievements):2d} | "
                         f"SPS: {sps:5.1f}{loss_info}"
                     )
@@ -717,6 +942,7 @@ class TrainingPipeline:
         print(f"Total Time:         {total_time:.2f} s")
         print(f"Achievements Count: {len(self.all_unlocked_achievements)}")
         print(f"Unlocked List:      {sorted(list(self.all_unlocked_achievements))}")
+        print(f"Success Counts:     {self.success_counts}")
         print("=" * 80)
 
         # Final checkpoint save
@@ -734,13 +960,14 @@ class TrainingPipeline:
             "achievements_unlocked": sorted(list(self.all_unlocked_achievements)),
             "achievement_history": self.achievement_history,
             "final_checkpoint": final_ckpt,
+            "success_counts": self.success_counts,
         }
 
 
 def train(
     device: Optional[str] = None,
     total_steps: int = 10_000,
-    batch_size: int = 64,
+    batch_size: int = 128,
     checkpoint_dir: str = "./checkpoints",
     eval_interval: int = 1_000,
     seed: int = 42,
