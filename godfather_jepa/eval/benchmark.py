@@ -106,7 +106,8 @@ class BenchmarkRunner:
                         ep_unlocked.add(ach_name)
                         if isinstance(state, dict):
                             state.setdefault("completed_milestones", set()).add(ach_name)
-                            agent_cards = getattr(getattr(agent, "causal_hypergraph", None), "cards", {})
+                            agent = getattr(policy_fn, "__self__", None)
+                            agent_cards = getattr(getattr(agent, "causal_hypergraph", None), "cards", {}) if agent is not None else {}
                             card = agent_cards.get(ach_name)
                             alias = get_fixture_alias(ach_name)
                             is_fixture = (card is not None and card.is_fixture) or (alias != ach_name)
