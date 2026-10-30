@@ -496,6 +496,10 @@ class TrainingPipeline:
             is_milestone = False
             eval_info = info_i.get("eval_info", {})
             unlocked = eval_info.get("unlocked_achievements", [])
+            act = action_list[env_i]
+            act_names = getattr(self.env, "action_names", None)
+            act_name = act_names[act] if act_names is not None else str(act)
+
             for ach in unlocked:
                 if ach not in self.episode_achievements[env_i]:
                     self.episode_achievements[env_i].add(ach)
@@ -503,16 +507,16 @@ class TrainingPipeline:
                     if ach not in self.all_unlocked_achievements:
                         self.all_unlocked_achievements.add(ach)
                         print(f" [★ DISCOVERY] Env {env_i} Step {self.current_step + 1}: Unlocked achievement '{ach}'!")
+                    
+                    # Accurately credit the action that achieved this milestone
+                    if act_name == ach:
+                        self.success_counts[act_name] = self.success_counts.get(act_name, 0) + 1
+                    elif act_name == "do" and ach in ("collect_wood", "collect_sapling", "collect_stone", "collect_coal", "collect_iron", "defeat_zombie", "defeat_skeleton", "eat_cow", "eat_plant"):
+                        self.success_counts["do"] = self.success_counts.get("do", 0) + 1
 
             r_int_i = float(r_int_np[env_i]) if r_int_np.ndim > 0 else float(r_int_np)
             if r_int_i > 0.5:
                 is_milestone = True
-
-            act = action_list[env_i]
-            if ext_r >= 0.5:
-                act_names = getattr(self.env, "action_names", None)
-                act_label = act_names[act] if act_names is not None else str(act)
-                self.success_counts[act_label] = self.success_counts.get(act_label, 0) + 1
 
             err_i = float(disagree_np[env_i]) if disagree_np.ndim > 0 else float(disagree_np)
             self.buffer.add(
@@ -622,6 +626,8 @@ class TrainingPipeline:
                         )
                 eval_info = info.get("eval_info", {})
                 unlocked = eval_info.get("unlocked_achievements", [])
+                act_names = getattr(self.env, "action_names", None)
+                act_name = act_names[action] if act_names is not None else str(action)
                 for ach in unlocked:
                     if ach not in episode_achievements:
                         episode_achievements.add(ach)
@@ -629,6 +635,12 @@ class TrainingPipeline:
                         if ach not in self.all_unlocked_achievements:
                             self.all_unlocked_achievements.add(ach)
                             print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
+
+                        # Accurately credit the action that achieved this milestone
+                        if act_name == ach:
+                            self.success_counts[act_name] = self.success_counts.get(act_name, 0) + 1
+                        elif act_name == "do" and ach in ("collect_wood", "collect_sapling", "collect_stone", "collect_coal", "collect_iron", "defeat_zombie", "defeat_skeleton", "eat_cow", "eat_plant"):
+                            self.success_counts["do"] = self.success_counts.get("do", 0) + 1
                 if done:
                     break
             ext_reward = total_ext_reward
@@ -665,12 +677,6 @@ class TrainingPipeline:
             for slot_idx in self.recent_t1_indices:
                 self.buffer.flag_milestone_at(slot_idx)
             self.total_milestones += 1
-
-        # C7: Track external reward successes (e.g. chop wood, place table)
-        if ext_reward >= 0.5:
-            act_names = getattr(self.env, "action_names", None)
-            act_label = act_names[action] if act_names is not None else str(action)
-            self.success_counts[act_label] = self.success_counts.get(act_label, 0) + 1
 
         step_metrics = {
             "ext_reward": ext_reward,
