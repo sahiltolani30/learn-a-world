@@ -27,8 +27,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
 
 import crafter
 from src.env.wrapper import make_crafter_env
@@ -306,21 +304,44 @@ class SeniorForensicSuite:
         y_tree = np.array(labels_tree)
         y_facing = np.array(labels_facing)
 
-        probes = {"Wood Count (0, 1, 2)": y_wood, "Tree Nearby (Yes/No)": y_tree, "Facing Direction (4-way)": y_facing}
+        probes = {
+            "Wood Count (0, 1, 2)": (y_wood, 3),
+            "Tree Nearby (Yes/No)": (y_tree, 2),
+            "Facing Direction (4-way)": (y_facing, 4),
+        }
         probe_results = {}
 
         self.log(f"{'Target Attribute':<28} | {'Majority Baseline':>18} | {'Probe Accuracy':>16} | {'Signal Preserved?'}")
         self.log("-" * 80)
 
-        for attr_name, y in probes.items():
-            Z_train, Z_test, y_train, y_test = train_test_split(Z, y, test_size=0.25, random_state=42)
-            clf = LogisticRegression(max_iter=500, random_state=42)
-            clf.fit(Z_train, y_train)
-            acc = clf.score(Z_test, y_test) * 100
+        N = len(Z)
+        n_train = int(N * 0.75)
+        perm = np.random.RandomState(42).permutation(N)
+        train_idx, test_idx = perm[:n_train], perm[n_train:]
+
+        for attr_name, (y, num_classes) in probes.items():
+            Z_tr = torch.from_numpy(Z[train_idx]).float().to(self.device)
+            y_tr = torch.from_numpy(y[train_idx]).long().to(self.device)
+            Z_te = torch.from_numpy(Z[test_idx]).float().to(self.device)
+            y_te = torch.from_numpy(y[test_idx]).long().to(self.device)
+
+            probe = nn.Linear(Z.shape[1], num_classes).to(self.device)
+            optimizer = torch.optim.Adam(probe.parameters(), lr=1e-2, weight_decay=1e-4)
+            loss_fn = nn.CrossEntropyLoss()
+
+            for _ in range(100):
+                optimizer.zero_grad()
+                loss = loss_fn(probe(Z_tr), y_tr)
+                loss.backward()
+                optimizer.step()
+
+            with torch.no_grad():
+                preds = probe(Z_te).argmax(dim=-1)
+                acc = (preds == y_te).float().mean().item() * 100.0
 
             # Majority baseline
-            vals, counts = np.unique(y_test, return_counts=True)
-            baseline = (counts.max() / len(y_test)) * 100
+            vals, counts = np.unique(y[test_idx], return_counts=True)
+            baseline = (counts.max() / len(test_idx)) * 100.0
 
             preserved = "YES (Informative)" if (acc - baseline) > 15.0 else "NO (Degraded / Discarded)"
             self.log(f"{attr_name:<28} | {baseline:17.1f}% | {acc:15.1f}% | {preserved}")
