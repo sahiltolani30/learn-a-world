@@ -119,6 +119,8 @@ def build_her_batch(
     her_reward_weight_max: float = 4.0,
     her_unlock_weight: float = 2.0,
     progress_weight_gain: float = 3.0,
+    critic: Optional[Any] = None,
+    critic_gamma: float = 0.97,
     device: Optional[torch.device | str] = None,
 ) -> Dict[str, torch.Tensor]:
     """Constructs Hindsight Experience Replay (HER) training pairs.
@@ -209,11 +211,21 @@ def build_her_batch(
                 w_progress = 1.0 + progress_weight_gain * max(0.0, progress)
 
                 seg_return = float(np.sum(ep["r"][t:t + k]))
-                w_reward = (
+                w_reward_base = (
                     (1.0 + min(max(seg_return, 0.0), her_reward_weight_max))
                     * (her_unlock_weight if np.any(ep["events"][t:t + k]) else 1.0)
                     * w_progress
                 )
+                w_adv = 1.0
+                if critic is not None:
+                    discounts = critic_gamma ** np.arange(k)
+                    seg_return_discounted = float(np.sum(ep["r"][t:t + k] * discounts))
+                    with torch.no_grad():
+                        s_t_tensor = torch.from_numpy(ep["s"][t]).float().to(device if device else "cpu")
+                        v_st = float(critic.value(s_t_tensor))
+                    A_seg = seg_return_discounted - v_st
+                    w_adv = float(np.exp(np.clip(A_seg / 3.0, -2.0, 2.0)))
+                w_reward = w_reward_base * w_adv
                 is_unlock = bool(np.any(ep["events"][t:t + k]))
 
                 for tau in range(t, t + k):
@@ -253,11 +265,21 @@ def build_her_batch(
                     w_progress = 1.0 + progress_weight_gain * max(0.0, progress)
 
                     seg_return = float(np.sum(ep["r"][t:t + k]))
-                    w_reward = (
+                    w_reward_base = (
                         (1.0 + min(max(seg_return, 0.0), her_reward_weight_max))
                         * (her_unlock_weight if np.any(ep["events"][t:t + k]) else 1.0)
                         * w_progress
                     )
+                    w_adv = 1.0
+                    if critic is not None:
+                        discounts = critic_gamma ** np.arange(k)
+                        seg_return_discounted = float(np.sum(ep["r"][t:t + k] * discounts))
+                        with torch.no_grad():
+                            s_t_tensor = torch.from_numpy(ep["s"][t]).float().to(device if device else "cpu")
+                            v_st = float(critic.value(s_t_tensor))
+                        A_seg = seg_return_discounted - v_st
+                        w_adv = float(np.exp(np.clip(A_seg / 3.0, -2.0, 2.0)))
+                    w_reward = w_reward_base * w_adv
                     is_unlock = bool(np.any(ep["events"][t:t + k]))
 
                     for tau in range(t, t + k):

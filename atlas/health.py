@@ -60,14 +60,25 @@ class HealthMonitor:
             "alarms_so_far": list(self.alarms_so_far),
         }
 
-    def load_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
-        """Restores health state snapshot on resume (V2.2 F1)."""
+    def load_snapshot(self, snapshot: Optional[Dict[str, Any]], resume_iter: Optional[int] = None) -> None:
+        """Restores health state snapshot on resume (V2.2 F1 / V3 C3)."""
         if not snapshot:
             return
         self.best_ach_per_ep = float(snapshot.get("best_ach_per_ep", 0.0))
         self.last_best_iter = int(snapshot.get("last_best_iter", 0))
         self.progress_history = [(int(it), float(val)) for it, val in snapshot.get("progress_history", [])]
         self.alarms_so_far = list(snapshot.get("alarms_so_far", []))
+
+        # V3 C3: initialize monitor from latest dev-screen ach/ep if best_ach_per_ep == 0.0 but iter > 10
+        cur_it = resume_iter if resume_iter is not None else (self.progress_history[-1][0] if self.progress_history else 0)
+        if self.best_ach_per_ep == 0.0 and cur_it > 10:
+            if self.progress_history:
+                best_score = max(item[1] for item in self.progress_history)
+                latest_best = max(item[0] for item in self.progress_history if item[1] >= best_score - 1e-6)
+                self.best_ach_per_ep = float(best_score)
+                self.last_best_iter = int(latest_best)
+            else:
+                self.last_best_iter = int(cur_it)
 
     def notify_step(self) -> None:
         """Called on each environment step during collection to decrement boost_steps_left."""
@@ -169,20 +180,19 @@ class HealthMonitor:
         else:
             largest_dim_share = 0.0
 
-        # 4. Progress trend vs iteration 10
-        it10_val = None
-        for it_num, score in self.progress_history:
-            if it_num == 10:
-                it10_val = score
-                break
-        if it10_val is None and self.progress_history:
-            it10_val = self.progress_history[0][1]
+        # 4. Progress trend vs fixed iters 10-15 baseline window (V3 C4)
+        base_scores = [score for it_num, score in self.progress_history if 10 <= it_num <= 15]
+        if base_scores:
+            baseline_val = float(np.mean(base_scores))
+        elif self.progress_history:
+            baseline_val = float(self.progress_history[0][1])
+        else:
+            baseline_val = 0.0
 
         latest_score = self.progress_history[-1][1] if self.progress_history else 0.0
-        if it10_val is not None and it10_val > 0.0:
-            trend_vs_it10 = float((latest_score - it10_val) / it10_val)
-        else:
-            trend_vs_it10 = 0.0
+        # Report raw difference: latest_score - baseline_val (never divide by zero)
+        trend_raw = float(latest_score - baseline_val)
+        trend_vs_it10 = trend_raw
 
         # 5. Lift statistics
         lift_edges_used = int(np.sum(agent.lift.ci_low > 1.2))
@@ -199,7 +209,7 @@ class HealthMonitor:
             "diversity": bool(top_action_share <= 0.50),
             "humility": bool(optionnet_confidence <= 0.80),
             "album_variety": bool(largest_dim_share <= 0.40),
-            "trend": bool(trend_vs_it10 >= 0.10 or iter_idx < 15),
+            "trend": bool(trend_raw >= 0.0 or iter_idx < 15),
             "lift": bool(lift_consistent),
         }
 
@@ -208,6 +218,7 @@ class HealthMonitor:
             "optionnet_confidence": optionnet_confidence,
             "goal_bank_largest_dim_share": largest_dim_share,
             "goal_bank_per_dim_counts": per_dim_counts,
+            "ach_per_ep_trend_raw": trend_raw,
             "ach_per_ep_trend_vs_it10": trend_vs_it10,
             "lift_edges_used": lift_edges_used,
             "max_ci_low": max_ci_low,

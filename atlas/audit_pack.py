@@ -77,6 +77,7 @@ class AuditPackExporter:
         probe_event_probs: Sequence[Sequence[float]],
         unlocked_dims: Sequence[int],
         matched_bank: bool,
+        probe_id: int = 0,
     ) -> None:
         """Records a single probe/goal decision event."""
         # Convert float16 event probs to float list
@@ -92,6 +93,7 @@ class AuditPackExporter:
             "probe_event_probs": [[round(float(p), 4) for p in row] for row in probe_event_probs],
             "unlocked_dims": [int(d) for d in unlocked_dims],
             "matched_bank": bool(matched_bank),
+            "probe_id": int(probe_id),
         }
         self.pending_decisions.append(record)
 

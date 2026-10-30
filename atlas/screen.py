@@ -205,6 +205,11 @@ def screen_agent(
         "privileged_achievements_used_for_action": False,
         "achievements_used_for_scoring_only": True,
         "readout_in_goal_gating": getattr(agent.cfg.goals, "readout_in_goal_gating", True),
+        "material_gate_active": bool(
+            getattr(agent.cfg.goals, "material_gating_learned", False)
+            and getattr(agent.backbone, "has_learned_delta_head", False)
+            and agent.readout_net is not None
+        ),
         "seeds": seed_list,
         "num_episodes": num_eps,
         "crafter_score": float(crafter_metrics["score"]),

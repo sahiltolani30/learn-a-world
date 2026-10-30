@@ -23,10 +23,22 @@ import torch.optim as optim
 from atlas.backbone import FrozenBackbone
 from atlas.collect import ShardLoader
 from atlas.config import LATENT_DIM, NUM_ACTIONS, RECURRENT_DIM, STATE_DIM, TrainConfig
+from atlas.critic import CriticNet, critic_loss, symlog, two_hot_encode
 from atlas.epistemic import EpistemicNet
 from atlas.readout import VitalsReadout
 from atlas.safety import ContinueNet, focal_bce
 from atlas.skills import OptionNet, ReachabilityNet, build_her_batch, compute_her_loss, build_validation_reach_pairs
+
+
+def compute_discounted_returns(rewards: np.ndarray, gamma: float = 0.97, horizon: int = 25) -> np.ndarray:
+    """Computes Monte-Carlo discounted returns over horizon H (V3 F1)."""
+    T = len(rewards)
+    returns = np.zeros(T, dtype=np.float32)
+    for t in range(T):
+        h = min(horizon, T - t)
+        discounts = gamma ** np.arange(h)
+        returns[t] = float(np.sum(rewards[t:t + h] * discounts))
+    return returns
 
 
 def _compute_auroc(scores: np.ndarray, labels: np.ndarray) -> float:
@@ -53,6 +65,7 @@ class HeadTrainer:
         epistemic_net: EpistemicNet,
         safety_net: ContinueNet,
         readout_net: Optional[VitalsReadout] = None,
+        critic_net: Optional[CriticNet] = None,
         cfg: Optional[TrainConfig] = None,
         log_dir: Optional[Union[str, Path]] = None,
     ):
@@ -63,6 +76,7 @@ class HeadTrainer:
         self.epistemic_net = epistemic_net
         self.safety_net = safety_net
         self.readout_net = readout_net
+        self.critic_net = critic_net or CriticNet(cfg=getattr(self.option_net, "cfg", None)).to(self.device)
         self.cfg = cfg or TrainConfig()
 
         self.log_dir = Path(log_dir) if log_dir else Path("atlas_runs")
@@ -184,9 +198,78 @@ class HeadTrainer:
         if self.readout_net is not None:
             opt_readout = optim.Adam(self.readout_net.parameters(), lr=3e-4)
 
-        # Build HER batch
-        max_her = getattr(self.cfg, "her_max_pairs", 32_768)
+        opt_critic = optim.Adam(
+            self.critic_net.parameters(),
+            lr=getattr(skills_cfg if 'skills_cfg' in locals() else getattr(self.option_net, "cfg", None), "critic_lr", 3e-4),
+        )
+
         skills_cfg = getattr(self.option_net, "cfg", None)
+        c_gamma = getattr(skills_cfg, "critic_gamma", 0.97)
+        c_horizon = getattr(skills_cfg, "critic_horizon", 25)
+        c_epochs = getattr(skills_cfg, "critic_epochs_per_iter", 8)
+
+        # Build flat transition tensors
+        z_train = np.concatenate([ep["z"] for ep in train_eps], axis=0)
+        h_train = np.concatenate([ep["h"] for ep in train_eps], axis=0)
+        s_train = np.concatenate([z_train, h_train], axis=-1)
+        a_train = np.concatenate([ep["actions"] for ep in train_eps], axis=0)
+        res_train = np.concatenate([ep["target_residuals"] for ep in train_eps], axis=0)
+        dones_train = np.concatenate([ep["dones"] for ep in train_eps], axis=0)
+        inv_train = np.concatenate([ep["inventory"] for ep in train_eps], axis=0)
+
+        # Compute Monte-Carlo discounted returns for critic (V3 F1)
+        g_list = [compute_discounted_returns(ep["rewards"], gamma=c_gamma, horizon=c_horizon) for ep in train_eps]
+        g_train = np.concatenate(g_list, axis=0)
+
+        s_t = torch.from_numpy(s_train).float().to(self.device)
+        a_t = torch.from_numpy(a_train).long().to(self.device)
+        res_t = torch.from_numpy(res_train).float().to(self.device)
+        dones_t = torch.from_numpy(dones_train).float().to(self.device)
+        inv_t = torch.from_numpy(inv_train).float().to(self.device)
+
+        # Two-hot targets for CriticNet
+        v_train = symlog(torch.from_numpy(g_train).float().to(self.device))
+        target_twohot_all = two_hot_encode(
+            v_train,
+            num_bins=self.critic_net.num_bins,
+            v_min=self.critic_net.v_min,
+            v_max=self.critic_net.v_max,
+        )
+
+        N = len(s_t)
+        batch_size = min(self.cfg.batch_size, max(1, N))
+        max_epoch_samples = min(N, 32768)
+
+        # Train CriticNet (8 epochs, V3 F1)
+        critic_ce = 0.0
+        critic_val_mean = 0.0
+        critic_val_p90 = 0.0
+        if N > 0:
+            for c_ep in range(c_epochs):
+                indices = np.random.permutation(N)[:max_epoch_samples]
+                for b_start in range(0, max_epoch_samples, batch_size):
+                    b_idx = indices[b_start: b_start + batch_size]
+                    b_s = s_t[b_idx]
+                    b_target = target_twohot_all[b_idx]
+                    opt_critic.zero_grad()
+                    logits = self.critic_net(b_s)
+                    loss_c = critic_loss(logits, b_target)
+                    loss_c.backward()
+                    nn.utils.clip_grad_norm_(self.critic_net.parameters(), 1.0)
+                    opt_critic.step()
+                    self.critic_net.update_target()
+
+            with torch.no_grad():
+                val_sub = s_t[:min(1024, N)]
+                val_logits = self.critic_net(val_sub)
+                val_twohot = target_twohot_all[:min(1024, N)]
+                critic_ce = float(critic_loss(val_logits, val_twohot).item())
+                val_vals = self.critic_net.value(val_sub).detach().cpu().numpy()
+                critic_val_mean = float(np.mean(val_vals))
+                critic_val_p90 = float(np.percentile(val_vals, 90))
+
+        # Build HER batch with trained critic (AWR weighting, V3 F2)
+        max_her = getattr(self.cfg, "her_max_pairs", 32_768)
         r_max = getattr(skills_cfg, "her_reward_weight_max", 4.0)
         u_weight = getattr(skills_cfg, "her_unlock_weight", 2.0)
         p_gain = getattr(skills_cfg, "progress_weight_gain", 3.0)
@@ -198,6 +281,8 @@ class HeadTrainer:
             her_reward_weight_max=r_max,
             her_unlock_weight=u_weight,
             progress_weight_gain=p_gain,
+            critic=self.critic_net,
+            critic_gamma=c_gamma,
             device=self.device,
         )
         her_val = (
@@ -208,29 +293,13 @@ class HeadTrainer:
                 her_reward_weight_max=r_max,
                 her_unlock_weight=u_weight,
                 progress_weight_gain=p_gain,
+                critic=self.critic_net,
+                critic_gamma=c_gamma,
                 device=self.device,
             )
             if val_eps
             else None
         )
-
-        # Build flat transition tensors for EpistemicNet and ContinueNet
-        z_train = np.concatenate([ep["z"] for ep in train_eps], axis=0)
-        h_train = np.concatenate([ep["h"] for ep in train_eps], axis=0)
-        s_train = np.concatenate([z_train, h_train], axis=-1)
-        a_train = np.concatenate([ep["actions"] for ep in train_eps], axis=0)
-        res_train = np.concatenate([ep["target_residuals"] for ep in train_eps], axis=0)
-        dones_train = np.concatenate([ep["dones"] for ep in train_eps], axis=0)
-        inv_train = np.concatenate([ep["inventory"] for ep in train_eps], axis=0)
-
-        s_t = torch.from_numpy(s_train).float().to(self.device)
-        a_t = torch.from_numpy(a_train).long().to(self.device)
-        res_t = torch.from_numpy(res_train).float().to(self.device)
-        dones_t = torch.from_numpy(dones_train).float().to(self.device)
-        inv_t = torch.from_numpy(inv_train).float().to(self.device)
-
-        N = len(s_t)
-        batch_size = min(self.cfg.batch_size, max(1, N))
 
         initial_ce_loss = 0.0
         final_ce_loss = 0.0
@@ -371,6 +440,9 @@ class HeadTrainer:
             "her_weight_mean": float(last_skills_metrics.get("her_weight_mean", 1.0)),
             "her_weight_p95": float(last_skills_metrics.get("her_weight_p95", 1.0)),
             "her_unlock_pair_fraction": float(last_skills_metrics.get("her_unlock_pair_fraction", 0.0)),
+            "critic_ce": float(critic_ce),
+            "critic_value_mean": float(critic_val_mean),
+            "critic_value_p90": float(critic_val_p90),
             "gates": gates,
         }
         if extra_log:

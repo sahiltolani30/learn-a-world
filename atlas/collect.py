@@ -268,6 +268,7 @@ class EpisodeCollector:
         all_inventory: List[np.ndarray] = []
         episode_lengths: List[int] = []
         seeds: List[int] = []
+        all_positions: List[np.ndarray] = []
 
         for i in range(n):
             ep_seed = seed_base + i
@@ -281,6 +282,7 @@ class EpisodeCollector:
             all_events.append(ep_data["events"])
             all_mask_before.append(ep_data["mask_before"])
             all_inventory.append(ep_data["inventory"])
+            all_positions.append(np.array(ep_data["positions"], dtype=np.float32))
             episode_lengths.append(ep_data["episode_length"])
             seeds.append(ep_seed)
 
@@ -296,6 +298,7 @@ class EpisodeCollector:
             events=np.concatenate(all_events, axis=0),
             mask_before=np.concatenate(all_mask_before, axis=0),
             inventory=np.concatenate(all_inventory, axis=0),
+            positions=np.concatenate(all_positions, axis=0),
             episode_lengths=np.array(episode_lengths, dtype=np.int64),
             seeds=np.array(seeds, dtype=np.int64),
             source="atlas_live",
@@ -338,6 +341,7 @@ class ShardLoader:
                 inventory = np.zeros((T, STATE_VECTOR_DIM), dtype=np.float32)
 
             seeds = data["seeds"] if "seeds" in keys else np.zeros(len(episode_lengths), dtype=np.int64)
+            positions = data["positions"] if "positions" in keys else np.zeros((T, 2), dtype=np.float32)
 
             return {
                 "obs": obs,
@@ -350,6 +354,7 @@ class ShardLoader:
                 "mask_before": mask_before,
                 "inventory": inventory,
                 "has_inventory": has_inventory,
+                "positions": positions,
                 "episode_lengths": episode_lengths,
                 "seeds": seeds,
             }
@@ -361,6 +366,7 @@ class ShardLoader:
         episodes: List[Dict[str, Any]] = []
 
         start = 0
+        has_pos = "positions" in shard_dict
         for ep_len in ep_lengths:
             end = start + ep_len
             episodes.append({
@@ -374,6 +380,7 @@ class ShardLoader:
                 "mask_before": shard_dict["mask_before"][start:end],
                 "inventory": shard_dict["inventory"][start:end],
                 "has_inventory": shard_dict.get("has_inventory", True),
+                "positions": shard_dict["positions"][start:end] if has_pos else np.zeros((ep_len, 2), dtype=np.float32),
             })
             start = end
         return episodes

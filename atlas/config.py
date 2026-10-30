@@ -105,10 +105,10 @@ class SkillsConfig:
     her_horizons: Tuple[int, ...] = (5, 10)  # dropped k=20 (measured arrivals are short-range)
     arrival_cosine: float = 0.85  # CHANGED from 0.93 (0.93 was unreachable; cos plateaus ~0.92)
     max_option_steps: int = 25
-    stagnation_patience: int = 8
+    stagnation_patience: int = 24  # V3 F6: raised from 8 to 24 to avoid aborting valid detours
     lr: float = 3e-4
     # NEW fields:
-    wander_steps: int = 10  # forced curiosity walk after option failure
+    wander_steps: int = 6  # V3 F6: reduced from 10 to 6
     label_smoothing: float = 0.05  # policy CE label smoothing
     max_action_share: float = 0.25  # not used for subsampling; kept for reference/tests
     weight_clip: float = 50.0  # max per-sample imitation weight
@@ -117,6 +117,15 @@ class SkillsConfig:
     progress_weight_gain: float = 3.0  # V2.2 F4
     option_budget_min: int = 25        # V2.2 F9
     option_budget_max: int = 60        # V2.2 F9
+    # V3 F1/F2 Critic & AWR:
+    critic_lr: float = 3e-4
+    critic_gamma: float = 0.97
+    critic_horizon: int = 25
+    critic_bins: int = 65
+    critic_v_min: float = -5.0
+    critic_v_max: float = 10.0
+    critic_epochs_per_iter: int = 8
+    critic_ema_decay: float = 0.995
 
 
 @dataclass
@@ -174,6 +183,14 @@ class GoalsConfig:
     prerequisite_routing: bool = True         # route to prerequisite before target (F11)
     material_gating_learned: bool = True   # F11-fix: learned costs gate probes, never recipes
     material_gate_margin: float = 0.2      # log1p-scale tolerance on have-vs-cost
+    # V3 additions:
+    vital_select_below: float = 0.35       # V3 F7: homeostatic pressure threshold
+    vital_window: int = 30                 # V3 F7: steps window for realized-vital mining
+    vital_min_delta: float = 1.0           # V3 F7: min vital unit increase to mine goal
+    blind_probe_boost: float = 1.0         # V3 F4: curiosity boost in blind contexts
+    w_value: float = 0.5                   # V3 F3: goal value weighting
+    max_cycles: int = 4                    # V3 F3: max material repeat cycles
+    probe_affordance_min: float = 0.05     # V3 F8: craft execution affordance threshold
 
 
 @dataclass

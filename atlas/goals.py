@@ -317,6 +317,7 @@ class GoalBank:
         lift: Optional[PredecessorLift],
         current_iter: int,
         beta_t: float,
+        critic: Optional[Any] = None,
     ) -> float:
         # 1) Unlock potential
         if locked_dims:
@@ -353,7 +354,22 @@ class GoalBank:
         danger = float(danger_fn(s, g.key)) if danger_fn is not None else 0.0
         score_danger = self.cfg.w_danger * danger
 
-        return float(score_unlock + score_reach + score_explor + score_recency - score_danger)
+        # 6) Learned value optimization (V3 F3: score(g) += w_value * V(s) * psi(s, g))
+        if critic is not None and hasattr(critic, "value"):
+            import torch
+            with torch.no_grad():
+                s_t = torch.from_numpy(s).float()
+                if hasattr(critic, "device"):
+                    s_t = s_t.to(critic.device)
+                elif hasattr(critic, "bins"):
+                    s_t = s_t.to(critic.bins.device)
+                v_s = float(critic.value(s_t))
+            w_value = getattr(self.cfg, "w_value", 0.5)
+            score_value = w_value * v_s * psi_val
+        else:
+            score_value = 0.0
+
+        return float(score_unlock + score_reach + score_explor + score_recency + score_value - score_danger)
 
     def select(
         self,
@@ -369,17 +385,36 @@ class GoalBank:
         topomap: Optional[Any] = None,
         belief: Optional[Any] = None,
         episode_artifact_views: Optional[Dict[int, np.ndarray]] = None,
+        critic: Optional[Any] = None,
+        readout_net: Optional[Any] = None,
     ) -> Tuple[Optional[GoalEntry], float]:
         """Selects a goal entry with statistical rotation (F3) and episode-scope gating (F10)."""
         if not self.entries:
             self.last_selection_mode = "none"
             return None, 0.0
 
+        s = np.concatenate([z.reshape(-1), h.reshape(-1)], axis=-1)
+
+        # V3 F7: Vital goals become selectable when readout's vitals fall below 0.35
+        vitals_low = True
+        if readout_net is not None:
+            import torch
+            with torch.no_grad():
+                dev = next(readout_net.parameters(), None)
+                dev = dev.device if dev is not None else "cpu"
+                s_t = torch.from_numpy(s).float().to(dev)
+                mean_x, _ = readout_net(s_t)
+                vitals = mean_x.squeeze(0)[12:16].detach().cpu().numpy()
+                thresh = getattr(self.cfg, "vital_select_below", 0.35)
+                vitals_low = bool(np.any(vitals < thresh))
+
         # V2.2 F10: Episode-scope gating for self-built-context goals
         freq_threshold = getattr(self.cfg, "episode_scope_frequency", 0.30)
         dedupe_thresh = getattr(self.cfg, "same_kind_dedupe", 0.90)
 
         def _is_selectable(g: GoalEntry) -> bool:
+            if g.kind == "vital" and not vitals_low:
+                return False
             w_freq = getattr(g, "world_frequency", 1.0)
             if w_freq >= freq_threshold:
                 return True
@@ -412,7 +447,7 @@ class GoalBank:
             mode = "frontier"
             chosen_g = min(frontier_goals, key=lambda g: (g.last_used_iter, g.n_try))
             chosen_score = self._compute_goal_score(
-                chosen_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                chosen_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
             )
         elif u < (frontier_share + rotate_share):
             event_vital = [g for g in selectable if g.kind in ("event", "vital")]
@@ -422,7 +457,7 @@ class GoalBank:
                     (
                         g,
                         self._compute_goal_score(
-                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
                         ),
                     )
                     for g in event_vital
@@ -436,7 +471,7 @@ class GoalBank:
                     (
                         g,
                         self._compute_goal_score(
-                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                            g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
                         ),
                     )
                     for g in selectable
@@ -448,7 +483,7 @@ class GoalBank:
                 (
                     g,
                     self._compute_goal_score(
-                        g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
+                        g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
                     ),
                 )
                 for g in selectable
@@ -487,21 +522,24 @@ class GoalBank:
                         else (m_soft[p] >= 0.5)
                     )
                     if not p_unlocked:
-                        p_goals = [g for g in selectable if p in g.event_dims]
-                        if p_goals:
-                            best_p = max(
-                                p_goals,
-                                key=lambda g: self._compute_goal_score(
-                                    g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
-                                ),
-                            )
-                            current_g = best_p
-                            chosen_score = self._compute_goal_score(
-                                current_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t
-                            )
-                            mode = "prereq_route"
-                            routed = True
-                            break
+                        # When readout_net is active and material gating is learned,
+                        # arbiter handles quantity-aware subgoal emission with cycle tracking
+                        if readout_net is None or not getattr(self.cfg, "material_gating_learned", False):
+                            p_goals = [g for g in selectable if p in g.event_dims]
+                            if p_goals:
+                                best_p = max(
+                                    p_goals,
+                                    key=lambda g: self._compute_goal_score(
+                                        g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
+                                    ),
+                                )
+                                current_g = best_p
+                                chosen_score = self._compute_goal_score(
+                                    current_g, s, locked_dims, psi_fn, danger_fn, novelty_fn, lift, current_iter, beta_t, critic=critic
+                                )
+                                mode = "prereq_route"
+                                routed = True
+                                break
                     else:
                         if (
                             episode_artifact_views is not None

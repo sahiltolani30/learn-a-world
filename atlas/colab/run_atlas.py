@@ -181,6 +181,7 @@ def main():
 
     print(f"[ATLAS] Initializing FrozenBackbone on device '{cfg.backbone.device}'...")
     backbone = FrozenBackbone(config=cfg)
+    assert backbone.has_learned_delta_head, "delta head not loaded — material gate inert"
     agent = AtlasAgent(backbone=backbone, cfg=cfg)
 
     target_state = paths["runs_dir"] / "state.pt"

@@ -90,7 +90,8 @@ class IterationInstrumenter:
 
                 if self.audit_exporter is not None and getattr(self.agent, "last_probe_decision", None):
                     dec = self.agent.last_probe_decision
-                    unlocked_dims = [i for i in range(NUM_ACHIEVEMENTS) if self.agent.belief.m_bin[i] > 0]
+                    # V3 C2: unlocked_dims during this probe only, plus probe_id
+                    unlocked_dims = dec.get("unlocked_dims", [])
                     self.audit_exporter.record_decision(
                         iter_idx=self.iter_idx,
                         step=step,
@@ -103,6 +104,7 @@ class IterationInstrumenter:
                         probe_event_probs=dec.get("probe_event_probs", [[0.0] * 22] * 17),
                         unlocked_dims=unlocked_dims,
                         matched_bank=dec.get("matched_bank", False),
+                        probe_id=dec.get("probe_id", 0),
                     )
                     self.audit_exporter.record_frame(f"probe_it{self.iter_idx}_step{step}", obs_uint8)
 
@@ -177,26 +179,32 @@ def mine_goals_and_lift(
                 )
                 agent.goals.add(entry)
 
-        # Vital goals: health-head positive spikes without unlock
-        with torch.no_grad():
-            s_t = torch.from_numpy(s).float().to(agent.device)
-            a_t = torch.from_numpy(a).long().to(agent.device)
-            vital_pred = agent.backbone.health(s_t, a_t).cpu().numpy()
-
-        for t in range(T):
-            if vital_pred[t] >= agent.cfg.goals.vital_spike and not events[t].any():
-                entry = GoalEntry(
-                    key=z[t],
-                    context=h[t],
-                    action_profile=np.zeros((NUM_ACTIONS, NUM_ACHIEVEMENTS), dtype=np.float32),
-                    event_dims=[],
-                    kind="vital",
-                    born_iter=iter_idx,
-                )
-                agent.goals.add(entry)
+        # Vital goals: windowed realized-vital mining from training inventory targets (V3 F7)
+        if "inventory" in ep and ep["inventory"].shape[-1] >= 16:
+            inv = ep["inventory"]
+            # Target vitals in dims 12..15, normalized by /16.0; multiply by 16.0 to get raw Crafter units
+            vitals = inv[:, 12:16] * 16.0
+            vital_window = getattr(agent.cfg.goals, "vital_window", 30)
+            vital_min_delta = getattr(agent.cfg.goals, "vital_min_delta", 1.0)
+            for t in range(T - 1):
+                max_step = min(T, t + vital_window + 1)
+                future_max = np.max(vitals[t + 1: max_step], axis=0)
+                diff = future_max - vitals[t]
+                if np.any(diff >= vital_min_delta) and not events[t].any():
+                    entry = GoalEntry(
+                        key=z[t],
+                        context=h[t],
+                        action_profile=np.zeros((NUM_ACTIONS, NUM_ACHIEVEMENTS), dtype=np.float32),
+                        event_dims=[],
+                        kind="vital",
+                        born_iter=iter_idx,
+                    )
+                    agent.goals.add(entry)
 
         # Frontier goals: top 15% epistemic disagreement
         with torch.no_grad():
+            s_t = torch.from_numpy(s).float().to(agent.device)
+            a_t = torch.from_numpy(a).long().to(agent.device)
             d_vals = agent.epistemic_net.disagreement(s_t, a_t).cpu().numpy()
 
         q_val = np.quantile(d_vals, agent.cfg.goals.frontier_quantile)
@@ -232,6 +240,30 @@ def mine_goals_and_lift(
                 if float(np.max(np.dot(z_norm, key_norm))) >= 0.85:
                     match_count += 1
             entry.world_frequency = float(match_count / num_total_eps)
+
+    # 3) Mine ItemEventMap (V3 F3 learned inventory-to-event bridge)
+    support = np.zeros((12, NUM_ACHIEVEMENTS), dtype=np.int32)
+    for ep in cached_episodes:
+        if "inventory" in ep and len(ep["inventory"]) >= 2 and "events" in ep:
+            inv = ep["inventory"]
+            evs = ep["events"]
+            T_ep = min(len(inv), len(evs))
+            if T_ep >= 2:
+                # inc[i][t] = inventory[t+1][i] - inventory[t][i] > +0.3 (a real gain of item i)
+                inv_diff = inv[1:T_ep, :12] - inv[:T_ep - 1, :12]
+                inc = inv_diff > 0.3
+                ev_slice = evs[1:T_ep, :NUM_ACHIEVEMENTS] > 0.5
+                # support(i, e) = count of steps where ev[e][t] AND inc[i][t]
+                support += np.dot(inc.T.astype(np.int32), ev_slice.astype(np.int32))
+
+    item_event_map: Dict[int, Optional[int]] = {}
+    for i in range(12):
+        best_e = int(np.argmax(support[i]))
+        if support[i, best_e] >= 5:
+            item_event_map[i] = best_e
+        else:
+            item_event_map[i] = None
+    agent.item_event_map = item_event_map
 
 
 class SelfLearnLoop:
@@ -274,9 +306,11 @@ class SelfLearnLoop:
             epistemic_net=self.agent.epistemic_net,
             safety_net=self.agent.safety_net,
             readout_net=self.agent.readout_net,
+            critic_net=self.agent.critic_net,
             cfg=self.cfg.train,
             log_dir=self.run_dir,
         )
+        self.agent.critic_net = self.trainer.critic_net
 
         self.state_file = self.run_dir / "state.pt"
         self.all_cached_episodes: List[Dict[str, Any]] = []
@@ -374,6 +408,8 @@ class SelfLearnLoop:
             "epistemic_net": self.agent.epistemic_net.state_dict(),
             "safety_net": self.agent.safety_net.state_dict(),
             "readout_net": self.agent.readout_net.state_dict() if self.agent.readout_net else None,
+            "critic_net": self.trainer.critic_net.state_dict() if hasattr(self.trainer, "critic_net") else None,
+            "item_event_map": getattr(self.agent, "item_event_map", None),
             "torch_rng": torch.get_rng_state(),
             "np_rng": np.random.get_state(),
         }
@@ -408,20 +444,25 @@ class SelfLearnLoop:
         self.agent.safety_net.load_state_dict(ckpt["safety_net"])
         if ckpt.get("readout_net") is not None and self.agent.readout_net:
             self.agent.readout_net.load_state_dict(ckpt["readout_net"])
+        if ckpt.get("critic_net") is not None and hasattr(self.trainer, "critic_net"):
+            self.trainer.critic_net.load_state_dict(ckpt["critic_net"])
+            self.agent.critic_net = self.trainer.critic_net
+        if "item_event_map" in ckpt:
+            self.agent.item_event_map = ckpt["item_event_map"]
 
+        resume_iter = int(ckpt.get("iter", 0)) + 1
         if "torch_rng" in ckpt:
             torch.set_rng_state(ckpt["torch_rng"].cpu())
         if "np_rng" in ckpt:
             np.random.set_state(ckpt["np_rng"])
 
         if "health_snapshot" in ckpt:
-            self.health.load_snapshot(ckpt["health_snapshot"])
+            self.health.load_snapshot(ckpt["health_snapshot"], resume_iter=resume_iter)
 
         self.agent.goals.load(self.run_dir / "goal_bank")
         self.agent.lift.load(self.run_dir / "lift.npz")
         self.agent.topomap.load(self.run_dir / "topomap.npz")
 
-        resume_iter = int(ckpt.get("iter", 0)) + 1
         self.start_iter = resume_iter
         print(f"[SelfLearnLoop] Resumed from iteration {resume_iter}")
         return resume_iter
@@ -477,6 +518,7 @@ class SelfLearnLoop:
                     "events": shard_data["events"][start:end].copy(),
                     "mask_before": shard_data["mask_before"][start:end].copy(),
                     "inventory": shard_data["inventory"][start:end].copy(),
+                    "positions": shard_data["positions"][start:end].copy() if "positions" in shard_data else np.zeros((ep_len, 2), dtype=np.float32),
                 }
                 chunk.append(ep_dict)
                 all_events_for_lift.append(ep_dict["events"])
@@ -615,6 +657,7 @@ class SelfLearnLoop:
                     "events": shard_data["events"][start:end].copy(),
                     "mask_before": shard_data["mask_before"][start:end].copy(),
                     "inventory": shard_data["inventory"][start:end].copy(),
+                    "positions": shard_data["positions"][start:end].copy() if "positions" in shard_data else np.zeros((ep_len, 2), dtype=np.float32),
                 })
                 start = end
 
