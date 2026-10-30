@@ -633,10 +633,13 @@ class SeniorForensicSuite:
             ani.save(str(gif_path), writer="pillow", fps=10)
             self.log(f"[+] 30-Second evaluation animation saved to: {gif_path.resolve()}")
             try:
-                from IPython.display import display, Image as IPImage
-                display(IPImage(filename=str(gif_path)))
-            except Exception:
-                pass
+                import base64
+                from IPython.display import display, HTML
+                with open(gif_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("ascii")
+                display(HTML(f'<div style="margin: 15px 0;"><img src="data:image/gif;base64,{b64}" style="max-width: 480px; border: 2px solid #22c55e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" /><br><span style="font-size: 13px; color: #64748b; font-weight: bold;">🎬 30-Second Eval Behavior Replay (Right-Click to Copy/Save)</span></div>'))
+            except Exception as e:
+                self.log(f"[!] Inline HTML display note: {e}")
         except Exception as e:
             self.log(f"[!] Animation saving warning: {e}")
         plt.close(fig)
