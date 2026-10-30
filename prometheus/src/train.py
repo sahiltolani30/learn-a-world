@@ -448,9 +448,11 @@ class TrainingPipeline:
                 batch["int_rewards"],
             )
 
-            # Target Q-value via Clipped Double-Q target network
-            next_actions = self.agent.actor.sample(z_next, deterministic=False)
-            target_q_min = self.agent.critic.target_q_min(z_next, next_actions)
+            # Discrete Double-Q Target: greedy optimal next action from online critic
+            # evaluated by clipped double target critic to prevent overestimation
+            q1_next, q2_next = self.agent.critic(z_next)
+            best_next_actions = torch.argmax(torch.min(q1_next, q2_next), dim=-1)
+            target_q_min = self.agent.critic.target_q_min(z_next, best_next_actions)
             not_done = (~batch["dones"]).float()
             target_q = r_total + self.gamma * not_done * target_q_min
 
@@ -468,13 +470,20 @@ class TrainingPipeline:
         # Update Target Critic EMA
         self.agent.critic.update_target(tau=self.tau)
 
-        # 2. Update Actor Policy Prior
-        actions_sampled = self.agent.actor.sample(z_curr.detach(), deterministic=False)
-        log_prob, entropy = self.agent.actor.evaluate_actions(z_curr.detach(), actions_sampled)
-        q_min_val = self.agent.critic.q_min(z_curr.detach(), actions_sampled)
+        # 2. Update Actor Policy Prior via Exact Discrete Expectation
+        # Since action space is discrete (17), compute exact expectation under policy
+        # allowing direct, rich gradient flow from TwinCritic Q-values into Actor weights
+        logits = self.agent.actor(z_curr.detach())
+        probs = torch.softmax(logits, dim=-1)
+        log_probs = torch.log_softmax(logits, dim=-1)
 
-        # Maximize expected Q-value with entropy exploration bonus
-        actor_loss = -(q_min_val + 0.01 * entropy).mean()
+        q1_all, q2_all = self.agent.critic(z_curr.detach())
+        q_all = torch.min(q1_all, q2_all).detach()
+
+        expected_q = (probs * q_all).sum(dim=-1)
+        entropy = -(probs * log_probs).sum(dim=-1)
+        actor_loss = -(expected_q + 0.05 * entropy).mean()
+
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.actor.parameters(), max_norm=1.0)
@@ -484,7 +493,7 @@ class TrainingPipeline:
             "critic_loss": float(critic_loss.item()),
             "actor_loss": float(actor_loss.item()),
             "entropy": float(entropy.mean().item()),
-            "q_mean": float(q_min_val.mean().item()),
+            "q_mean": float(expected_q.mean().item()),
         }
 
     def evaluate(self, num_episodes: Optional[int] = None) -> Dict[str, Any]:
