@@ -294,27 +294,39 @@ class CheckpointManager:
         Returns:
             Absolute path string of latest checkpoint, or None if none found.
         """
-        # Rule 3: Prioritize active verified checkpoint 'state.pt' if present
-        state_file = self.checkpoint_dir / "state.pt"
-        if state_file.exists():
-            return str(state_file.resolve())
-
+        # Find all numbered checkpoints matching pattern
         search_path = str(self.checkpoint_dir / pattern)
         files = glob.glob(search_path)
-        if not files:
-            return None
-
-        # Try to sort numerically by step number if filename contains _step_(\d+)
         step_pattern = re.compile(r"_step_(\d+)")
-        numbered_files = []
+        highest_numbered = None
+        highest_step = -1
         for f in files:
             match = step_pattern.search(f)
             if match:
-                numbered_files.append((int(match.group(1)), f))
+                s = int(match.group(1))
+                if s > highest_step:
+                    highest_step = s
+                    highest_numbered = f
 
-        if numbered_files:
-            numbered_files.sort(key=lambda x: x[0])
-            return str(Path(numbered_files[-1][1]).resolve())
+        # Prioritize active verified checkpoint 'state.pt', but ensure it's not superseded by a higher step
+        state_file = self.checkpoint_dir / "state.pt"
+        if state_file.exists():
+            if highest_numbered is not None:
+                try:
+                    raw = torch.load(str(state_file), map_location="cpu", weights_only=False)
+                    st_step = raw.get("metadata", {}).get("step", 0)
+                    if highest_step > st_step:
+                        print(f"[*] Found numbered checkpoint {highest_numbered} with step {highest_step} > state.pt ({st_step}). Prioritizing highest step.")
+                        return str(Path(highest_numbered).resolve())
+                except Exception:
+                    pass
+            return str(state_file.resolve())
+
+        if not files:
+            return None
+
+        if highest_numbered is not None:
+            return str(Path(highest_numbered).resolve())
 
         # Fall back to file modification time
         files.sort(key=os.path.getmtime)
