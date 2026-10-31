@@ -715,3 +715,61 @@ stop and report — never guess.
 training recipe extracted from the four champion Crafter agents (DreamerV3, EMERALD, Δ-IRIS,
 STORM) + milestone-prioritized replay (our C2). No single model was copied wholesale; every
 borrowed organ is cited in §0. Zero-cheat discipline per the project's standing constraint.*
+
+---
+
+## 16. CROSS-DOMAIN ADOPTION — post-G1 candidates (v1.5, added 2026-10-31)
+
+**NOT in v1 scope.** The implementing agent does NOT build anything in this section. These are
+pre-researched decision points for after the G1 report. Rationale: the three independent reviews
+identified compute/sample-efficiency as the binding constraint (64× frame-visit deficit vs
+DreamerV3@14.5); this section lists verified cross-domain techniques that attack it, ranked.
+
+### 16.1 Compute recovery (systems techniques from the LLM domain) — target 2–3× SPS
+- **CUDA graphs via `torch.compile(mode="reduce-overhead")`** on the update step. Our workload
+  is launch-bound (~250 small eager CUDA launches per update) — exactly the regime where CUDA
+  graphs help most. v1.0–v1.4 dismissed torch.compile for tiny nets; that dismissal was wrong
+  for the launch-bound case (verified against PyTorch docs + community reports). REQUIREMENT:
+  numerical-equivalence test vs eager (allclose 1e-4 on losses over 50 updates) before adoption.
+- **AMP bf16** on encoder/transformer forwards only — VICReg variance/covariance and critic
+  math stay fp32 (standing rule from the v2 speed ladder).
+- **Muon optimizer** on 2-D matrix params (transformer, GRU, heads); Adam on embeddings/convs.
+  Evidence: Muon gives ~2× FLOP efficiency in LLM training (arXiv 2502.16982; Kimi K2
+  production) and +88% relative success vs AdamW in agentic RL (alphaXiv 2607.16169).
+  UNVERIFIED for world models — cheap A/B at 25k: adopt if ≥1.3× SPS or better critic loss at
+  equal steps; keep Adam fallback.
+- Protocol: A/B each separately at 25k steps, adopt one at a time, never two at once
+  (one-change-at-a-time rule).
+
+### 16.2 Stage P — passive pretraining of the encoder (promoted from §1 bonus to a defined stage)
+Collect 1–2M frames with a random policy (env time only — no gradient contact, ~0 GPU cost),
+then masked-prediction SSL pretraining of the SAPNA encoder (few h on T4) BEFORE the RL run.
+Evidence: the V-JEPA 2 recipe (video pretraining → action-conditioned finetune → zero-shot
+robot manipulation). Effect: the 26k nonzero-reward budget spends on control, not on learning
+to see. Zero-cheat: frames come from the environment's own generator; no labels exist.
+Run DURING implementation (CPU/GPU-light), evaluate as an A/B against random-init at G1.
+
+### 16.3 Parked, with named reasons
+- **Search/reanalysis (EfficientZero's edge, Atari-100k ~190%)**: MCTS reanalysis is the
+  strongest published sample-efficiency multiplier, but it is the compute we don't have. The
+  search-free analogue (re-imagining replay states with the current actor every update) is
+  already in the plan. Revisit only if a GPU upgrade lands.
+- **PLR/curricula (procedural-env RL domain)**: Crafter's official metric scores training
+  episodes on the default world distribution and the env does not expose clean level control —
+  a curriculum would distort the leaderboard-comparable metric. Parked.
+- **HER / goal-conditioned relabeling (robotics domain) — NAMED ORIGINAL-RESEARCH CANDIDATE.**
+  Relabel replay trajectories against the 22 achievement "goals" (goal-conditioned critic/actor,
+  UVFA-style): every trajectory that unlocked ANY achievement becomes a dense training signal
+  for that goal — directly attacks the 26k-event reward budget. Zero-cheat compatible (goals
+  are derived from rewards the env already paid). Unproven on world models; significant design
+  work; decision point: after the G2 drift report, if policy metrics are flat.
+- **MoE encoders (NLP domain)**: more params per FLOP; unproven for world models at this scale;
+  engineering risk outweighs expected gain here. Parked.
+
+### 16.4 The wall-clock honesty (the most important line in this section)
+EMERALD's 58.1% was achieved on ONE RTX 3090 in ~100 hours (~27 FPS). A T4 is ~2–3× slower →
+10M steps ≈ 200–300 h ≈ **2–4 weeks of daily free Colab sessions with Drive auto-resume** —
+the same hardware class as the SOTA run. The compute barrier is a WALL-CLOCK barrier, not a
+hardware-class barrier. The pre-wired G4 continuation branch (1.1M → 3M → …) exists for
+exactly this. Standing rule unchanged: never scale a failing run — each extension requires its
+gate to pass.
