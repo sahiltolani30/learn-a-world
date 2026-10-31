@@ -134,9 +134,31 @@ The `PosixPath` in the payload is what triggered the safe-loader refusal. In `Ch
 
 ---
 
+## 3b. Carry-source correction — **SUPERSEDED 2026-10-31: the 36k diary is corrupted; fresh start is the decision**
+
+**Final forensic finding (other agent):** `checkpoint_step_36000.pt.tmp...` is a **truncated file** — the Stage-B RAM crash killed Colab *mid-write*, cutting the zip stream ("PytorchStreamReader failed locating file data/0"). There are **no uncorrupted replay-buffer files from Stage B anywhere on Drive**: every checkpoint after ~step 40k is weights-only (save_replay_buffer was disabled after the crash), and the last buffer-bearing write never completed.
+
+**Complete data-loss chain (now fully explained):** RAM crash mid-write → truncated .tmp file → saves disabled → weights-only checkpoints → empty diary at 44k resume → empty carry-over at v3 start. Two losses, one root cause.
+
+**Decision (implemented by the other agent): `allow_fresh_buffer: True` in the notebook — Stage C starts with a fresh buffer.** This is correct and now the only option. Honest accounting: the lost diary had real value (all Stage-A/B rare-event experience), but (a) no alternative exists, (b) at 8-parallel ~60 SPS the replacement cost is ~10 minutes of collection, and (c) the fresh-buffer Stage C already re-reached the wood chain 3× faster than v2 (sword @3,447).
+
+**SAFETY NOTE (do not skip):** after the fresh start is confirmed (first checkpoint saved with buffer inside), **set `allow_fresh_buffer` back to `False`** in the notebook. Otherwise a future failed resume would silently discard the NEW diary too — the exact failure class this flag exists to prevent. `state.pt` in v3 always carries the buffer (P0.1), so normal resumes never need the flag.
+
+**RAM-spine note for this run:** the buffer grows toward ~1.7 GB; `state.pt` carries it every save (P0.1). The Stage-B crash was exactly this save at scale. Mitigation already in the v3 config: keep `save_interval` ≥ 1,000 and watch the RAM% log line — if it climbs past ~60% between saves, raise `save_interval` to 2,500 before continuing. (Proper incremental `np.save` buffer dumps remain the long-term fix, unscheduled.)
+
 ## 4. Colab run protocol (exact sequence)
 
-> ⚠️ **Folder rule: delete ONLY `checkpoints_v3`. NEVER delete `checkpoints_v2`** — it contains `checkpoint_step_100000.pt`, the sole source of the 63,074-transition diary and the entire Stage A/B archive.
+> ⚠️ **Folder rule (updated): `checkpoints_v2` is now a WEIGHTS-ONLY archive** (its diary copies are corrupted/absent). Keep it for the Stage A/B weights and forensic history, but no diary recovery is possible from it. `checkpoints_v3` = the live lineage. *Original folder rule superseded — see §3b above.*
+
+**Verified finding:** `checkpoint_step_100000.pt` and `state.pt` contain **no buffer arrays** (24.6 MB, weights only) — during Stage B, RAM spikes from ~1.5 GB buffer saves forced `save_replay_buffer: False` after ~step 40k. The **latest buffer-bearing checkpoint is `checkpoint_step_36000.pt` (1.46 GB, 36,000 transitions)** — arithmetic verified (T1 sliced 0.88 GB + T2 preallocated 0.49 GB ≈ 1.38 GB + pickle overhead). It spans steps 0–36,000 CONTINUOUSLY (pre-dates both data-loss events) and contains the full wood economy: every Stage-A table/pickaxe/sword milestone + the trailing-window flags.
+
+**Changes:** carry-source preference order becomes `checkpoint_step_36000.pt` → `state.pt` → `checkpoint_step_100000.pt`; Hotfix 1's `weights_only=False` applies to this file too (same PosixPath payload issue). P0.1 resume assertion passes (t1_size 36,000 > 0). The 44k–100k segment's experiences (83 tables, 92 pickaxes) are unrecoverable — accepted.
+
+**Save-crash tension (root cause of the disablement, fix at Stage C):** P0.1 requires state.pt to carry the buffer every save → ~1.5–1.7 GB serialization spike each save_interval — this is what crashed Colab at 45k. At Stage C scale: raise `save_interval` to 2,500–5,000 steps, and the proper long-term fix is dumping buffer arrays incrementally (`np.save` per array) instead of one monolithic `torch.save`. Do not disable buffer saves again — that trade caused both data losses.
+
+## 4. Colab run protocol (exact sequence)
+
+> ⚠️ **Folder rule: delete ONLY `checkpoints_v3`. NEVER delete `checkpoints_v2`** — it contains `checkpoint_step_36000.pt`, the sole buffer-bearing diary (36,000 transitions) and the entire Stage A/B archive.
 
 1. **Push the hotfixed code to GitHub** (Colab pulls from the repo — verify the cell-4 `git pull` shows the hotfix commit).
 2. **Delete `checkpoints_v3`** on Drive (user is doing this) — v3 starts fresh.

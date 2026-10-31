@@ -169,6 +169,8 @@ class JEPAAgent(nn.Module):
             nn.Linear(latent_dim * 2, latent_dim),
             nn.LayerNorm(latent_dim),
         )
+        # I3: GRU auxiliary memory projection to pooled latent (MATH_AUDIT §1)
+        self.mem_to_pooled = nn.Linear(latent_dim, latent_dim)
 
         # U3: Auxiliary Value Heads (Reward and Termination prediction on 256-d latent)
         self.reward_head = nn.Sequential(

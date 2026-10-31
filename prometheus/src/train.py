@@ -48,6 +48,8 @@ from src.env.parallel import ParallelCrafterBatch
 from src.agent.agent import JEPAAgent
 from src.curiosity.ensemble import EpistemicCuriosityEngine, RunningMeanStd
 from src.curiosity.episodic import EpisodicNovelty
+from src.curiosity.rnd import LatentRND
+from src.curiosity.boredom import BoredomMonitor
 from src.memory.buffer import TwoTierReplayBuffer
 from src.memory.storage import CheckpointManager
 from src.models.losses import VICRegLoss, verify_non_collapse
@@ -287,8 +289,20 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--token_var_floor",
         type=float,
-        default=0.05,
-        help="Per-token batch variance floor for W1a-4 anti-collapse (default 0.05)",
+        default=0.10,
+        help="Per-token batch variance floor for W1a-4 anti-collapse (default 0.10, escalated for I1)",
+    )
+    parser.add_argument(
+        "--l_recon_weight",
+        type=float,
+        default=1.0,
+        help="Weight for W1a-0 reconstruction loss (default 1.0, escalated for I1)",
+    )
+    parser.add_argument(
+        "--mem_loss_weight",
+        type=float,
+        default=0.3,
+        help="Weight for GRU auxiliary memory loss (default 0.3, I3 / MATH_AUDIT §1)",
     )
     parser.add_argument(
         "--carry_source",
@@ -356,7 +370,9 @@ class TrainingPipeline:
         self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
         self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
         self.allow_fresh_buffer: bool = bool(self.cfg.get("allow_fresh_buffer", False))
-        self.token_var_floor: float = float(self.cfg.get("token_var_floor", 0.05))
+        self.token_var_floor: float = float(self.cfg.get("token_var_floor", 0.10))
+        self.l_recon_weight: float = float(self.cfg.get("l_recon_weight", 1.0))
+        self.mem_loss_weight: float = float(self.cfg.get("mem_loss_weight", 0.3))
         self.carry_source: Optional[str] = self.cfg.get("carry_source", None)
         
         # Parallel Environment Configuration (PARALLEL_ENV_PLAN.md)
@@ -373,7 +389,7 @@ class TrainingPipeline:
         self.env_episode_ids: List[int] = [i for i in range(self.num_envs)]
         self.episode_achievements: List[Set[str]] = [set() for _ in range(self.num_envs)]
         self.episodic_novelties: List[EpisodicNovelty] = [
-            EpisodicNovelty(latent_dim=256, seed=self.seed + 100 * i)
+            EpisodicNovelty(latent_dim=273, seed=self.seed + 100 * i)  # I5: (S,A)-augmented key (256+17=273)
             for i in range(self.num_envs)
         ]
 
@@ -387,6 +403,11 @@ class TrainingPipeline:
         self.per_action_disc_stats = RunningMeanStd(shape=(17,)).to(self.device)
         self.episodic_novelty = self.episodic_novelties[0]
         self.episodic_stats = RunningMeanStd(shape=())
+
+        # I8: Lifelong Latent RND and BoredomMonitor
+        self.rnd = LatentRND(latent_dim=256).to(self.device)
+        self.rnd_stats = RunningMeanStd(shape=(), clip_max=5.0).to(self.device)
+        self.boredom_monitor = BoredomMonitor(window_threshold=3, eps_step=0.05, rnd_mult_step=2.0)
 
         # Set seeds for reproducibility
         torch.manual_seed(self.seed)
@@ -430,6 +451,8 @@ class TrainingPipeline:
             list(self.agent.encoder.parameters())
             + list(self.agent.predictor.parameters())
             + list(self.agent.gru.parameters())
+            + list(self.agent.mem_to_pooled.parameters())
+            + list(self.rnd.predictor_parameters())
             + list(self.agent.reward_head.parameters())
             + list(self.agent.done_head.parameters())
         )
@@ -480,8 +503,8 @@ class TrainingPipeline:
                 step = metadata.get("step", 0)
 
                 # Check architecture compatibility (Pitfall 5)
-                if arch != "v3.1-w1a":
-                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3.1-w1a; carrying over replay buffer only.")
+                if arch != "v3.2-film":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3.2-film; carrying over replay buffer only.")
                     comp_states = raw_ckpt.get("components", {})
                     buf_dict = comp_states.get("buffer") or raw_ckpt.get("buffer_arrays")
                     if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
@@ -517,6 +540,7 @@ class TrainingPipeline:
                         filepath=latest_ckpt,
                         components={
                             "agent": self.agent,
+                            "rnd": self.rnd,
                             "buffer": self.buffer,
                             "wm_optimizer": self.wm_optimizer,
                             "critic_optimizer": self.critic_optimizer,
@@ -525,6 +549,8 @@ class TrainingPipeline:
                         device=self.device,
                         strict=False,
                     )
+                    if "boredom_monitor" in metadata:
+                        self.boredom_monitor.load_state_dict(metadata["boredom_monitor"])
                     self.current_step = metadata.get("step", 0)
                     self.vector_step = metadata.get("vector_step", self.current_step // self.num_envs)
                     self.checkpoint_count = metadata.get("checkpoint_count", 0)
@@ -745,13 +771,23 @@ class TrainingPipeline:
                 actions_t = torch.multinomial(probs, 1).squeeze(-1)
                 action_list = [int(a.item()) for a in actions_t]
 
-                # Per-env novelty-modulated epsilon (PARALLEL_ENV_PLAN.md §3.2 & P0.5)
+                # Lifelong RND global novelty across environments (I8)
+                nov_global_raw = self.rnd.compute_novelty(z.detach())  # (N,)
+                self.rnd_stats.update(nov_global_raw)
+                nov_global = self.rnd_stats.normalize(nov_global_raw, center=False, clip=5.0)
+
+                # Per-env novelty-modulated epsilon with (S,A)-augmented key and RND/Boredom (I5 & I8)
+                rnd_weight = 0.10 * self.boredom_monitor.rnd_mult
+                eps_base = self.boredom_monitor.effective_eps_base(self.eps_base)
                 for env_i in range(self.num_envs):
+                    act = action_list[env_i]
                     r_i = readout[env_i].detach().cpu().numpy()
-                    nov_raw = self.episodic_novelties[env_i].novelty_and_insert(r_i)
+                    key = np.concatenate([r_i, np.eye(17, dtype=np.float32)[act]])  # 273-d
+                    nov_raw = self.episodic_novelties[env_i].novelty_and_insert(key)
                     self.episodic_stats.update(nov_raw)
-                    nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
-                    eps = min(self.eps_max, self.eps_base + self.eps_novelty_coef * nov)
+                    nov_episodic = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
+                    g_nov = float(nov_global[env_i].item() if isinstance(nov_global, torch.Tensor) else nov_global[env_i])
+                    eps = min(self.eps_max, eps_base + self.eps_novelty_coef * nov_episodic + rnd_weight * g_nov)
                     self.recent_eps.append(eps)
                     if float(np.random.random_sample()) < eps:
                         action_list[env_i] = int(self.envs.action_space.sample())
@@ -868,21 +904,33 @@ class TrainingPipeline:
             if z_t.dim() == 1:
                 z_t = z_t.unsqueeze(0)
             readout_t = self.agent.get_readout(z_t, self.env_hidden_states[:1])
+            r_0 = readout_t.detach().squeeze(0).cpu().numpy()
 
-        nov_raw = self.episodic_novelty.novelty_and_insert(readout_t.detach().squeeze(0).cpu().numpy())
-        self.episodic_stats.update(nov_raw)
-        nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
-
-        # Select action via novelty-modulated epsilon-greedy
+        # Select action via novelty-modulated epsilon-greedy with (S,A)-augmented key and RND/Boredom (I5 & I8)
         if self.current_step < self.warmup_steps:
             action = int(self.env.action_space.sample())
+            key = np.concatenate([r_0, np.eye(17, dtype=np.float32)[action]])
+            nov_raw = self.episodic_novelty.novelty_and_insert(key)
         else:
-            eps = min(self.eps_max, self.eps_base + self.eps_novelty_coef * nov)
+            tentative_action = self.agent.act(obs, eval_mode=False, planning=False, h=self.env_hidden_states[:1])
+            key = np.concatenate([r_0, np.eye(17, dtype=np.float32)[tentative_action]])
+            nov_raw = self.episodic_novelty.novelty_and_insert(key)
+            self.episodic_stats.update(nov_raw)
+            nov_episodic = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
+
+            with torch.no_grad():
+                nov_global_raw = self.rnd.compute_novelty(z_t.detach())
+                self.rnd_stats.update(nov_global_raw)
+                nov_global = float(self.rnd_stats.normalize(nov_global_raw, center=False, clip=5.0))
+
+            rnd_weight = 0.10 * self.boredom_monitor.rnd_mult
+            eps_base = self.boredom_monitor.effective_eps_base(self.eps_base)
+            eps = min(self.eps_max, eps_base + self.eps_novelty_coef * nov_episodic + rnd_weight * nov_global)
             self.recent_eps.append(eps)
             if float(np.random.random_sample()) < eps:
                 action = int(self.env.action_space.sample())
             else:
-                action = self.agent.act(obs, eval_mode=False, planning=False, h=self.env_hidden_states[:1])
+                action = tentative_action
 
         # Step environment (supporting action_repeat)
         is_milestone = False
@@ -1054,13 +1102,25 @@ class TrainingPipeline:
         l_reward = F.mse_loss(pred_r, batch["rewards"])
         l_done = F.binary_cross_entropy_with_logits(pred_d_logits, batch["dones"].float())
 
+        # I3: GRU auxiliary memory loss (MATH_AUDIT §1)
+        # Trains GRU so h is predictive of the next state's pooled latent
+        h_next = self.agent.gru(curr_pooled.detach(), batch["h"].float())
+        pred_next_pooled = self.agent.mem_to_pooled(h_next)
+        valid = (~batch["dones"]).float().unsqueeze(-1)
+        l_mem = (F.mse_loss(pred_next_pooled, target_pooled.detach(), reduction="none") * valid).mean()
+
+        # I8: Lifelong Latent RND distillation loss (weight 0.2)
+        l_rnd = self.rnd.compute_loss(curr_pooled.detach())
+
         # Anti-collapse variance and covariance regularization on online latents
         var_z, cov_z, min_std_z, _ = self.vicreg_loss._compute_var_cov(curr_pooled.unsqueeze(0))
         wm_loss = (
             1.0 * l_tokens            # masked tile prediction (with W1a-2 weights)
             + 1.0 * l_pool            # VICReg on pooled (unchanged)
-            + 0.3 * l_recon           # W1a-0 reconstruction anchor
+            + self.l_recon_weight * l_recon  # W1a-0 reconstruction anchor (I1: 1.0)
             + 1.0 * l_tokfloor        # W1a-4 per-token variance floor
+            + self.mem_loss_weight * l_mem # I3: GRU memory loss
+            + 0.2 * l_rnd             # I8: Latent RND lifelong novelty
             + 1.0 * l_reward          # U3 (bumped from 0.5 to 1.0)
             + 1.0 * l_done            # U3 (bumped from 0.5 to 1.0)
             + self.vicreg_loss.var_coeff * var_z
@@ -1074,6 +1134,8 @@ class TrainingPipeline:
             list(self.agent.encoder.parameters())
             + list(self.agent.predictor.parameters())
             + list(self.agent.gru.parameters())
+            + list(self.agent.mem_to_pooled.parameters())
+            + list(self.rnd.predictor_parameters())
             + list(self.agent.reward_head.parameters())
             + list(self.agent.done_head.parameters()),
             max_norm=1.0,
@@ -1089,6 +1151,8 @@ class TrainingPipeline:
             "l_pool": float(l_pool.item()),
             "l_recon": float(l_recon.item()),
             "l_tokfloor": float(l_tokfloor.item()),
+            "l_mem": float(l_mem.item()),
+            "l_rnd": float(l_rnd.item()),
             "l_reward": float(l_reward.item()),
             "l_done": float(l_done.item()),
             "invariance": float(loss_dict["invariance"].item()),
@@ -1112,8 +1176,8 @@ class TrainingPipeline:
         )
 
         with torch.no_grad():
-            z_curr = self.agent.encoder(batch["obs"])
-            z_boot = self.agent.target_encoder(batch["boot_obs"])
+            curr_tokens, z_curr = self.agent.encoder.forward_tokens(batch["obs"])
+            boot_tokens, z_boot = self.agent.target_encoder.forward_tokens(batch["boot_obs"])
 
             # Compute readouts matching collection distribution (Hotfix 6)
             readout_curr = self.agent.get_readout(z_curr, batch["h"])
@@ -1142,17 +1206,26 @@ class TrainingPipeline:
         # Update Target Critic EMA
         self.agent.critic.update_target(tau=self.tau)
 
-        # C4.1: Compute per-action ensemble disagreement under no_grad (exploration term)
+        # C4.1 & I2: Compute per-action ensemble disagreement with dynamic-position weighting
         with torch.no_grad():
             B = z_curr.shape[0]
-            z_rep = z_curr.unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
+            # Dynamic-tile position weights from W1a-2 delta ranking (I2)
+            delta = (boot_tokens - curr_tokens).norm(dim=-1)  # (B, 64)
+            w_base = torch.ones_like(delta)
+            topk = torch.topk(delta, k=8, dim=-1).indices
+            w_base.scatter_(1, topk, 5.0)
+            dyn_w = w_base / w_base.mean(dim=-1, keepdim=True)  # (B, 64)
+
+            tok_rep = curr_tokens.unsqueeze(1).expand(B, self.agent.num_actions, -1, -1).reshape(B * self.agent.num_actions, 64, -1)
             a_rep = torch.arange(self.agent.num_actions, device=z_curr.device).repeat(B)
             h_rep = batch["h"].unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
-            _, all_preds = self.agent.predictor(z_rep, a_rep, h=h_rep)
-            disc = self.agent.predictor.compute_epistemic_disagreement(all_preds).view(B, -1)
+            dyn_w_rep = dyn_w.unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
+
+            _, all_preds = self.agent.predictor.forward_tokens(tok_rep, a_rep, h=h_rep)
+            disc = self.agent.predictor.compute_epistemic_disagreement(all_preds, dyn_w=dyn_w_rep).view(B, -1)
             self.per_action_disc_stats.update(disc)
             disc_norm = disc / (self.per_action_disc_stats.std + self.per_action_disc_stats.epsilon)
-            disc_norm = torch.clamp(disc_norm, min=0.0, max=5.0)
+            disc_norm = torch.clamp(disc_norm, min=0.0, max=50.0)  # I4: wide safety clamp at 50 (was 5.0)
 
         # 2. Update Actor Policy Prior via exact discrete expectation on readout
         readout_curr_actor = self.agent.get_readout(z_curr.detach(), batch["h"])
@@ -1167,10 +1240,11 @@ class TrainingPipeline:
         expected_q = (probs * q_all).sum(dim=-1)
         expected_int = (probs * disc_norm).sum(dim=-1)
         entropy = -(probs * log_probs).sum(dim=-1)
-        actor_loss = -(expected_q + self.actor_intrinsic_weight * expected_int + 0.05 * entropy).mean()
+        entropy_weight = self.boredom_monitor.entropy_weight  # I8: L3 0.10, default 0.05
+        actor_loss = -(expected_q + self.actor_intrinsic_weight * expected_int + entropy_weight * entropy).mean()
 
-        # 3. U3: Self-Imitation Loss on verified milestone items
-        milestone_mask = batch["is_milestone"] & (batch["rewards"] > 0.0)
+        # 3. U3 & I9: Self-Imitation Loss on verified milestone items (rewards >= 0.5)
+        milestone_mask = batch["is_milestone"] & (batch["rewards"] >= 0.5)
         num_milestones = int(milestone_mask.sum().item())
         si_loss = torch.tensor(0.0, device=self.device)
         # Cap: skip if batch has > 32 milestone items (avoid dominating policy)
@@ -1339,6 +1413,13 @@ class TrainingPipeline:
             except Exception:
                 pass
 
+        # I8: Update BoredomMonitor state machine and run canary if triggered
+        boredom_report = self.boredom_monitor.step(self.all_unlocked_achievements, agent=self.agent)
+        eval_summary["boredom"] = boredom_report
+        if boredom_report.get("is_bored", False) and self.boredom_monitor.consecutive_empty_windows == self.boredom_monitor.window_threshold:
+            canary_report = self.boredom_monitor.check_canary(self.agent, device=self.device)
+            eval_summary["canary"] = canary_report
+
         self.achievement_history[self.current_step] = eval_summary
 
         return eval_summary
@@ -1363,7 +1444,7 @@ class TrainingPipeline:
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
-            "arch": "v3.1-w1a",
+            "arch": "v3.2-film",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,
@@ -1375,6 +1456,7 @@ class TrainingPipeline:
             "success_counts": self.success_counts,
             "success_actions": self.success_actions,
             "loss_history": self.loss_history,
+            "boredom_monitor": self.boredom_monitor.state_dict(),
             "has_buffer": save_numbered_buffer,
             "config": self.cfg,
             "timestamp": time.time(),
@@ -1382,6 +1464,7 @@ class TrainingPipeline:
 
         components = {
             "agent": self.agent,
+            "rnd": self.rnd,
             "wm_optimizer": self.wm_optimizer,
             "critic_optimizer": self.critic_optimizer,
             "actor_optimizer": self.actor_optimizer,

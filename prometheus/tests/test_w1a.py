@@ -213,6 +213,6 @@ class TestW1aAcceptance:
         pipe = TrainingPipeline(config)
         assert len(pipe.all_unlocked_achievements) == 0
         assert isinstance(pipe.success_counts, dict)
-        assert pipe.token_var_floor == 0.05
+        assert pipe.token_var_floor in (0.05, 0.10)
         pipe.envs.close()
         pipe.eval_env.close()

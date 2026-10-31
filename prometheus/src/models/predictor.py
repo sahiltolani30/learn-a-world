@@ -129,6 +129,7 @@ class SpatialTransformerPredictor(nn.Module):
         self.action_embedding = ActionEmbedding(num_actions=num_actions, action_dim=action_dim)
         self.action_proj = nn.Linear(action_dim, token_dim)
         self.a_proj = nn.Linear(action_dim, token_dim)
+        self.film = nn.Linear(action_dim, 2 * token_dim)  # I2: FiLM action conditioning
         self.default_mem = nn.Parameter(torch.randn(1, mem_hidden) * 0.05)
         self.mem_proj = nn.Linear(mem_hidden, token_dim)
 
@@ -180,10 +181,13 @@ class SpatialTransformerPredictor(nn.Module):
         """
         B = tokens.size(0)
 
-        # 1. Embed action and inject into every token position (W1a-1)
+        # 1. Embed action and inject into every token position (W1a-1 + FiLM I2)
         a_emb = self.action_embedding(a)  # (B, action_dim)
         a_broadcast = self.a_proj(a_emb)  # (B, token_dim)
         tokens = tokens + a_broadcast.unsqueeze(1)  # (B, 64, token_dim) += broadcast
+        film = self.film(a_emb)  # (B, 2 * token_dim)
+        gamma_f, beta_f = film.chunk(2, dim=-1)  # (B, token_dim) each
+        tokens = tokens * (1.0 + gamma_f).unsqueeze(1) + beta_f.unsqueeze(1)
         a_tok = self.action_proj(a_emb).unsqueeze(1)  # (B, 1, token_dim)
 
         # 2. Project memory state to token_dim (uses learnable default_mem if h is None)
@@ -292,17 +296,23 @@ class SpatialTransformerPredictor(nn.Module):
         self,
         all_preds: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
+        dyn_w: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Compute epistemic disagreement (variance across heads) on pooled masked positions.
+        Compute epistemic disagreement (variance across heads) on pooled positions.
         Consumes either (num_heads, B, 64, token_dim) token grids or (num_heads, B, latent_dim) vectors.
+        When dyn_w is provided, pools predictions with dynamic position weights (I2).
         
         Returns:
             epistemic_var: Non-negative tensor of shape (B,).
         """
         if all_preds.dim() == 4:
             # (num_heads, B, 64, token_dim)
-            if mask is not None:
+            if dyn_w is not None:
+                # (B, 64) weights from W1a-2's delta ranking
+                w = dyn_w.unsqueeze(0).unsqueeze(-1)  # (1, B, 64, 1)
+                pooled = (all_preds * w).sum(dim=2) / w.sum(dim=2).clamp(min=1e-6)
+            elif mask is not None:
                 mask_f = mask.unsqueeze(-1).float()  # (B, 64, 1)
                 mask_cnt = mask_f.sum(dim=1).clamp(min=1.0)  # (B, 1)
                 pooled = (all_preds * mask_f.unsqueeze(0)).sum(dim=2) / mask_cnt.unsqueeze(0)
