@@ -112,18 +112,21 @@ def main():
                 mgr = CheckpointManager(checkpoint_dir=d)
                 found = mgr.find_latest_checkpoint()
                 if found:
-                    ckpt_path = found
+                    ckpt_path = Path(found)
                     break
 
     agent = JEPAAgent(device=device)
 
     step_restored = 0
-    if ckpt_path and ckpt_path.exists():
+    if ckpt_path is not None and Path(ckpt_path).exists():
+        ckpt_path = Path(ckpt_path)
         print(f"[+] Restoring agent weights from checkpoint: {ckpt_path}")
         state = torch.load(str(ckpt_path), map_location=device, weights_only=False)
         components = state.get("components", {})
         if "agent" in components:
-            agent.load_state_dict(components["agent"])
+            agent.load_state_dict(components["agent"].state_dict() if hasattr(components["agent"], "state_dict") else components["agent"])
+        elif "model" in components:
+            agent.load_state_dict(components["model"].state_dict() if hasattr(components["model"], "state_dict") else components["model"])
         metadata = state.get("metadata", {})
         step_restored = metadata.get("step", 0)
         print(f"[+] Successfully loaded checkpoint from step {step_restored:,}")
