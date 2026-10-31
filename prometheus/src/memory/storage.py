@@ -308,16 +308,24 @@ class CheckpointManager:
                     highest_step = s
                     highest_numbered = f
 
-        # Prioritize active verified checkpoint 'state.pt', but ensure it's not superseded by a higher step
+        # Prioritize active verified checkpoint 'state.pt', but ensure it's not superseded by a higher step that HAS a buffer
         state_file = self.checkpoint_dir / "state.pt"
         if state_file.exists():
-            if highest_numbered is not None:
+            if highest_numbered is not None and highest_step > 0:
                 try:
                     raw = torch.load(str(state_file), map_location="cpu", weights_only=False)
                     st_step = raw.get("metadata", {}).get("step", 0)
+                    st_has_buf = raw.get("metadata", {}).get("has_buffer", True)
                     if highest_step > st_step:
-                        print(f"[*] Found numbered checkpoint {highest_numbered} with step {highest_step} > state.pt ({st_step}). Prioritizing highest step.")
-                        return str(Path(highest_numbered).resolve())
+                        num_raw = torch.load(str(highest_numbered), map_location="cpu", weights_only=False)
+                        num_has_buf = num_raw.get("metadata", {}).get("has_buffer", False) or (
+                            "components" in num_raw and "buffer" in num_raw["components"]
+                        )
+                        if num_has_buf or not st_has_buf:
+                            print(f"[*] Found numbered checkpoint {highest_numbered} with step {highest_step} > state.pt ({st_step}) with valid buffer. Prioritizing highest step.")
+                            return str(Path(highest_numbered).resolve())
+                        else:
+                            print(f"[*] Numbered checkpoint {highest_numbered} (step {highest_step}) has no buffer; prioritizing state.pt (step {st_step}) to preserve replay buffer.")
                 except Exception:
                     pass
             return str(state_file.resolve())

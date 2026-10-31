@@ -542,6 +542,19 @@ class TrainingPipeline:
                         self.success_actions = dict(metadata["success_actions"])
                     self.loss_history = metadata.get("loss_history", [])
 
+                # Fallback: if restored checkpoint had no buffer, attempt buffer recovery from state.pt
+                if self.buffer.t1_size == 0:
+                    state_path = Path(self.checkpoint_dir) / "state.pt"
+                    if state_path.exists() and str(state_path.resolve()) != str(Path(latest_ckpt).resolve()):
+                        try:
+                            raw_state = torch.load(str(state_path), map_location="cpu", weights_only=False)
+                            buf_state = raw_state.get("components", {}).get("buffer") or raw_state.get("buffer_arrays")
+                            if buf_state is not None and "t1_size" in buf_state and buf_state["t1_size"] > 0:
+                                self.buffer.load_state_dict(buf_state)
+                                print(f"[+] Replay buffer successfully recovered from {state_path} ({self.buffer.size} transitions).")
+                        except Exception as e_buf:
+                            print(f"[!] Warning: Could not recover buffer from state.pt: {e_buf}")
+
                 # P0.1 Resume assertion: protect against buffer data loss
                 if not self.cfg.get("no_resume", False) and self.buffer.t1_size == 0 and self.current_step > 5_000:
                     raise RuntimeError(
