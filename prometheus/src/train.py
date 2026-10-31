@@ -569,9 +569,14 @@ class TrainingPipeline:
         """
         import re
 
-        # If fresh buffer is explicitly configured, skip carry-over search entirely
-        if self.carry_source is False or self.cfg.get("fresh_start", False) or str(self.carry_source).lower() in ["none", "false", "off"]:
-            print("[*] Starting Stage C with a fresh replay buffer (fresh_start requested).")
+        # If fresh buffer is explicitly configured or allowed with no explicit carry source, skip search entirely
+        if (
+            (self.allow_fresh_buffer and self.carry_source is None)
+            or self.carry_source is False
+            or self.cfg.get("fresh_start", False)
+            or str(self.carry_source).lower() in ["none", "false", "off"]
+        ):
+            print("[*] Starting Stage C with a fresh replay buffer.")
             return False
 
         explicit_target: Optional[Path] = None
