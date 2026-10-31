@@ -9,8 +9,17 @@ imagined rollouts of its own learned world model, the one organ shared by every 
 ## 0. MISSION & HARD CONSTRAINTS
 
 **Mission.** Build a NEW model, `sapna/`, as a self-contained package inside this repo. Target:
-**official Crafter geometric score ≥ 10% (stretch 15%) at 1.1M env steps** — the same budget as
-DreamerV3's official Crafter run (which scores 19.4 in its fixed paper version; 14.5 in v1).
+**official Crafter geometric score ≥ 5% (breakthrough — breaks the team's 2–4% plateau into
+PPO/Rainbow territory), stretch 10% (DreamerV2-level breadth) at 1.1M env steps** — DreamerV3's
+own official Crafter budget. VERIFIED calibration (v1.3): the official formula is
+`exp((1/22)·Σ ln(1+S_i)) − 1` with **S_i in PERCENT**; official leaderboard scale:
+Random 1.6, PPO 4.6, DreamerV2 10.0, **DreamerV3 14.5±1.6**, Curious Replay (DreamerV3 +
+novelty-prioritized replay, 200M params) 19.4±1.6, Human 50.5. A score of 10 therefore means
+~12 achievements at ~90% rates — DreamerV2 breadth — NOT "nine solid early achievements"
+(v1.0–v1.2's worked example was computed in fraction form and wrong by ~4×). The official
+score aggregates **all training episodes** within the budget (env default length 10,000) —
+not a held-out suite (§13 G4). Independent review estimate: P(≥10%) ≈ 8–12%, P(≥5%) ≈ 40%,
+modal outcome 4–7%.
 Current v3 lineage plateaus at ~3% — SAPNA must break that by adding the three missing champion
 organs: **sequence-trained memory, imagination-based policy training, two-hot value regression**.
 
@@ -151,6 +160,10 @@ current main branch) into `sapna/encoder.py`, changing only the module/import pa
   orthogonal init, final layer gain **0.01** (≈uniform at init = built-in exploration warmup).
 - `Critic` (`sapna/policy.py`): `Linear(512,256) → ELU → Linear(256,256) → ELU → Linear(256,255)`
   (distributional, §5.3).
+- `SlowCritic` (v1.3): `copy.deepcopy(Critic)`, EMA `tau=0.98`, updated once per imagination
+  update, permanent `no_grad` — provides the advantage baseline and all λ-return
+  values/bootstrap. (The plan previously cited EMERALD's critic-EMA 0.98 and then dropped it
+  silently — restored; at ~69k updates a self-bootstrapped critic is too unstable.)
 
 ### 2.3 Posterior / prior split (the RSSM-like core, in one paragraph)
 On real data, `z_{t+1}` comes from the **online encoder on the real next frame** ("posterior").
@@ -217,6 +230,7 @@ Tag legend: **[D3]** = DreamerV3 official config, **[EM]** = EMERALD paper Table
 | lr world model | 1e-4 | [EM] | Adam |
 | lr actor | 3e-5 | [EM] | Adam |
 | lr critic | 3e-5 | [EM] | Adam |
+| slow critic EMA tau | 0.98 | [EM] | advantage baseline AND λ-return values/bootstrap read the SLOW critic (permanent no_grad, EMA-updated once per update); fast Critic trains via two-hot CE only — NO critic gradient through the actor loss (DreamerV3 form; v1.3 addition — 69k updates is too few to bootstrap a critic on itself) |
 | grad clip | 1.0 (global norm) | [V3] | known-good in this repo |
 | update_every | **1** (vec step = 16 raw env steps → train ratio 8 raw / 16 stored) | [AMEND v1.2] | doubles gradient contact per life (v1.0's ratio 4 was mis-derived); pre-registered fallback if SPS < 20 at G1: `update_every=2` + `batch_seqs=16, seq_len=8` (same 128 frames, 256 imagination starts from 16 episodes) |
 | warmup_steps | 200 vec-steps random-uniform | OURS | buffer needs valid ≥16-length windows first |
@@ -225,7 +239,7 @@ Tag legend: **[D3]** = DreamerV3 official config, **[EM]** = EMERALD paper Table
 | eps_base (ε-greedy) | **0.0** | [D3][EM] | champions use none; entropy + unimix only. Pre-registered lever: 0→0.05 at G3 branch (§13) |
 | curiosity (disagreement) weight in actor | **0.0** (off) | [OURS] | champions show entropy suffices; disagreement still computed + logged (diagnostics + milestone admission). Do not enable without a plan revision |
 | self-imitation | none in v1 | OURS | revisit only after G4 report |
-| checkpoint interval | 5,000 env steps | [V3] | state.pt ALWAYS includes buffer (P0.1 lesson) |
+| checkpoint interval | **25,000 env steps** | [AMEND v1.3] | was 5k — a 1.23 GB Drive write every ~3 min costs 20–40% wall-clock and spikes RAM. state.pt ALWAYS includes buffer (P0.1 lesson); retention: latest + 3 most recent numbered saves; pre-save psutil check, skip-save warning if < 2 GB free |
 | eval_interval | 5,000 env steps; 3+3 episodes dual policy | [V3] | |
 | benchmark | N=50 both policies | [V3 P0.4] | |
 
@@ -234,7 +248,9 @@ Tag legend: **[D3]** = DreamerV3 official config, **[EM]** = EMERALD paper Table
 ## 4. TRAINING LOOP (pseudocode — implement exactly this)
 
 ```
-init: envs = ParallelCrafterBatch(num_envs=8)   # copied verbatim into sapna/envs.py
+init: torch.set_num_threads(2)   # v1.3: pin CPU threads — 8 in-process Crafter envs
+                                 # fighting torch intra-op threads halves SPS otherwise
+      envs = ParallelCrafterBatch(num_envs=8)   # copied verbatim into sapna/envs.py
       modules per §2; optimizers: opt_wm  Adam(lr 1e-4) on [encoder, SpatialPredictor,
         TemporalCore, mem_proj, RewardHead, DoneHead]   (TargetEncoder excluded)
       opt_actor Adam(3e-5) on [Actor];  opt_critic Adam(3e-5) on [Critic]
@@ -244,7 +260,7 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
   collect: probs = unimix(Actor(concat[z_t, h_t]));  a ~ probs;  envs.step(a)  (repeat 2)
            z_{t+1} = Encoder(x_next);  h = GRUCell(concat[z_t, emb(a)], h);  reset slot on done
            buffer.add(obs, a, r_sum_over_repeat, done, episode_id, step_in_ep, milestone_flag)
-           milestone_flag = new achievement this episode (per-env set) OR r_int_norm > 0.5
+           milestone_flag = new achievement this episode (per-env set) OR r_int_norm > 1.0  (§6)
            r_int = predictor.compute_epistemic_disagreement(all_preds_t, mask_t)  # stored, NOT rewarded
   if step < warmup or buffer.valid_windows < 64: continue
   if step % update_every != 0: continue
@@ -257,9 +273,9 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
   mask = sample_token_mask(batch_size=B*(T-1), num_tokens=64, mask_ratio=0.35)  # per update
   for t in 0..T-2:                                  # accumulate over t
       mean_pred_t, all_preds_t = SpatialPredictor.forward_tokens(toks[t], a[t], h[t])
-      L_tokens += compute_masked_loss(all_preds_t, TargetEnc.tokens(obs[t+1]), mask[8t:8t+8])
+      L_tokens += compute_masked_loss(all_preds_t, TargetEnc.forward_tokens(obs[t+1])[0], mask[8t:8t+8])
       L_pool   += VICReg(stack([Enc.pool_tokens(all_preds_t[k]) for k in 4 heads]),
-                         TargetEnc.pooled(obs[t+1]))["loss"]     # per-head VICReg, v3 wiring
+                         TargetEnc.forward_tokens(obs[t+1])[1]))["loss"]  # per-head VICReg, v3 wiring
       arr_t     = concat[Enc.pool_tokens(mean_pred_t), h[t+1]]   # ARRIVAL state (post-action)
       L_reward += twohot_ce(RewardHead(arr_t), symlog(clamp(r[t+1], ±20)))
       L_done   += BCEWithLogits(DoneHead(arr_t), done[t+1])
@@ -286,16 +302,15 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
           h_{k+1} = GRUCell(concat[z_k, emb(a_k)], h_k)
           r_k = symexp(score(RewardHead(concat[z_{k+1}, h_{k+1}])))  # ARRIVAL-state pricing
           d_k = sigmoid(DoneHead(concat[z_{k+1}, h_{k+1}]))          # detached (reward_grad=False)
-          v_k = symexp(score(Critic(concat[z_k, h_k])))       # detached (for λ-returns only)
+          v_k = symexp(score(SlowCritic(concat[z_k, h_k])))   # slow-critic values for λ-returns
   G = lambda_returns(r, d, v, v_bootstrap; γ=0.997, λ=0.95)   # §5.2, all detached inputs
   # recompute WITH grad on the detached states:
   probs, logprob, entropy = Actor(concat[z_k, h_k])           # z_k, h_k detached tensors
-  v_grad = symexp(score(Critic(concat[z_k, h_k])))
-  v_bootstrap = symexp(score(Critic(concat[z_H, h_H])))
-  advantage = sg(G − v_grad)                                  # sg = detach; see §5.4
+  v_slow = symexp(score(SlowCritic(concat[z_k, h_k])))        # EMA 0.98, no_grad
+  advantage = sg(G − v_slow)                                  # sg = detach; see §5.4
   loss_actor  = −mean( logprob(a_k) · advantage_k ) − 3e-4 · mean(entropy)
   loss_critic = twohot_ce(Critic(concat[z_k, h_k]), symlog(clamp(G, ±20)))   # G detached
-  opt_actor.step();  opt_critic.step()
+  opt_actor.step();  opt_critic.step();  SlowCritic.ema_update(tau=0.98)
 
   every 5k env steps: checkpoint (§11); every 5k: eval (§9); log telemetry every update (§10)
 ```
@@ -317,8 +332,10 @@ Critic/Actor always read `concat[z, h]` of the state they act FROM.
 G_H = v_bootstrap
 G_k = r_k + γ·(1−d_k)·[ (1−λ)·v_{k+1} + λ·G_{k+1} ]     for k = H−1 .. 0
 ```
+`reward_grad` (DreamerV3) is deliberately NOT used in v1: reward/continuation predictions
+stay detached (documented decision, v1.3).
 `r_k, d_k` are the detached **arrival-state** head predictions (the reward / termination of
-arriving at imagined state k+1, §2.2); `v_{k+1}` = critic's scalar value at the NEXT
+arriving at imagined state k+1, §2.2); `v_{k+1}` = the SLOW critic's scalar value at the NEXT
 imagined state (detached inside the return computation; gradients reach the critic only
 through `loss_critic`). Shapes: all `(N,15)` with `N=128`; bootstrap `v_H` shape `(N,)`.
 
@@ -347,10 +364,13 @@ logged check with strict=False at `train.py:1335`; SAPNA promotes it to a hard a
 ## 6. REPLAY BUFFER — `sapna/buffer.py`
 
 Ring buffer, `capacity=100_000` transitions, arrays (pre-allocated, uint8 obs):
-`obs (100k,3,64,64) uint8` [1.23 GB], `action int8`, `reward float32` (sum over the 2 repeated
+`obs (100k,3,64,64) uint8` [1.23 GB] (v1.3 contract: the copied wrapper emits float32 [0,1]
+→ store `(obs*255).astype(uint8)`, load back `.astype(float32)/255` before the encoder),
+`action int8`, `reward float32` (sum over the 2 repeated
 frames), `done bool`, `episode_id int64`, `step_in_ep int64`, `milestone bool`,
-`r_int_norm float32` — produced by copying v3's `WelfordNormalizer`
-(`src/curiosity/ensemble.py`; disagreement is Welford-normalized online). Milestone admission
+`r_int_norm float32` — produced by copying v3's running-mean normalizer (`RunningMeanStd`,
+`src/curiosity/ensemble.py:21` — v1.3 corrects the earlier wrong class name; disagreement is
+online-normalized). Milestone admission
 (C2 dual trigger): new achievement in this episode's per-env set OR `r_int_norm > 1.0`
 (v1.2: raised from 0.5 — a 0.5 z-score threshold flags ~31% of ALL transitions under a
 Welford scale and dilutes the milestone pool to near-uniform). **RAM contract:** peak budget = buffer 1.23 GB + T2 none
@@ -393,7 +413,8 @@ slot level. Note: `step_single(i, a)` is a small, documented ADDITION to the cop
 the class only exposes the lockstep `step(actions)`; extract/wrap its per-slot step.
 The "verbatim" rule applies to everything else in the file. Re-run the existing zero-cheat
 leak tests (§11 T11) against the copied wrapper.
-8 envs, seeds 0..7, `base_seed=42` semantics as in the copied file.
+8 envs, seeds per the copied class's own scheme (`base_seed=42` + per-slot offsets — do not
+override; v1.3 removes the contradictory "0..7").
 
 **Collection policy:** sample from unimixed actor probs. NO ε-greedy in v1, NO curiosity bonus.
 Early exploration comes from the near-uniform init (actor final gain 0.01) + entropy reg.
@@ -421,9 +442,16 @@ Functions (pure, testable):
 ## 9. EVALUATION — `sapna/train.py::evaluate` + `sapna/benchmark.py`
 
 - Every `eval_interval`: 3 greedy + 3 stochastic episodes, each capped at 1000 env steps
-  (v3 rule — eval cost grows with survival; the cap counts RAW env steps including action
-  repeats). Greedy = argmax of unimixed probs (argmax is
+  (cap counts repeats). **DEVELOPMENT signal only — explicitly NOT leaderboard-comparable**
+  (v1.3: official Crafter episodes run to death at env length 10,000 and the official score
+  aggregates ALL TRAINING EPISODES; the earlier "v3 rule" attribution was wrong — v3's
+  evaluate has no cap). Greedy = argmax of unimixed probs (argmax is
   unchanged by unimix). Stochastic = sample.
+- **Official-score telemetry (free, always on, v1.3)**: the training loop already observes
+  every episode's final achievement set — accumulate per-achievement success counts over
+  ALL training episodes and log the running official score (official formula,
+  training-episode basis) at every eval. THIS is the leaderboard-comparable headline
+  number; the capped dev eval is not.
 - **`SAPNAAgent` facade** (thin class in `sapna/policy.py`): bundles all modules; exposes
   `act(obs, h, greedy=False) -> (action, h_next, z)` and `reset_h()`. Both `evaluate()` and
   `benchmark.py` consume ONLY this facade — one single eval code path (this is the
@@ -557,13 +585,16 @@ list as the existing Cell 3 (crafter, gymnasium, imageio, matplotlib, psutil).
 **Stage G0 — Smoke (CPU, 200 steps).** All §11 tests green. → proceed.
 **Stage G1 — Validation run, 25k steps** (`--total_steps 25000`, fresh `checkpoints_v1`,
 `--no_resume`). Gates: no NaN; `wm_loss` declining; `reward_ce < 1.5` (init ≈ ln 255 ≈ 5.5);
-`done_bce < 0.3`; stochastic eval mean achievements ≥ 2.5; SPS ≥ 20; imagination reward corr
+`done_bce < 0.3`; stochastic eval mean achievements ≥ 2.5; SPS ≥ 15 (v1.3 recalibrated to
+T4 + 2-vCPU reality); imagination reward corr
 ≥ 0.3 — with the v1.2 caveat: if fewer than 10 of the 32 sampled windows contain nonzero
 cumulative reward, log "insufficient reward variance" and PASS-with-caveat instead of
 stopping; `var_hinge > 0.1` (no collapse). **PASS → extend the SAME run** to 1.1M
 (`--total_steps 1100000`, resume). **FAIL → stop, send telemetry, do not tune.**
 **Stage G2 — checkpoint @100k (running gate).** Official stochastic score ≥ 2.5%; unique ≥ 9;
-collect_wood ≥ 30%; drift cosine @H=5 ≥ 0.8; place_table occurring in training
+collect_wood ≥ 30%; in-loop drift cosine ≥ 0.8 (v1.3: computed at every eval — mean cosine
+between predicted pooled next-latent and real online pooled next-latent over one training
+batch; no notebook needed; Cell 11 remains the deep forensic); place_table occurring in training
 (milestone counter). Continue regardless to 1.1M unless ≥2 gates red → stop + report.
 Drift lever (pre-authorized, v1.2): if drift cosine @H=5 < 0.8 but all other gates are
 green → apply the single lever `--imag_horizon 8` and resume (the one authorized response
@@ -572,11 +603,14 @@ to deterministic-decode drift; document in the report).
 Branch: if score ≥ 5% but collect_stone = 0 AND benchmark movement% < 30% (mean over the
 50 games) → apply the ONE pre-authorized lever `--eps_base 0.05` and resume (document in
 report). Anything else → continue.
-**Stage G4 — 1.1M (TARGET).** At G4 also run ONE N=50 benchmark with NO 1000-step episode
-cap (official-protocol parity — DreamerV3's 19.4 is measured uncapped; v1.2 addition).
-Score ≥ 10% = mission accomplished (stretch 15%). Score 8–10%
-→ continue same run to 3M (one command). Score < 8% with all gates healthy → continue to 3M
-and report at 2M. Score < 5% → STOP, full forensic report (§9 instruments), no config changes.
+**Stage G4 — 1.1M (official read-out).** Headline number = the official score over ALL
+TRAINING EPISODES in the budget (§9 telemetry) PLUS one N=50 benchmark with env
+`length=10000` (the official default — NOT `length=None`; v1.3 corrects v1.2's "uncapped"
+wording: uncapped is neither official nor safe). Reading: **≥5% = breakthrough target hit**
+(breaks the 2–4% lineage plateau into PPO/Rainbow territory); ≥10% = stretch,
+DreamerV2-level breadth. Score 4–5% → continue same run to 3M (one command). Score < 4%
+with all gates healthy → continue to 3M and report at 2M. Score < 3% → STOP, full forensic
+report (§9 instruments), no config changes.
 **Stage G5 — beyond.** Post-G4 upgrades (MaskGIT refinement S=3, T=32, categorical latents
 A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of this document.
 
@@ -600,21 +634,25 @@ A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of t
 
 ## 14. EXPECTATIONS & BUDGET MATH (set the bar honestly)
 
-- DreamerV3 official Crafter: **19.4 @1.1M** (fixed v2 paper; 14.5 in v1) with train_ratio 512
+- DreamerV3 official Crafter: **14.5±1.6 @1.1M** (vanilla, official leaderboard; v1.3
+  correction — the 19.4±1.6 figure is **Curious Replay**, i.e., DreamerV3 + novelty-prioritized
+  replay at 200M params. Encouraging: that organ is one SAPNA already carries) with train_ratio 512
   on A100-class hardware. Δ-IRIS: 9.3 @1M. SAPNA is the compute-poor replica: train_ratio
   ~8 raw (16 stored transitions) per update (v1.2 corrected derivation), ~1.7–2.5M params, T4
   — targeting **10–15% at 1.1M** means "DreamerV3-v1 territory at DreamerV3's own budget".
   Achievable; not guaranteed; gates decide. Single-seed Crafter variance is ±2–4 score
   points — the G4 8%-vs-10% branch sits inside that noise band; when in doubt, continue to
   3M rather than stop.
-- Worked example of what score 10 needs: per-achievement rates {wake_up 90, sapling 70,
-  place_plant 60, collect_wood 50, collect_drink 40, eat_cow 30, place_table 20,
-  collect_stone 10, make_wood_pickaxe 5} → Σln(1+S_i)=2.98 → score = exp(2.98/22)−1 ≈ **14.5%**.
-  Nine solid early/mid achievements — no diamond required.
-- Wall-clock: at SPS 25–40 (update_every=1 spends more time on gradients; SPS gate is 20),
-  1.1M steps ≈ 8–12 h of pure env time; with evals/saves budget ~12–16 h → one Colab
-  session with auto-resume, or 2–3 sessions (checkpoint every 5k makes preemption cheap).
-  25k validation ≈ 20–30 min.
+- Worked examples (v1.3, corrected — the v1.0 example used the fraction form of S_i and was
+  wrong by ~4×; S_i enters in PERCENT): rates {90,70,60,50,40,30,20,10,5} → Σln(1+S)=31.2 →
+  score **3.13**. Score 5 needs Σ≈39.5 — e.g., those nine plus three more at ~30%.
+  Score 10 needs Σ≈52.8 — e.g., ~12 achievements averaging ~90%: **DreamerV2-level breadth**.
+  This is why §13 treats 5% as the breakthrough target and 10% as stretch.
+- Wall-clock (v1.3, honest band): SPS 15–25 on T4 + 2 vCPU (≈250 small eager CUDA launches
+  per update; `torch.set_num_threads(2)` pinned — unpinned, 8 in-process Crafter envs fight
+  torch's intra-op threads and SPS halves). 1.1M steps ≈ 12–20 h; 25k-step checkpoints keep
+  save overhead ~1.5%. Colab sessions die — Drive auto-resume is mandatory design; expect
+  2–4 sessions. 25k validation ≈ 30–45 min.
 
 ---
 
