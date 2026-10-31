@@ -10,10 +10,38 @@ Fulfills requirements:
 
 from typing import Tuple, Optional, Union, Dict, Any
 import copy
+import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
+
+
+def symlog(x: Union[torch.Tensor, float, np.ndarray]) -> Union[torch.Tensor, float, np.ndarray]:
+    """
+    Symlog function (DreamerV3): symlog(x) = sign(x) * ln(1 + |x|).
+    Compresses wide value ranges smoothly around zero.
+    """
+    if isinstance(x, torch.Tensor):
+        return torch.sign(x) * torch.log1p(torch.abs(x))
+    elif isinstance(x, np.ndarray):
+        return np.sign(x) * np.log1p(np.abs(x))
+    else:
+        return (1.0 if x > 0 else (-1.0 if x < 0 else 0.0)) * math.log1p(abs(x))
+
+
+def symexp(y: Union[torch.Tensor, float, np.ndarray]) -> Union[torch.Tensor, float, np.ndarray]:
+    """
+    Inverse of symlog: symexp(y) = sign(y) * (exp(|y|) - 1).
+    Exact inverse: symexp(symlog(x)) == x.
+    """
+    if isinstance(y, torch.Tensor):
+        return torch.sign(y) * torch.expm1(torch.abs(y))
+    elif isinstance(y, np.ndarray):
+        return np.sign(y) * np.expm1(np.abs(y))
+    else:
+        return (1.0 if y > 0 else (-1.0 if y < 0 else 0.0)) * math.expm1(abs(y))
 
 
 class ActorPrior(nn.Module):
@@ -520,14 +548,17 @@ class TwinCritic(nn.Module):
         z: torch.Tensor,
         a: torch.Tensor,
         target_q: torch.Tensor,
+        symlog_targets: bool = False,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Compute MSE Bellman loss for both online critic heads.
+        If symlog_targets is True (U3), targets are transformed via symlog(target_q).
 
         Args:
             z: Latent state tensor (B, latent_dim).
             a: Action tensor (B,) or (B, 1).
             target_q: Target Q-values (B,) or (B, 1).
+            symlog_targets: Whether to apply symlog transformation to targets.
 
         Returns:
             total_loss: Scalar loss tensor.
@@ -543,8 +574,10 @@ class TwinCritic(nn.Module):
             q1 = q1.unsqueeze(1)
             q2 = q2.unsqueeze(1)
 
-        loss1 = F.mse_loss(q1, target_q.detach())
-        loss2 = F.mse_loss(q2, target_q.detach())
+        y = symlog(target_q.detach()) if symlog_targets else target_q.detach()
+
+        loss1 = F.mse_loss(q1, y)
+        loss2 = F.mse_loss(q2, y)
         total_loss = loss1 + loss2
 
         return total_loss, {

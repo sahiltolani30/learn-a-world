@@ -10,7 +10,9 @@ from src.models.predictor import (
     ActionEmbedding,
     ResidualMLPPredictorHead,
     ResidualMLPPredictor,
+    SpatialTransformerPredictor,
     LatentPredictor,
+    sample_token_mask,
 )
 from src.models.losses import VICRegLoss, verify_non_collapse, assert_non_collapse
 
@@ -22,7 +24,9 @@ __all__ = [
     "ActionEmbedding",
     "ResidualMLPPredictorHead",
     "ResidualMLPPredictor",
+    "SpatialTransformerPredictor",
     "LatentPredictor",
+    "sample_token_mask",
     "VICRegLoss",
     "verify_non_collapse",
     "assert_non_collapse",

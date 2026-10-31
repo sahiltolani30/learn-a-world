@@ -51,6 +51,8 @@ from src.curiosity.episodic import EpisodicNovelty
 from src.memory.buffer import TwoTierReplayBuffer
 from src.memory.storage import CheckpointManager
 from src.models.losses import VICRegLoss, verify_non_collapse
+from src.models.predictor import sample_token_mask
+from src.agent.actor_critic import symlog, symexp
 
 # Safe RAM telemetry utility (Rule R3)
 try:
@@ -205,8 +207,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--eps_base",
         type=float,
-        default=0.05,
-        help="Base epsilon exploration rate (default 0.05)",
+        default=0.10,
+        help="Base epsilon exploration rate (raised to 0.10 per P0.5)",
     )
     parser.add_argument(
         "--eps_novelty_coef",
@@ -225,6 +227,37 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         type=int,
         default=5,
         help="Horizon n for n-step TD critic targets (default 5)",
+    )
+    # Upgrade 1, 2, 3 configuration parameters (UPGRADE_1_2_3_SPEC.md §6)
+    parser.add_argument(
+        "--token_dim",
+        type=int,
+        default=64,
+        help="Per-tile spatial token latent dimension (U1)",
+    )
+    parser.add_argument(
+        "--mask_ratio",
+        type=float,
+        default=0.35,
+        help="Fraction of next-frame spatial tokens hidden per sample (U1)",
+    )
+    parser.add_argument(
+        "--mem_hidden",
+        type=int,
+        default=256,
+        help="GRU memory hidden state dimension (U2)",
+    )
+    parser.add_argument(
+        "--si_weight",
+        type=float,
+        default=0.1,
+        help="Self-imitation loss weight on milestone transitions (U3)",
+    )
+    parser.add_argument(
+        "--symlog_values",
+        action="store_true",
+        default=True,
+        help="Symlog value targets for critic (U3)",
     )
     # Parallel environment batching arguments (PARALLEL_ENV_PLAN.md)
     parser.add_argument(
@@ -293,10 +326,17 @@ class TrainingPipeline:
         self.update_every: int = int(self.cfg.get("update_every", 2))
         self.action_repeat: int = int(self.cfg.get("action_repeat", 1))
         self.actor_intrinsic_weight: float = float(self.cfg.get("actor_intrinsic_weight", 0.1))
-        self.eps_base: float = float(self.cfg.get("eps_base", 0.05))
+        self.eps_base: float = float(self.cfg.get("eps_base", 0.10))
         self.eps_novelty_coef: float = float(self.cfg.get("eps_novelty_coef", 0.20))
         self.eps_max: float = float(self.cfg.get("eps_max", 0.50))
         self.nstep: int = int(self.cfg.get("nstep", 5))
+
+        # Upgrade 1, 2, 3 parameters (UPGRADE_1_2_3_SPEC.md)
+        self.token_dim: int = int(self.cfg.get("token_dim", 64))
+        self.mask_ratio: float = float(self.cfg.get("mask_ratio", 0.35))
+        self.mem_hidden: int = int(self.cfg.get("mem_hidden", 256))
+        self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
+        self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
         
         # Parallel Environment Configuration (PARALLEL_ENV_PLAN.md)
         self.num_envs: int = int(self.cfg.get("num_envs", 8))
@@ -318,6 +358,8 @@ class TrainingPipeline:
 
         self.total_milestones: int = 0
         self.success_counts: Dict[str, int] = {}
+        self.success_actions: Dict[str, str] = {}
+        self.env_hidden_states: torch.Tensor = torch.zeros(self.num_envs, 256, device=self.device)
         self.recent_eps: deque = deque(maxlen=1000)
 
         # C4: Per-action normalized curiosity running statistics and episodic novelty
@@ -363,8 +405,16 @@ class TrainingPipeline:
             gamma=1.0,
         )
 
+        wm_params = (
+            list(self.agent.encoder.parameters())
+            + list(self.agent.predictor.parameters())
+            + list(self.agent.gru.parameters())
+            + list(self.agent.readout_proj.parameters())
+            + list(self.agent.reward_head.parameters())
+            + list(self.agent.done_head.parameters())
+        )
         self.wm_optimizer = torch.optim.Adam(
-            list(self.agent.encoder.parameters()) + list(self.agent.predictor.parameters()),
+            wm_params,
             lr=self.lr,
         )
         self.critic_optimizer = torch.optim.Adam(
@@ -397,40 +447,80 @@ class TrainingPipeline:
     def try_auto_resume(self) -> bool:
         """
         Attempts to discover and restore the most recent checkpoint.
+        Handles architecture compatibility (v3-spatial) and P0.1 buffer-resume verification.
         Returns True if a checkpoint was restored, False otherwise.
         """
         latest_ckpt = self.checkpoint_manager.find_latest_checkpoint()
         if latest_ckpt is not None:
             print(f"[*] Found existing checkpoint: {latest_ckpt}")
             try:
-                metadata = self.checkpoint_manager.restore(
-                    filepath=latest_ckpt,
-                    components={
-                        "agent": self.agent,
-                        "buffer": self.buffer,
-                        "wm_optimizer": self.wm_optimizer,
-                        "critic_optimizer": self.critic_optimizer,
-                        "actor_optimizer": self.actor_optimizer,
-                    },
-                    device=self.device,
-                    strict=False,
-                )
-                self.current_step = metadata.get("step", 0)
-                self.vector_step = metadata.get("vector_step", self.current_step // self.num_envs)
-                self.checkpoint_count = metadata.get("checkpoint_count", 0)
-                self.current_episode = metadata.get("episode", 0)
-                self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
-                self.best_eval_return = metadata.get("best_eval_return", -float("inf"))
-                self.achievement_history = metadata.get("achievement_history", {})
-                self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
-                if "success_counts" in metadata:
-                    self.success_counts = dict(metadata["success_counts"])
+                raw_ckpt = self.checkpoint_manager.load(latest_ckpt, device=self.device)
+                metadata = raw_ckpt.get("metadata", {})
+                arch = metadata.get("arch", "v2-legacy")
+                step = metadata.get("step", 0)
+
+                # Check architecture compatibility (Pitfall 5)
+                if arch != "v3-spatial":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3-spatial; carrying over replay buffer only.")
+                    comp_states = raw_ckpt.get("components", {})
+                    if "buffer" in comp_states and comp_states["buffer"] is not None:
+                        self.buffer.load_state_dict(comp_states["buffer"])
+                        print(f"[+] Replay buffer successfully carried over: T1={self.buffer.t1_size}, T2={self.buffer.t2_size}")
+                    self.current_step = step
+                    self.vector_step = metadata.get("vector_step", step // self.num_envs)
+                    self.checkpoint_count = metadata.get("checkpoint_count", 0)
+                    self.current_episode = metadata.get("episode", 0)
+                    self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
+                    self.best_eval_return = metadata.get("best_eval_return", -float("inf"))
+                    self.achievement_history = metadata.get("achievement_history", {})
+                    self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
+                    if "success_counts" in metadata:
+                        self.success_counts = dict(metadata["success_counts"])
+                    if "success_actions" in metadata:
+                        self.success_actions = dict(metadata["success_actions"])
+                    self.loss_history = metadata.get("loss_history", [])
+                else:
+                    metadata = self.checkpoint_manager.restore(
+                        filepath=latest_ckpt,
+                        components={
+                            "agent": self.agent,
+                            "buffer": self.buffer,
+                            "wm_optimizer": self.wm_optimizer,
+                            "critic_optimizer": self.critic_optimizer,
+                            "actor_optimizer": self.actor_optimizer,
+                        },
+                        device=self.device,
+                        strict=False,
+                    )
+                    self.current_step = metadata.get("step", 0)
+                    self.vector_step = metadata.get("vector_step", self.current_step // self.num_envs)
+                    self.checkpoint_count = metadata.get("checkpoint_count", 0)
+                    self.current_episode = metadata.get("episode", 0)
+                    self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
+                    self.best_eval_return = metadata.get("best_eval_return", -float("inf"))
+                    self.achievement_history = metadata.get("achievement_history", {})
+                    self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
+                    if "success_counts" in metadata:
+                        self.success_counts = dict(metadata["success_counts"])
+                    if "success_actions" in metadata:
+                        self.success_actions = dict(metadata["success_actions"])
+                    self.loss_history = metadata.get("loss_history", [])
+
+                # P0.1 Resume assertion: protect against buffer data loss
+                if not self.cfg.get("no_resume", False) and self.buffer.t1_size == 0 and self.current_step > 5_000:
+                    raise RuntimeError(
+                        f"Resumed step {self.current_step} but buffer is empty — state.pt is missing buffer arrays. Aborting to protect the lineage."
+                    )
+
                 print(
                     f"[+] Resumed successfully at step {self.current_step}, "
-                    f"episode {self.current_episode}, best return {self.best_eval_return:.2f}"
+                    f"episode {self.current_episode}, buffer size {self.buffer.size}, best return {self.best_eval_return:.2f}"
                 )
                 return True
             except Exception as e:
+                # Re-raise P0.1 assertion RuntimeError directly
+                if isinstance(e, RuntimeError) and "Aborting to protect the lineage" in str(e):
+                    raise
                 print(f"[!] Warning: Failed to restore checkpoint at {latest_ckpt}: {e}")
                 return False
         return False
@@ -438,7 +528,7 @@ class TrainingPipeline:
     def collect_batch_step(self) -> int:
         """
         Executes one vector step across all N parallel environments in lockstep.
-        Batches visual observation encoding and curiosity prediction into single tensor operations.
+        Batches visual observation encoding, memory recurrence, and curiosity prediction into single tensor operations.
         
         Returns:
             transitions_added: Number of environment transitions added to the replay buffer.
@@ -447,20 +537,21 @@ class TrainingPipeline:
         obs_batch = torch.from_numpy(obs_np).to(self.device).float() / 255.0
 
         with torch.no_grad():
-            z = self.agent.encoder(obs_batch)  # (N, D)
+            tokens_batch, z = self.agent.encoder.forward_tokens(obs_batch)  # (N, 64, 64), (N, 256)
+            readout = self.agent.get_readout(z, self.env_hidden_states)  # (N, 256)
 
             # Epsilon-greedy action selection per environment
             if self.vector_step < self.warmup_steps:
                 action_list = [int(self.envs.action_space.sample()) for _ in range(self.num_envs)]
             else:
-                probs = self.agent.actor.get_probs(z)  # (N, 17)
+                probs = self.agent.actor.get_probs(readout)  # (N, 17)
                 actions_t = torch.multinomial(probs, 1).squeeze(-1)
                 action_list = [int(a.item()) for a in actions_t]
 
-                # Per-env novelty-modulated epsilon (PARALLEL_ENV_PLAN.md §3.2)
+                # Per-env novelty-modulated epsilon (PARALLEL_ENV_PLAN.md §3.2 & P0.5)
                 for env_i in range(self.num_envs):
-                    z_i = z[env_i].detach().cpu().numpy()
-                    nov_raw = self.episodic_novelties[env_i].novelty_and_insert(z_i)
+                    r_i = readout[env_i].detach().cpu().numpy()
+                    nov_raw = self.episodic_novelties[env_i].novelty_and_insert(r_i)
                     self.episodic_stats.update(nov_raw)
                     nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
                     eps = min(self.eps_max, self.eps_base + self.eps_novelty_coef * nov)
@@ -470,9 +561,9 @@ class TrainingPipeline:
 
             # Batched predictor forward pass for disagreement and intrinsic curiosity
             actions_tensor = torch.tensor(action_list, device=self.device, dtype=torch.long)
-            _, all_preds = self.agent.predictor(z, actions_tensor)
-            disagreement = self.agent.curiosity_engine.compute_epistemic_disagreement(all_preds)
-            r_int_tensor = self.agent.curiosity_engine.compute_intrinsic_reward(all_preds, update_stats=True)
+            _, all_preds = self.agent.predictor.forward_tokens(tokens_batch, actions_tensor, h=self.env_hidden_states)
+            disagreement = self.agent.predictor.compute_epistemic_disagreement(all_preds)
+            r_int_tensor = self.agent.curiosity_engine.compute_intrinsic_reward(disagreement)
             r_int_np = r_int_tensor.detach().cpu().numpy()
             disagree_np = disagreement.detach().cpu().numpy()
 
@@ -500,19 +591,16 @@ class TrainingPipeline:
             act_names = getattr(self.env, "action_names", None)
             act_name = act_names[act] if act_names is not None else str(act)
 
+            # P0.3 Achievement-verified success counting
             for ach in unlocked:
                 if ach not in self.episode_achievements[env_i]:
                     self.episode_achievements[env_i].add(ach)
                     is_milestone = True
+                    self.success_counts[ach] = self.success_counts.get(ach, 0) + 1
+                    self.success_actions[ach] = act_name
                     if ach not in self.all_unlocked_achievements:
                         self.all_unlocked_achievements.add(ach)
                         print(f" [★ DISCOVERY] Env {env_i} Step {self.current_step + 1}: Unlocked achievement '{ach}'!")
-                    
-                    # Accurately credit the action that achieved this milestone
-                    if act_name == ach:
-                        self.success_counts[act_name] = self.success_counts.get(act_name, 0) + 1
-                    elif act_name == "do" and ach in ("collect_wood", "collect_sapling", "collect_stone", "collect_coal", "collect_iron", "defeat_zombie", "defeat_skeleton", "eat_cow", "eat_plant"):
-                        self.success_counts["do"] = self.success_counts.get("do", 0) + 1
 
             r_int_i = float(r_int_np[env_i]) if r_int_np.ndim > 0 else float(r_int_np)
             if r_int_i > 0.5:
@@ -539,12 +627,16 @@ class TrainingPipeline:
                 for past_idx in self.recent_t1_indices_per_env[env_i]:
                     self.buffer.flag_milestone_at(past_idx)
 
+            # U2 Memory update: reset on done, else step GRU
             if done_i:
                 self.current_episode += 1
                 self.env_episode_ids[env_i] = self.current_episode
                 self.episode_achievements[env_i].clear()
                 self.recent_t1_indices_per_env[env_i].clear()
                 self.episodic_novelties[env_i].reset()
+                self.env_hidden_states[env_i] = 0.0
+            else:
+                self.env_hidden_states[env_i] = self.agent.gru(z[env_i:env_i+1], self.env_hidden_states[env_i:env_i+1]).squeeze(0)
 
             self.current_step += 1
             transitions_added += 1
@@ -572,13 +664,13 @@ class TrainingPipeline:
         Returns:
             next_obs, reward, done, step_metrics
         """
-        # C4.2: Latent encoding, episodic novelty, and novelty-modulated exploration
         with torch.no_grad():
             z_t = self.agent.encode(obs)
             if z_t.dim() == 1:
                 z_t = z_t.unsqueeze(0)
+            readout_t = self.agent.get_readout(z_t, self.env_hidden_states[:1])
 
-        nov_raw = self.episodic_novelty.novelty_and_insert(z_t.detach().squeeze(0).cpu().numpy())
+        nov_raw = self.episodic_novelty.novelty_and_insert(readout_t.detach().squeeze(0).cpu().numpy())
         self.episodic_stats.update(nov_raw)
         nov = float(np.clip(nov_raw / (float(self.episodic_stats.std) + 1e-4), 0.0, 5.0))
 
@@ -591,7 +683,7 @@ class TrainingPipeline:
             if float(np.random.random_sample()) < eps:
                 action = int(self.env.action_space.sample())
             else:
-                action = self.agent.act(obs, eval_mode=False, planning=False)
+                action = self.agent.act(obs, eval_mode=False, planning=False, h=self.env_hidden_states[:1])
 
         # Step environment (supporting action_repeat)
         is_milestone = False
@@ -605,10 +697,15 @@ class TrainingPipeline:
                     )
             eval_info = info.get("eval_info", {})
             unlocked = eval_info.get("unlocked_achievements", [])
+            act_names = getattr(self.env, "action_names", None)
+            act_name = act_names[action] if act_names is not None else str(action)
+            # P0.3 Achievement-verified success counting
             for ach in unlocked:
                 if ach not in episode_achievements:
                     episode_achievements.add(ach)
                     is_milestone = True
+                    self.success_counts[ach] = self.success_counts.get(ach, 0) + 1
+                    self.success_actions[ach] = act_name
                     if ach not in self.all_unlocked_achievements:
                         self.all_unlocked_achievements.add(ach)
                         print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
@@ -628,19 +725,16 @@ class TrainingPipeline:
                 unlocked = eval_info.get("unlocked_achievements", [])
                 act_names = getattr(self.env, "action_names", None)
                 act_name = act_names[action] if act_names is not None else str(action)
+                # P0.3 Achievement-verified success counting
                 for ach in unlocked:
                     if ach not in episode_achievements:
                         episode_achievements.add(ach)
                         is_milestone = True
+                        self.success_counts[ach] = self.success_counts.get(ach, 0) + 1
+                        self.success_actions[ach] = act_name
                         if ach not in self.all_unlocked_achievements:
                             self.all_unlocked_achievements.add(ach)
                             print(f" [★ DISCOVERY] Step {self.current_step}: Unlocked achievement '{ach}'!")
-
-                        # Accurately credit the action that achieved this milestone
-                        if act_name == ach:
-                            self.success_counts[act_name] = self.success_counts.get(act_name, 0) + 1
-                        elif act_name == "do" and ach in ("collect_wood", "collect_sapling", "collect_stone", "collect_coal", "collect_iron", "defeat_zombie", "defeat_skeleton", "eat_cow", "eat_plant"):
-                            self.success_counts["do"] = self.success_counts.get("do", 0) + 1
                 if done:
                     break
             ext_reward = total_ext_reward
@@ -648,7 +742,7 @@ class TrainingPipeline:
         # Compute epistemic curiosity reward for exploration
         with torch.no_grad():
             a_t = torch.tensor([action], device=self.device, dtype=torch.long)
-            _, all_preds = self.agent.predictor(z_t, a_t)
+            _, all_preds = self.agent.predictor(z_t, a_t, h=self.env_hidden_states[:1])
             r_int_tensor = self.agent.curiosity_engine.compute_intrinsic_reward(all_preds, update_stats=True)
             r_int = float(r_int_tensor.item() if r_int_tensor.numel() == 1 else r_int_tensor[0].item())
 
@@ -670,6 +764,12 @@ class TrainingPipeline:
             step_in_ep=step_in_ep,
         )
 
+        # U2 Memory update
+        if done:
+            self.env_hidden_states[0] = 0.0
+        else:
+            self.env_hidden_states[0] = self.agent.gru(z_t, self.env_hidden_states[:1]).squeeze(0)
+
         # C2.2: Capture written T1 slot and retroactively flag trailing 30-step window on milestone
         written_slot = (self.buffer.t1_ptr - 1) % self.buffer.tier1_capacity
         self.recent_t1_indices.append(written_slot)
@@ -690,7 +790,7 @@ class TrainingPipeline:
     def update_world_model(self) -> Dict[str, float]:
         """
         Samples a mixed batch (70% Tier 1, 30% Tier 2) and optimizes the JEPA
-        visual encoder and 4-head predictor ensemble via VICRegLoss.
+        visual encoder, 4-head spatial transformer predictor, and auxiliary value heads.
         Also performs Polyak EMA update of the target encoder.
         """
         self.agent.train()
@@ -700,38 +800,75 @@ class TrainingPipeline:
             device=self.device,
         )
 
-        # 1. Forward passes
-        z_curr = self.agent.encoder(batch["obs"])
+        # 1. Forward passes: online spatial tokens + target tokens
+        curr_tokens, curr_pooled = self.agent.encoder.forward_tokens(batch["obs"])
         with torch.no_grad():
-            z_target = self.agent.target_encoder(batch["next_obs"])
+            target_tokens, target_pooled = self.agent.target_encoder.forward_tokens(batch["next_obs"])
 
-        mean_pred, all_preds = self.agent.predictor(z_curr, batch["actions"])
+        # 2. Spatial Transformer Prediction
+        mean_pred_tokens, all_pred_tokens = self.agent.predictor.forward_tokens(
+            curr_tokens, batch["actions"]
+        )
 
-        # 2. VICReg Loss computation
-        loss_dict = self.vicreg_loss(all_preds, z_target)
+        # 3. U1: Masked Token Prediction Loss (35% tokens masked per sample)
+        mask = sample_token_mask(
+            batch_size=curr_tokens.size(0),
+            num_tokens=self.agent.predictor.num_tokens,
+            mask_ratio=self.mask_ratio,
+            device=self.device,
+        )
+        l_tokens = self.agent.predictor.compute_masked_loss(all_pred_tokens, target_tokens, mask)
 
-        # Direct representation variance regularization to guarantee non-collapse of z_curr
-        var_z, cov_z, min_std_z, _ = self.vicreg_loss._compute_var_cov(z_curr.unsqueeze(0))
+        # 4. Pooled VICReg Loss on pooled latents
+        mean_pred_pooled = self.agent.encoder.pool_tokens(mean_pred_tokens)
+        all_pred_pooled = torch.stack([
+            self.agent.encoder.pool_tokens(all_pred_tokens[k])
+            for k in range(self.agent.predictor.num_heads)
+        ], dim=0)
+
+        loss_dict = self.vicreg_loss(all_pred_pooled, target_pooled)
+        l_pool = loss_dict["loss"]
+
+        # 5. U3: Auxiliary Reward & Done Heads (trained on WM optimizer)
+        pred_r = self.agent.reward_head(mean_pred_pooled).squeeze(-1)
+        pred_d_logits = self.agent.done_head(mean_pred_pooled).squeeze(-1)
+        l_reward = F.mse_loss(pred_r, batch["rewards"])
+        l_done = F.binary_cross_entropy_with_logits(pred_d_logits, batch["dones"].float())
+
+        # Anti-collapse variance and covariance regularization on online latents
+        var_z, cov_z, min_std_z, _ = self.vicreg_loss._compute_var_cov(curr_pooled.unsqueeze(0))
         wm_loss = (
-            loss_dict["loss"]
+            1.0 * l_tokens
+            + 1.0 * l_pool
+            + 0.5 * l_reward
+            + 0.5 * l_done
             + self.vicreg_loss.var_coeff * var_z
             + self.vicreg_loss.cov_coeff * cov_z
         )
 
-        # 3. Optimizer backward & step
+        # 6. Optimizer backward & step
         self.wm_optimizer.zero_grad()
         wm_loss.backward()
         torch.nn.utils.clip_grad_norm_(
-            list(self.agent.encoder.parameters()) + list(self.agent.predictor.parameters()),
+            list(self.agent.encoder.parameters())
+            + list(self.agent.predictor.parameters())
+            + list(self.agent.gru.parameters())
+            + list(self.agent.readout_proj.parameters())
+            + list(self.agent.reward_head.parameters())
+            + list(self.agent.done_head.parameters()),
             max_norm=1.0,
         )
         self.wm_optimizer.step()
 
-        # 4. Polyak EMA update on target encoder
+        # 7. Polyak EMA update on target encoder
         self.agent.update_target_networks(tau=self.tau)
 
         return {
             "wm_loss": float(wm_loss.item()),
+            "l_tokens": float(l_tokens.item()),
+            "l_pool": float(l_pool.item()),
+            "l_reward": float(l_reward.item()),
+            "l_done": float(l_done.item()),
             "invariance": float(loss_dict["invariance"].item()),
             "variance": float(loss_dict["variance"].item()),
             "covariance": float(loss_dict["covariance"].item()),
@@ -741,7 +878,7 @@ class TrainingPipeline:
     def update_actor_critic(self) -> Dict[str, float]:
         """
         Optimizes Twin Critic Q_omega(z, a) and Actor policy prior pi_psi(a | z)
-        using latent representations and blended extrinsic + intrinsic rewards.
+        using latent representations, symlog value targets, and self-imitation on milestones.
         """
         self.agent.train()
         batch = self.buffer.sample_nstep(
@@ -759,15 +896,17 @@ class TrainingPipeline:
             # Discrete Double-Q Target with n-step discounted return & bootstrapped future value
             q1b, q2b = self.agent.critic(z_boot)
             best_boot_actions = torch.argmax(torch.min(q1b, q2b), dim=-1)
-            boot_q = self.agent.critic.target_q_min(z_boot, best_boot_actions)
+            boot_q_raw = self.agent.critic.target_q_min(z_boot, best_boot_actions)
+            boot_q = symexp(boot_q_raw) if self.symlog_values else boot_q_raw
             r_total = batch["nstep_return"] + self.critic_intrinsic_weight * batch["int_rewards"]
             target_q = r_total + batch["boot_gamma"] * batch["boot_valid"].float() * boot_q
 
-        # 1. Update Twin Critic
+        # 1. Update Twin Critic with symlog target transformation (U3)
         critic_loss, c_metrics = self.agent.critic.compute_loss(
             z_curr.detach(),
             batch["actions"],
             target_q,
+            symlog_targets=self.symlog_values,
         )
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -782,26 +921,37 @@ class TrainingPipeline:
             B = z_curr.shape[0]
             z_rep = z_curr.unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
             a_rep = torch.arange(self.agent.num_actions, device=z_curr.device).repeat(B)
-            _, all_preds = self.agent.predictor(z_rep, a_rep)  # (K, B*17, D)
-            disc = self.agent.predictor.compute_epistemic_disagreement(all_preds).view(B, -1)  # (B, 17)
+            _, all_preds = self.agent.predictor(z_rep, a_rep)
+            disc = self.agent.predictor.compute_epistemic_disagreement(all_preds).view(B, -1)
             self.per_action_disc_stats.update(disc)
-            disc_norm = disc / (self.per_action_disc_stats.std + self.per_action_disc_stats.epsilon)  # ÷std per action column
+            disc_norm = disc / (self.per_action_disc_stats.std + self.per_action_disc_stats.epsilon)
             disc_norm = torch.clamp(disc_norm, min=0.0, max=5.0)
 
-        # 2. Update Actor Policy Prior via Exact Discrete Expectation
-        # Since action space is discrete (17), compute exact expectation under policy
-        # allowing direct, rich gradient flow from TwinCritic Q-values into Actor weights
-        logits = self.agent.actor(z_curr.detach())
+        # 2. Update Actor Policy Prior via exact discrete expectation on readout
+        readout_curr = self.agent.get_readout(z_curr.detach())
+        logits = self.agent.actor(readout_curr)
         probs = torch.softmax(logits, dim=-1)
         log_probs = torch.log_softmax(logits, dim=-1)
 
-        q1_all, q2_all = self.agent.critic(z_curr.detach())
-        q_all = torch.min(q1_all, q2_all).detach()
+        q1_all, q2_all = self.agent.critic(readout_curr)
+        q_min_raw = torch.min(q1_all, q2_all).detach()
+        q_all = symexp(q_min_raw) if self.symlog_values else q_min_raw
 
         expected_q = (probs * q_all).sum(dim=-1)
         expected_int = (probs * disc_norm).sum(dim=-1)
         entropy = -(probs * log_probs).sum(dim=-1)
         actor_loss = -(expected_q + self.actor_intrinsic_weight * expected_int + 0.05 * entropy).mean()
+
+        # 3. U3: Self-Imitation Loss on verified milestone items
+        milestone_mask = batch["is_milestone"] & (batch["rewards"] > 0.0)
+        num_milestones = int(milestone_mask.sum().item())
+        si_loss = torch.tensor(0.0, device=self.device)
+        # Cap: skip if batch has > 32 milestone items (avoid dominating policy)
+        if 0 < num_milestones <= 32:
+            si_actions = batch["actions"][milestone_mask]
+            si_log_probs = log_probs[milestone_mask].gather(1, si_actions.unsqueeze(1)).squeeze(1)
+            si_loss = -si_log_probs.mean()
+            actor_loss = actor_loss + self.si_weight * si_loss
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -814,6 +964,8 @@ class TrainingPipeline:
         return {
             "critic_loss": float(critic_loss.item()),
             "actor_loss": float(actor_loss.item()),
+            "si_loss": float(si_loss.item()),
+            "si_count": num_milestones,
             "entropy": float(entropy.mean().item()),
             "q_mean": float(expected_q.mean().item()),
             "q_spread": float(q_spread.item()),
@@ -942,17 +1094,18 @@ class TrainingPipeline:
     def save_checkpoint(self, is_best: bool = False, force_buffer: bool = False) -> str:
         """
         Atomically saves pipeline components and metadata to checkpoint_dir.
-        RAM Crash Safety: Skips heavy replay buffer serialization by default (save_replay_buffer=False)
-        to prevent transient 6.5GB memory allocation spikes on Google Drive FUSE mounts.
+        P0.1 Fix: state.pt ALWAYS includes full buffer arrays.
+        Numbered checkpoints save buffer every buffer_save_every checkpoints.
         """
         self.checkpoint_count += 1
         save_replay_buffer = bool(self.cfg.get("save_replay_buffer", True))
-        save_buffer = save_replay_buffer and (
+        save_numbered_buffer = save_replay_buffer and (
             force_buffer or (self.buffer_save_every > 0 and self.checkpoint_count % self.buffer_save_every == 0)
         )
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
+            "arch": "v3-spatial",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,
@@ -962,7 +1115,9 @@ class TrainingPipeline:
             "all_unlocked_achievements": sorted(list(self.all_unlocked_achievements)),
             "achievement_history": self.achievement_history,
             "success_counts": self.success_counts,
-            "has_buffer": save_buffer,
+            "success_actions": self.success_actions,
+            "loss_history": self.loss_history,
+            "has_buffer": save_numbered_buffer,
             "config": self.cfg,
             "timestamp": time.time(),
         }
@@ -973,7 +1128,7 @@ class TrainingPipeline:
             "critic_optimizer": self.critic_optimizer,
             "actor_optimizer": self.actor_optimizer,
         }
-        if save_buffer:
+        if save_numbered_buffer:
             components["buffer"] = self.buffer
 
         saved_path = self.checkpoint_manager.save(
@@ -982,21 +1137,26 @@ class TrainingPipeline:
             metadata=metadata,
             is_best=is_best,
         )
-        # Atomically update active verified checkpoint 'state.pt'
-        state_path = Path(saved_path).parent / "state.pt"
-        state_tmp = Path(saved_path).parent / f"state.pt.tmp.{os.getpid()}"
-        try:
-            shutil.copyfile(saved_path, str(state_tmp))
-            os.replace(str(state_tmp), str(state_path))
-        except Exception as e:
-            if state_tmp.exists():
-                try:
-                    state_tmp.unlink()
-                except OSError:
-                    pass
+
+        # P0.1: Atomically save active auto-resume checkpoint 'state.pt' ALWAYS containing buffer
+        state_components = {
+            "agent": self.agent,
+            "buffer": self.buffer,
+            "wm_optimizer": self.wm_optimizer,
+            "critic_optimizer": self.critic_optimizer,
+            "actor_optimizer": self.actor_optimizer,
+        }
+        state_metadata = dict(metadata)
+        state_metadata["has_buffer"] = True
+        self.checkpoint_manager.save(
+            filepath="state.pt",
+            components=state_components,
+            metadata=state_metadata,
+            is_best=False,
+        )
 
         # Clean memory immediately
-        del components, metadata
+        del components, metadata, state_components, state_metadata
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

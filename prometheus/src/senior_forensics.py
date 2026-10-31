@@ -236,25 +236,28 @@ class SeniorForensicSuite:
             self.log(f"  Target 'do':          Q={q_vals[act_do]:+.4f} | Prob={probs[act_do]:.3f} | Disagree={disagreements[act_do]:.4f}")
             self.log(f"  Target 'place_table': Q={q_vals[act_pt]:+.4f} | Prob={probs[act_pt]:.3f} | Disagree={disagreements[act_pt]:.4f}")
 
-        # The Smoking Gun Evaluation (Within-Scene Ranking Only - ROOT_CAUSE_FIX_PLAN.md §6.3 / §9)
+        # The Smoking Gun Evaluation (Within-Scene Ranking Only - UPGRADE_1_2_3_SPEC.md P0.2)
         act_pt_idx = CRAFTER_ACTION_NAMES.index("place_table")
+        probs_b = diagnostics["(b) Facing grass with Wood=2"]["probs"]
+        probs_c = diagnostics["(c) Facing grass with Wood=0"]["probs"]
         q_b = diagnostics["(b) Facing grass with Wood=2"]["q_vals"]
         q_c = diagnostics["(c) Facing grass with Wood=0"]["q_vals"]
 
-        # Calculate within-scene rank (1-indexed)
-        rank_b = int(np.where(np.argsort(q_b)[::-1] == act_pt_idx)[0][0]) + 1
-        rank_c = int(np.where(np.argsort(q_c)[::-1] == act_pt_idx)[0][0]) + 1
+        # Calculate within-scene rank (1-indexed) based on policy probability
+        rank_b = int(np.where(np.argsort(probs_b)[::-1] == act_pt_idx)[0][0]) + 1
+        rank_c = int(np.where(np.argsort(probs_c)[::-1] == act_pt_idx)[0][0]) + 1
+        prob_b = float(probs_b[act_pt_idx])
+        prob_c = float(probs_c[act_pt_idx])
 
-        self.log("\n>>> SMOKING GUN AUDIT: PRECONDITION AWARENESS (WITHIN-SCENE RANKS) <<<")
-        self.log(f"  Scene (b) Wood=2: Q(place_table) = {q_b[act_pt_idx]:+.4f} | Rank = #{rank_b} / 17")
-        self.log(f"  Scene (c) Wood=0: Q(place_table) = {q_c[act_pt_idx]:+.4f} | Rank = #{rank_c} / 17")
+        self.log("\n>>> SMOKING GUN AUDIT: PRECONDITION AWARENESS (WITHIN-SCENE RANKS - P0.2) <<<")
+        self.log(f"  Scene (b) Wood=2: Prob(place_table) = {prob_b:.1%} | Rank = #{rank_b} / 17 | Q = {q_b[act_pt_idx]:+.4f}")
+        self.log(f"  Scene (c) Wood=0: Prob(place_table) = {prob_c:.1%} | Rank = #{rank_c} / 17 | Q = {q_c[act_pt_idx]:+.4f}")
         
-        if rank_b <= 3 and rank_c > rank_b:
-            self.log(f"  [+] VERDICT: Critic recognizes the wood precondition! place_table is prioritized with Wood=2 (Rank #{rank_b}) and suppressed with Wood=0 (Rank #{rank_c}).")
-        elif rank_b <= 3 and rank_c <= 3:
-            self.log(f"  [!] VERDICT: Partial consolidation. place_table is top-ranked facing grass (Rank #{rank_b}), but not yet suppressed when Wood=0 (Rank #{rank_c}). Precondition inhibition is still forming.")
+        passed = (rank_b <= 3) and (prob_b >= 0.5) and (rank_c > rank_b + 3)
+        if passed:
+            self.log(f"  [+] VERDICT: PASS — place_table has Wood=2 Rank #{rank_b} (prob={prob_b:.1%}) and Wood=0 Rank #{rank_c} (prob={prob_c:.1%}) satisfying rank(b)<=3, prob(b)>=0.5, rank(c)>rank(b)+3.")
         else:
-            self.log(f"  [!] VERDICT: Critic has not consolidated place_table (Rank #{rank_b} > 3).")
+            self.log(f"  [-] VERDICT: FAIL — place_table has Wood=2 Rank #{rank_b} (prob={prob_b:.1%}) and Wood=0 Rank #{rank_c} (prob={prob_c:.1%}). Does not satisfy rank(b)<=3, prob(b)>=0.5, rank(c)>rank(b)+3.")
 
         return diagnostics
 

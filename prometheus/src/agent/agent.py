@@ -20,7 +20,7 @@ import torch.nn as nn
 
 from src.models.encoder import ObservationEncoder
 from src.models.target import TargetEncoder
-from src.models.predictor import ResidualMLPPredictor
+from src.models.predictor import ResidualMLPPredictor, SpatialTransformerPredictor
 from src.curiosity.ensemble import EpistemicCuriosityEngine
 from src.agent.actor_critic import ActorPrior, TwinCritic
 from src.agent.planner import CategoricalCEMPlanner
@@ -104,11 +104,11 @@ class JEPAAgent(nn.Module):
                 tau=tau,
             )
 
-        # 3. Action-Conditioned Residual Latent Predictor Ensemble
+        # 3. Action-Conditioned Residual Latent Predictor Ensemble (U1: Spatial Transformer)
         if predictor is not None:
             self.predictor = predictor
         else:
-            self.predictor = ResidualMLPPredictor(
+            self.predictor = SpatialTransformerPredictor(
                 latent_dim=latent_dim,
                 num_actions=num_actions,
                 action_dim=action_dim,
@@ -161,6 +161,26 @@ class JEPAAgent(nn.Module):
                 gamma=gamma,
                 num_actions=num_actions,
             )
+
+        # U2: Memory GRU Core (input: 256, hidden: 256)
+        self.gru = nn.GRUCell(latent_dim, latent_dim)
+        # U2: Readout projection restoring 256-d interface: [z_pooled, h] (512) -> (256)
+        self.readout_proj = nn.Sequential(
+            nn.Linear(latent_dim * 2, latent_dim),
+            nn.LayerNorm(latent_dim),
+        )
+
+        # U3: Auxiliary Value Heads (Reward and Termination prediction on 256-d latent)
+        self.reward_head = nn.Sequential(
+            nn.Linear(latent_dim, 128),
+            nn.ReLU(inplace=False),
+            nn.Linear(128, 1),
+        )
+        self.done_head = nn.Sequential(
+            nn.Linear(latent_dim, 128),
+            nn.ReLU(inplace=False),
+            nn.Linear(128, 1),
+        )
 
         self.to(self.device)
 
@@ -263,12 +283,48 @@ class JEPAAgent(nn.Module):
         x = self.validate_and_prepare_obs(obs)
         return self.encoder(x)
 
+    def get_readout(
+        self,
+        z: torch.Tensor,
+        h: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Produce 256-d downstream representation combining pooled visual latent and memory.
+        Interface contract: returns (B, latent_dim) or (latent_dim,).
+        """
+        was_1d = (z.dim() == 1)
+        if was_1d:
+            z = z.unsqueeze(0)
+
+        if h is None:
+            h = torch.zeros_like(z)
+        elif h.dim() == 1:
+            h = h.unsqueeze(0)
+
+        combined = torch.cat([z, h], dim=-1)
+        readout = self.readout_proj(combined)
+
+        if was_1d:
+            readout = readout.squeeze(0)
+        return readout
+
+    def gru_step(
+        self,
+        z: torch.Tensor,
+        h: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Execute one recurrent GRU memory update."""
+        if h is None:
+            h = torch.zeros_like(z)
+        return self.gru(z, h)
+
     @torch.no_grad()
     def act(
         self,
         obs: Union[torch.Tensor, np.ndarray, Dict[str, Any]],
         eval_mode: bool = False,
         planning: bool = False,
+        h: Optional[torch.Tensor] = None,
     ) -> int:
         """
         Select discrete action in Dual Execution Modes:
@@ -279,6 +335,7 @@ class JEPAAgent(nn.Module):
             obs: Visual pixel observation (C, H, W) or (B, C, H, W).
             eval_mode: If True, uses deterministic action selection (argmax).
             planning: If True, engages deliberative CEM lookahead in JEPA latent space.
+            h: Optional recurrent memory state tensor (B, latent_dim).
 
         Returns:
             action: Discrete action index as an integer.
@@ -287,22 +344,23 @@ class JEPAAgent(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(0)  # (1, C, H, W)
 
-        # 1. Encode visual observation to latent representation
+        # 1. Encode visual observation to latent representation & combine with memory
         z = self.encoder(x)  # (1, latent_dim)
+        readout = self.get_readout(z, h)  # (1, latent_dim)
 
         # 2. Select execution mode
         if planning:
             # Deliberative Planning Mode (R3, R5)
-            action = self.planner.select_action(z)
+            action = self.planner.select_action(readout)
             return int(action)
         else:
-            # In evaluation mode: select greedy optimal action from TwinCritic Q(z, a)
+            # In evaluation mode: select greedy optimal action from TwinCritic Q(readout, a)
             if eval_mode:
-                q1, q2 = self.critic(z)
+                q1, q2 = self.critic(readout)
                 q_min = torch.min(q1, q2)
                 return int(torch.argmax(q_min, dim=-1).item())
             # Fast Policy Exploration Mode (R3, R5)
-            action_t = self.actor.sample(z, deterministic=False)
+            action_t = self.actor.sample(readout, deterministic=False)
             if action_t.numel() == 1:
                 return int(action_t.item())
             return int(action_t[0].item())
@@ -311,12 +369,14 @@ class JEPAAgent(nn.Module):
     def plan(
         self,
         obs: Union[torch.Tensor, np.ndarray, Dict[str, Any]],
+        h: Optional[torch.Tensor] = None,
     ) -> Tuple[int, Dict[str, Any]]:
         """
         Run deliberative planning and return action with diagnostic info.
 
         Args:
             obs: Visual pixel observation.
+            h: Optional recurrent memory state tensor.
 
         Returns:
             action: Discrete action integer.
@@ -326,7 +386,8 @@ class JEPAAgent(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(0)
         z = self.encoder(x)
-        return self.planner.plan(z)
+        readout = self.get_readout(z, h)
+        return self.planner.plan(readout)
 
     def update_target_networks(self, tau: Optional[float] = None) -> None:
         """

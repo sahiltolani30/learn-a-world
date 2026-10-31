@@ -4,9 +4,10 @@ src/models/target.py
 Target Encoder wrapper for the JEPA World Model.
 Maintains an Exponential Moving Average (EMA) clone of the online ObservationEncoder
 with stop-gradient (torch.no_grad()) semantics to provide non-oscillating target latents.
+Supports both pooled 256-d latents and U1 (MAP) spatial token representations.
 """
 
-from typing import Optional
+from typing import Optional, Tuple
 import copy
 import torch
 import torch.nn as nn
@@ -54,6 +55,20 @@ class TargetEncoder(nn.Module):
         with torch.no_grad():
             z = self.target_encoder(x)
             return z.detach()
+
+    def forward_tokens(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass strictly under torch.no_grad() providing U1 target tokens and pooled latent.
+        
+        Args:
+            x: Raw pixel observation tensor (B, C, H, W) or (C, H, W).
+        Returns:
+            tokens_target: Detached target spatial tokens (B, 64, token_dim).
+            z_target: Detached target pooled latent tensor (B, latent_dim).
+        """
+        with torch.no_grad():
+            tokens, z = self.target_encoder.forward_tokens(x)
+            return tokens.detach(), z.detach()
 
     def update(self, tau: Optional[float] = None) -> None:
         """

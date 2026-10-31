@@ -346,13 +346,17 @@ class EpistemicCuriosityEngine(nn.Module):
         Compute epistemic curiosity reward, applying online Welford normalization.
         
         Args:
-            all_preds: Ensemble predictions of shape (K, B, D) or (K, D).
+            all_preds: Ensemble predictions of shape (K, B, D) or (K, D),
+                or raw epistemic disagreement tensor of shape (B,) or scalar.
             update_stats: Whether to update running Welford statistics with this batch.
             
         Returns:
             intrinsic_reward: Normalized intrinsic reward tensor of shape (B,) or scalar.
         """
-        disagreement = self.compute_epistemic_disagreement(all_preds)
+        if all_preds.dim() in (0, 1):
+            disagreement = all_preds
+        else:
+            disagreement = self.compute_epistemic_disagreement(all_preds)
 
         if self.use_welford:
             if update_stats and self.training:

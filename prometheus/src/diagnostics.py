@@ -282,15 +282,154 @@ class AgentForensics:
             plt.savefig(save_path, dpi=150, bbox_inches="tight")
         return fig
 
+
+def evaluate_counterfactual_verdict(
+    rank_b: int,
+    prob_b: float,
+    rank_c: int,
+) -> Dict[str, Any]:
+    """
+    Evaluate counterfactual probe verdict strictly using within-scene ranks (UPGRADE_1_2_3_SPEC.md P0.2).
+    PASS if: rank(b) <= 3 AND prob(b) >= 0.5 AND rank(c) > rank(b) + 3.
+    """
+    passed = bool((rank_b <= 3) and (prob_b >= 0.5) and (rank_c > rank_b + 3))
+    return {
+        "passed": passed,
+        "rank_b": rank_b,
+        "prob_b": prob_b,
+        "rank_c": rank_c,
+        "verdict": "PASS" if passed else "FAIL",
+    }
+
+
+def run_counterfactual_probe(agent: Any) -> Dict[str, Any]:
+    """
+    Executes counterfactual scene probing comparing:
+    - Scene (b): Facing grass with Wood=2 (affordance present -> place_table expected)
+    - Scene (c): Facing grass with Wood=0 (precondition absent -> place_table suppressed)
+    Verdict computed purely via within-scene ranking (P0.2).
+    """
+    import crafter
+    from src.agent.actor_critic import symexp
+
+    agent.eval()
+    dev = getattr(agent, "device", torch.device("cpu"))
+    act_pt = CRAFTER_ACTION_NAMES.index("place_table")
+
+    # Construct Scene (b): Facing grass with Wood=2
+    env_b = crafter.Env(seed=42)
+    obs_b = env_b.reset()
+    p_b = env_b._player
+    p_b.inventory["wood"] = 2
+    px, py = p_b.pos
+    dx, dy = p_b.facing
+    env_b._world[px + dx, py + dy] = "grass"
+    obs_b = env_b.render()
+    with torch.no_grad():
+        t_b = torch.from_numpy(obs_b.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+        z_b = agent.encoder(t_b)
+        readout_b = agent.get_readout(z_b) if hasattr(agent, "get_readout") else z_b
+        probs_b = agent.actor.get_probs(readout_b).squeeze(0).cpu().numpy()
+        q1_b, q2_b = agent.critic(readout_b)
+        q_b = torch.min(q1_b, q2_b).squeeze(0).cpu().numpy()
+
+    # Construct Scene (c): Facing grass with Wood=0
+    env_c = crafter.Env(seed=42)
+    obs_c = env_c.reset()
+    p_c = env_c._player
+    p_c.inventory["wood"] = 0
+    px, py = p_c.pos
+    dx, dy = p_c.facing
+    env_c._world[px + dx, py + dy] = "grass"
+    obs_c = env_c.render()
+    with torch.no_grad():
+        t_c = torch.from_numpy(obs_c.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+        z_c = agent.encoder(t_c)
+        readout_c = agent.get_readout(z_c) if hasattr(agent, "get_readout") else z_c
+        probs_c = agent.actor.get_probs(readout_c).squeeze(0).cpu().numpy()
+        q1_c, q2_c = agent.critic(readout_c)
+        q_c = torch.min(q1_c, q2_c).squeeze(0).cpu().numpy()
+
+    # Calculate within-scene rank (1-indexed) based on policy probabilities / Q
+    rank_b = int(np.where(np.argsort(probs_b)[::-1] == act_pt)[0][0]) + 1
+    rank_c = int(np.where(np.argsort(probs_c)[::-1] == act_pt)[0][0]) + 1
+    prob_b = float(probs_b[act_pt])
+    prob_c = float(probs_c[act_pt])
+
+    verdict_info = evaluate_counterfactual_verdict(rank_b, prob_b, rank_c)
+    verdict_info.update({
+        "prob_b": prob_b,
+        "prob_c": prob_c,
+        "q_b_pt": float(q_b[act_pt]),
+        "q_c_pt": float(q_c[act_pt]),
+    })
+    return verdict_info
+
+
+def run_stagewise_policy_probe(agent: Any) -> Dict[str, Any]:
+    """
+    Probes neural activations across the four canonical tech-tree stages (P0.6):
+    1. Fresh spawn (0 Wood, bare hands)
+    2. Wood in inventory (2 Wood, no table)
+    3. Crafting station (1 Wood, facing table)
+    4. Mining ready (has wood pickaxe, facing stone)
+    """
+    import crafter
+
+    agent.eval()
+    dev = getattr(agent, "device", torch.device("cpu"))
+    stage_results = {}
+
+    stages = [
+        ("Stage 1: Fresh Spawn", 0, None, "grass"),
+        ("Stage 2: Wood in Inventory (Wood=2)", 2, None, "grass"),
+        ("Stage 3: Facing Table (Wood=1)", 1, "table", "table"),
+        ("Stage 4: Mining Ready (Wood Pickaxe, Facing Stone)", 0, None, "stone"),
+    ]
+
+    for name, wood_cnt, facing_item, target_tile in stages:
+        env = crafter.Env(seed=42)
+        env.reset()
+        p = env._player
+        p.inventory["wood"] = wood_cnt
+        if name.startswith("Stage 4"):
+            p.inventory["wood_pickaxe"] = 1
+        px, py = p.pos
+        dx, dy = p.facing
+        env._world[px + dx, py + dy] = target_tile
+        frame = env.render()
+
+        with torch.no_grad():
+            t = torch.from_numpy(frame.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+            z = agent.encoder(t)
+            readout = agent.get_readout(z) if hasattr(agent, "get_readout") else z
+            probs = agent.actor.get_probs(readout).squeeze(0).cpu().numpy()
+            q1, q2 = agent.critic(readout)
+            q_vals = torch.min(q1, q2).squeeze(0).cpu().numpy()
+
+        sorted_indices = np.argsort(probs)[::-1]
+        top_actions = [
+            {
+                "rank": r + 1,
+                "action": CRAFTER_ACTION_NAMES[idx],
+                "prob": float(probs[idx]),
+                "q": float(q_vals[idx]),
+            }
+            for r, idx in enumerate(sorted_indices[:5])
+        ]
+        stage_results[name] = top_actions
+
+    return stage_results
+
     def run_benchmark(
         self,
-        num_episodes: int = 20,
+        num_episodes: int = 50,
         planning: bool = False,
         base_seed: int = 1000,
         stochastic: bool = False,
     ) -> Dict[str, Any]:
         """
-        Runs N independent benchmark evaluation games to compute:
+        Runs N=50 independent benchmark evaluation games to compute:
         1. Official Crafter Score (geometric mean of success rates across 22 achievements)
         2. Per-game average achievements unlocked
         3. Mean survival steps and episodic returns
@@ -340,7 +479,7 @@ class AgentForensics:
         mean_achs_per_game = float(np.mean([len(s) for s in ep_achievements]))
         all_unlocked = sorted(list(set.union(*ep_achievements))) if ep_achievements else []
 
-        print(f"Policy: {'stochastic' if stochastic else 'greedy'}")
+        print(f"Policy: {'stochastic' if stochastic else 'greedy'} (N={num_episodes} games)")
         return {
             "num_episodes": num_episodes,
             "policy": "stochastic" if stochastic else "greedy",
@@ -403,3 +542,142 @@ class AgentForensics:
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches="tight")
         return fig
+
+
+def evaluate_counterfactual_verdict(
+    rank_b: int,
+    prob_b: float,
+    rank_c: int,
+) -> Dict[str, Any]:
+    """
+    Evaluate counterfactual probe verdict strictly using within-scene ranks (UPGRADE_1_2_3_SPEC.md P0.2).
+    PASS if: rank(b) <= 3 AND prob(b) >= 0.5 AND rank(c) > rank(b) + 3.
+    """
+    passed = bool((rank_b <= 3) and (prob_b >= 0.5) and (rank_c > rank_b + 3))
+    return {
+        "passed": passed,
+        "rank_b": rank_b,
+        "prob_b": prob_b,
+        "rank_c": rank_c,
+        "verdict": "PASS" if passed else "FAIL",
+    }
+
+
+def run_counterfactual_probe(agent: Any) -> Dict[str, Any]:
+    """
+    Executes counterfactual scene probing comparing:
+    - Scene (b): Facing grass with Wood=2 (affordance present -> place_table expected)
+    - Scene (c): Facing grass with Wood=0 (precondition absent -> place_table suppressed)
+    Verdict computed purely via within-scene ranking (P0.2).
+    """
+    import crafter
+    from src.agent.actor_critic import symexp
+
+    agent.eval()
+    dev = getattr(agent, "device", torch.device("cpu"))
+    act_pt = CRAFTER_ACTION_NAMES.index("place_table")
+
+    # Construct Scene (b): Facing grass with Wood=2
+    env_b = crafter.Env(seed=42)
+    obs_b = env_b.reset()
+    p_b = env_b._player
+    p_b.inventory["wood"] = 2
+    px, py = p_b.pos
+    dx, dy = p_b.facing
+    env_b._world[px + dx, py + dy] = "grass"
+    obs_b = env_b.render()
+    with torch.no_grad():
+        t_b = torch.from_numpy(obs_b.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+        z_b = agent.encoder(t_b)
+        readout_b = agent.get_readout(z_b) if hasattr(agent, "get_readout") else z_b
+        probs_b = agent.actor.get_probs(readout_b).squeeze(0).cpu().numpy()
+        q1_b, q2_b = agent.critic(readout_b)
+        q_b = torch.min(q1_b, q2_b).squeeze(0).cpu().numpy()
+
+    # Construct Scene (c): Facing grass with Wood=0
+    env_c = crafter.Env(seed=42)
+    obs_c = env_c.reset()
+    p_c = env_c._player
+    p_c.inventory["wood"] = 0
+    px, py = p_c.pos
+    dx, dy = p_c.facing
+    env_c._world[px + dx, py + dy] = "grass"
+    obs_c = env_c.render()
+    with torch.no_grad():
+        t_c = torch.from_numpy(obs_c.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+        z_c = agent.encoder(t_c)
+        readout_c = agent.get_readout(z_c) if hasattr(agent, "get_readout") else z_c
+        probs_c = agent.actor.get_probs(readout_c).squeeze(0).cpu().numpy()
+        q1_c, q2_c = agent.critic(readout_c)
+        q_c = torch.min(q1_c, q2_c).squeeze(0).cpu().numpy()
+
+    # Calculate within-scene rank (1-indexed) based on policy probabilities / Q
+    rank_b = int(np.where(np.argsort(probs_b)[::-1] == act_pt)[0][0]) + 1
+    rank_c = int(np.where(np.argsort(probs_c)[::-1] == act_pt)[0][0]) + 1
+    prob_b = float(probs_b[act_pt])
+    prob_c = float(probs_c[act_pt])
+
+    verdict_info = evaluate_counterfactual_verdict(rank_b, prob_b, rank_c)
+    verdict_info.update({
+        "prob_b": prob_b,
+        "prob_c": prob_c,
+        "q_b_pt": float(q_b[act_pt]),
+        "q_c_pt": float(q_c[act_pt]),
+    })
+    return verdict_info
+
+
+def run_stagewise_policy_probe(agent: Any) -> Dict[str, Any]:
+    """
+    Probes neural activations across the four canonical tech-tree stages (P0.6):
+    1. Fresh spawn (0 Wood, bare hands)
+    2. Wood in inventory (2 Wood, no table)
+    3. Crafting station (1 Wood, facing table)
+    4. Mining ready (has wood pickaxe, facing stone)
+    """
+    import crafter
+
+    agent.eval()
+    dev = getattr(agent, "device", torch.device("cpu"))
+    stage_results = {}
+
+    stages = [
+        ("Stage 1: Fresh Spawn", 0, None, "grass"),
+        ("Stage 2: Wood in Inventory (Wood=2)", 2, None, "grass"),
+        ("Stage 3: Facing Table (Wood=1)", 1, "table", "table"),
+        ("Stage 4: Mining Ready (Wood Pickaxe, Facing Stone)", 0, None, "stone"),
+    ]
+
+    for name, wood_cnt, facing_item, target_tile in stages:
+        env = crafter.Env(seed=42)
+        env.reset()
+        p = env._player
+        p.inventory["wood"] = wood_cnt
+        if name.startswith("Stage 4"):
+            p.inventory["wood_pickaxe"] = 1
+        px, py = p.pos
+        dx, dy = p.facing
+        env._world[px + dx, py + dy] = target_tile
+        frame = env.render()
+
+        with torch.no_grad():
+            t = torch.from_numpy(frame.transpose((2, 0, 1))).unsqueeze(0).to(dev).float() / 255.0
+            z = agent.encoder(t)
+            readout = agent.get_readout(z) if hasattr(agent, "get_readout") else z
+            probs = agent.actor.get_probs(readout).squeeze(0).cpu().numpy()
+            q1, q2 = agent.critic(readout)
+            q_vals = torch.min(q1, q2).squeeze(0).cpu().numpy()
+
+        sorted_indices = np.argsort(probs)[::-1]
+        top_actions = [
+            {
+                "rank": r + 1,
+                "action": CRAFTER_ACTION_NAMES[idx],
+                "prob": float(probs[idx]),
+                "q": float(q_vals[idx]),
+            }
+            for r, idx in enumerate(sorted_indices[:5])
+        ]
+        stage_results[name] = top_actions
+
+    return stage_results
