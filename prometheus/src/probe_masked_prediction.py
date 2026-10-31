@@ -210,8 +210,25 @@ def main():
         plt.tight_layout()
         plot_path = Path("spatial_masked_prediction_probe.png")
         plt.savefig(str(plot_path), bbox_inches="tight", dpi=150)
-        plt.close(fig)
         print(f"\n[+] Saved high-resolution 4-panel visual figure to: {plot_path.resolve()}")
+
+        # Also save copy directly to Google Drive folder
+        if ckpt_path is not None:
+            try:
+                import shutil
+                drive_plot_path = ckpt_path.parent / "spatial_masked_prediction_probe.png"
+                shutil.copyfile(str(plot_path), str(drive_plot_path))
+                print(f"[+] Saved copy directly to Google Drive: {drive_plot_path}")
+            except Exception as e:
+                print(f"[!] Note: Could not copy to Drive folder: {e}")
+
+        # Render directly in Jupyter / Colab cell output
+        try:
+            from IPython.display import Image, display
+            display(Image(filename=str(plot_path)))
+        except Exception:
+            pass
+        plt.close(fig)
     except Exception as e:
         print(f"[!] Plot generation note: {e}")
 
