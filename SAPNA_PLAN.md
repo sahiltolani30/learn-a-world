@@ -128,19 +128,25 @@ current main branch) into `sapna/encoder.py`, changing only the module/import pa
   - The class ALWAYS returns full-grid predictions; masking exists only inside
     `compute_masked_loss(all_pred_tokens, target_tokens, mask, position_weights=None)`.
     Training calls it with `mask = sample_token_mask(batch, num_tokens=64, mask_ratio=0.35)`
-    → exactly `floor(0.35·64)=22` masked positions, one mask resampled per optimizer update,
-    shared across the whole batch and all T−1 steps of the window.
+    → exactly `floor(0.35·64)=22` masked positions, resampled per optimizer update as
+    **per-row iid masks** over the `B*(T−1)` flattened steps (shape `(B*(T−1), 64)` —
+    matching `sample_token_mask(batch_size=…, …)` and the §4 block exactly).
   - `position_weights=None` in SAPNA v1 (v3's W1a-2 dynamic-tile weighting is deliberately
     not carried over; the optional argument stays available in the copied class).
   - Imagination uses the SAME `forward_tokens` call — the full-grid `mean_pred` is the
     one-shot decode (EMERALD's 3-step MaskGIT refinement is explicitly deferred).
   - `compute_epistemic_disagreement(all_preds (4,B,64,64), mask (B,64)) -> (B,)` comes with
     the copy and produces the stored-but-unrewarded `r_int`.
-- `RewardHead`: `Linear(512,256) → ELU → Linear(256,255)`. Input `concat[z_t, h_t]`;
-  predicts the distribution of the reward received after taking `a_t` in state
-  `(z_t, h_t)` (i.e., r_{t+1} of that transition). Symlog two-hot (§5.3).
-- `DoneHead`: `Linear(512,256) → ELU → Linear(256,1)`. Same input convention; predicts
-  Bernoulli termination of the transition `(z_t,a_t) → (z_{t+1})`.
+- `RewardHead`: `Linear(512,256) → ELU → Linear(256,255)`. Input = the **ARRIVAL state**
+  `concat[pool_tokens(mean_pred_t), h_{t+1}]` (post-action: the predicted next pooled state
+  + the post-step memory). It predicts the distribution of `r_{t+1}` — the reward of
+  arriving at that state. Symlog two-hot (§5.3). This is DreamerV3's actual semantics and it
+  makes immediate reward ACTION-CONDITIONED: different `a_t` → different predicted arrival
+  state → different priced reward. (v1.0 read the head on the pre-action `concat[z_t, h_t]`
+  with no action input — that prices all 17 actions identically and blunts the key organ;
+  fixed in v1.2 after independent review.)
+- `DoneHead`: `Linear(512,256) → ELU → Linear(256,1)`. Same ARRIVAL-state input; predicts
+  Bernoulli termination of arriving at `(z_{t+1}, h_{t+1})`.
 - `Actor` (`sapna/policy.py`): `Linear(512,256) → ELU → Linear(256,256) → ELU → Linear(256,17)`;
   orthogonal init, final layer gain **0.01** (≈uniform at init = built-in exploration warmup).
 - `Critic` (`sapna/policy.py`): `Linear(512,256) → ELU → Linear(256,256) → ELU → Linear(256,255)`
@@ -167,11 +173,13 @@ role DreamerV3's RSSM plays; ours is built from JEPA tokens instead of categoric
 - IMAGINATION: identical recurrence, but `z` is the predicted pooled vector (prior, §2.3).
 
 ### 2.5 Deliberate deviations from the copied v3 code (read before touching anything)
-1. **Reward/Done head wiring differs from v3 on purpose.** v3 reads them on the PREDICTED
-   NEXT pooled state with plain MSE (`train.py:1045-1046`). SAPNA reads them on
-   `concat[z_t, h_t]` — the state where the action is chosen (DreamerV3 semantics; required
-   so imagination can price an action before advancing) — and upgrades reward to
-   symexp_twohot CE. Do NOT copy v3's head wiring.
+1. **Reward/Done head wiring differs from v3 on purpose.** v3 reads them on the predicted
+   next pooled state alone, with plain MSE (`train.py:1052-1055`). SAPNA reads them on the
+   **ARRIVAL state** `concat[pool_tokens(mean_pred), h_next]` — DreamerV3's actual
+   arrival-state semantics, which makes immediate reward action-conditioned — and upgrades
+   reward to symexp_twohot CE. (v1.0–v1.1 of this plan wrongly specified pre-action inputs
+   `concat[z_t, h_t]`; corrected in v1.2 after independent review.) Do NOT copy v3's head
+   wiring either.
 2. `position_weights=None` (v3's W1a-2 dynamic tile weighting is not carried over).
 3. Everything else in the WM loss block — masking, per-head VICReg, token variance floor
    (0.05, weight 1.0), 0.3 recon anchor, var/cov hinge — is copied to mirror
@@ -210,7 +218,7 @@ Tag legend: **[D3]** = DreamerV3 official config, **[EM]** = EMERALD paper Table
 | lr actor | 3e-5 | [EM] | Adam |
 | lr critic | 3e-5 | [EM] | Adam |
 | grad clip | 1.0 (global norm) | [V3] | known-good in this repo |
-| update_every | 2 (vec steps = 16 env transitions) | [V3-style] | 1 WM update + 1 imagination update per trigger |
+| update_every | **1** (vec step = 16 raw env steps → train ratio 8 raw / 16 stored) | [AMEND v1.2] | doubles gradient contact per life (v1.0's ratio 4 was mis-derived); pre-registered fallback if SPS < 20 at G1: `update_every=2` + `batch_seqs=16, seq_len=8` (same 128 frames, 256 imagination starts from 16 episodes) |
 | warmup_steps | 200 vec-steps random-uniform | OURS | buffer needs valid ≥16-length windows first |
 | buffer capacity | 100,000 transitions | OURS | 1.23 GB uint8 — Colab RAM contract (§7) |
 | replay sampling | 70% uniform / 30% milestone-window | [V3 C2] | validated mechanism, carried over |
@@ -252,8 +260,9 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
       L_tokens += compute_masked_loss(all_preds_t, TargetEnc.tokens(obs[t+1]), mask[8t:8t+8])
       L_pool   += VICReg(stack([Enc.pool_tokens(all_preds_t[k]) for k in 4 heads]),
                          TargetEnc.pooled(obs[t+1]))["loss"]     # per-head VICReg, v3 wiring
-      L_reward += twohot_ce(RewardHead(concat[z[t], h[t]]), symlog(clamp(r[t+1], ±20)))
-      L_done   += BCEWithLogits(DoneHead(concat[z[t], h[t]]), done[t+1])
+      arr_t     = concat[Enc.pool_tokens(mean_pred_t), h[t+1]]   # ARRIVAL state (post-action)
+      L_reward += twohot_ce(RewardHead(arr_t), symlog(clamp(r[t+1], ±20)))
+      L_done   += BCEWithLogits(DoneHead(arr_t), done[t+1])
   tok_var    = toks.flatten(0,1).var(dim=0)         # (64,64) per position-feature
   L_tokfloor = relu(0.05 - tok_var).mean()          # W1a-4 token variance floor, weight 1.0
   L_recon    = MSE(Encoder.decode_tokens(toks.flatten(0,1)), seq.obs.flatten(0,1))  # W1a-0
@@ -275,8 +284,8 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
           mean_pred = SpatialPredictor.forward_tokens(tokens_k, a_k, h_k)[0]  # full decode
           tokens_{k+1} = mean_pred;  z_{k+1} = Encoder.pool_tokens(mean_pred)
           h_{k+1} = GRUCell(concat[z_k, emb(a_k)], h_k)
-          r_k = symexp(score(RewardHead(concat[z_k, h_k])))   # detached (reward_grad=False)
-          d_k = sigmoid(DoneHead(concat[z_k, h_k]))           # detached
+          r_k = symexp(score(RewardHead(concat[z_{k+1}, h_{k+1}])))  # ARRIVAL-state pricing
+          d_k = sigmoid(DoneHead(concat[z_{k+1}, h_{k+1}]))          # detached (reward_grad=False)
           v_k = symexp(score(Critic(concat[z_k, h_k])))       # detached (for λ-returns only)
   G = lambda_returns(r, d, v, v_bootstrap; γ=0.997, λ=0.95)   # §5.2, all detached inputs
   # recompute WITH grad on the detached states:
@@ -308,7 +317,8 @@ Critic/Actor always read `concat[z, h]` of the state they act FROM.
 G_H = v_bootstrap
 G_k = r_k + γ·(1−d_k)·[ (1−λ)·v_{k+1} + λ·G_{k+1} ]     for k = H−1 .. 0
 ```
-`r_k, d_k` are the detached head predictions; `v_{k+1}` = critic's scalar value at the NEXT
+`r_k, d_k` are the detached **arrival-state** head predictions (the reward / termination of
+arriving at imagined state k+1, §2.2); `v_{k+1}` = critic's scalar value at the NEXT
 imagined state (detached inside the return computation; gradients reach the critic only
 through `loss_critic`). Shapes: all `(N,15)` with `N=128`; bootstrap `v_H` shape `(N,)`.
 
@@ -329,8 +339,8 @@ No PPO clipping, no DPG — copy the champion form exactly.
 **5.5 VICReg** (copy v3 `src/models/losses.py` semantics): sim = MSE on normalized vectors,
 coeff 1.0; var hinge coeff 1.0 (γ=1.0, ε=1e-4 inside sqrt); cov coeff 0.04; reduction
 `mean_heads`; plus the v3 extra var/cov hinge on the online pooled z. `verify_non_collapse`
-(min var > 0.1) MUST be wired as a logged metric and a run-abort check (v3 left it dead —
-SAPNA does not repeat that).
+(min var > 0.1) MUST be wired as a logged metric and a run-abort check (v3 wires it as a
+logged check with strict=False at `train.py:1335`; SAPNA promotes it to a hard abort).
 
 ---
 
@@ -341,7 +351,9 @@ Ring buffer, `capacity=100_000` transitions, arrays (pre-allocated, uint8 obs):
 frames), `done bool`, `episode_id int64`, `step_in_ep int64`, `milestone bool`,
 `r_int_norm float32` — produced by copying v3's `WelfordNormalizer`
 (`src/curiosity/ensemble.py`; disagreement is Welford-normalized online). Milestone admission
-(C2 dual trigger): new achievement in this episode's per-env set OR `r_int_norm > 0.5`. **RAM contract:** peak budget = buffer 1.23 GB + T2 none
+(C2 dual trigger): new achievement in this episode's per-env set OR `r_int_norm > 1.0`
+(v1.2: raised from 0.5 — a 0.5 z-score threshold flags ~31% of ALL transitions under a
+Welford scale and dilutes the milestone pool to near-uniform). **RAM contract:** peak budget = buffer 1.23 GB + T2 none
 (SAPNA has NO two-tier system — one pool, the 70/30 priority is at sampling time) + model/opt
 ~0.1 GB + 8 envs ~0.2 GB + checkpoint-save spike ≤ 0.6 GB → **≤ 2.5 GB** of Colab's 12.7 GB.
 Do NOT raise capacity above 100k for v1.
@@ -377,7 +389,10 @@ def step_with_repeat(i, a):
     return obs, r_sum, done, info                  # LAST sub-step frame/info; reward summed
 ```
 Keep the copied class's terminal-observation handling untouched; integrate repeat at the
-slot level. Re-run the existing zero-cheat leak tests (§11 T11) against the copied wrapper.
+slot level. Note: `step_single(i, a)` is a small, documented ADDITION to the copied class —
+the class only exposes the lockstep `step(actions)`; extract/wrap its per-slot step.
+The "verbatim" rule applies to everything else in the file. Re-run the existing zero-cheat
+leak tests (§11 T11) against the copied wrapper.
 8 envs, seeds 0..7, `base_seed=42` semantics as in the copied file.
 
 **Collection policy:** sample from unimixed actor probs. NO ε-greedy in v1, NO curiosity bonus.
@@ -406,7 +421,8 @@ Functions (pure, testable):
 ## 9. EVALUATION — `sapna/train.py::evaluate` + `sapna/benchmark.py`
 
 - Every `eval_interval`: 3 greedy + 3 stochastic episodes, each capped at 1000 env steps
-  (v3 rule — eval cost grows with survival). Greedy = argmax of unimixed probs (argmax is
+  (v3 rule — eval cost grows with survival; the cap counts RAW env steps including action
+  repeats). Greedy = argmax of unimixed probs (argmax is
   unchanged by unimix). Stochastic = sample.
 - **`SAPNAAgent` facade** (thin class in `sapna/policy.py`): bundles all modules; exposes
   `act(obs, h, greedy=False) -> (action, h_next, z)` and `reset_h()`. Both `evaluate()` and
@@ -489,7 +505,9 @@ or buffer roundtrip failure (Hotfix-2 lesson).
 - **T7 imagination shapes + determinism:** `imagine_batch` with fixed seed → same outputs
   twice; shapes per §8; rewards/conts detached (`.requires_grad == False`), values carry grad.
 - **T8 two-hot critic reduces:** 200 gradient steps of Critic on synthetic fixed G targets →
-  CE drops >5×; scalar readout error < 0.05.
+  CE drops >5×; scalar readout error < 0.05; reward-head action-conditioning sanity: two
+  different arrival-state inputs (`concat[pool(mean_pred_a), h_a]` vs `…_b`) produce
+  different predicted reward distributions.
 - **T9 eval-h maintenance (Hotfix 4):** run 20 eval steps — `eval_h` changes across steps,
   resets on done, and is actually passed to act (assert via monkeypatched spy).
 - **T10 checkpoint roundtrip:** save → mutate → load → all arrays byte-identical, config
@@ -539,17 +557,24 @@ list as the existing Cell 3 (crafter, gymnasium, imageio, matplotlib, psutil).
 **Stage G0 — Smoke (CPU, 200 steps).** All §11 tests green. → proceed.
 **Stage G1 — Validation run, 25k steps** (`--total_steps 25000`, fresh `checkpoints_v1`,
 `--no_resume`). Gates: no NaN; `wm_loss` declining; `reward_ce < 1.5` (init ≈ ln 255 ≈ 5.5);
-`done_bce < 0.3`; stochastic eval mean achievements ≥ 2.5; SPS ≥ 30; imagination reward corr
-≥ 0.3; `var_hinge > 0.1` (no collapse). **PASS → extend the SAME run** to 1.1M
+`done_bce < 0.3`; stochastic eval mean achievements ≥ 2.5; SPS ≥ 20; imagination reward corr
+≥ 0.3 — with the v1.2 caveat: if fewer than 10 of the 32 sampled windows contain nonzero
+cumulative reward, log "insufficient reward variance" and PASS-with-caveat instead of
+stopping; `var_hinge > 0.1` (no collapse). **PASS → extend the SAME run** to 1.1M
 (`--total_steps 1100000`, resume). **FAIL → stop, send telemetry, do not tune.**
 **Stage G2 — checkpoint @100k (running gate).** Official stochastic score ≥ 2.5%; unique ≥ 9;
 collect_wood ≥ 30%; drift cosine @H=5 ≥ 0.8; place_table occurring in training
 (milestone counter). Continue regardless to 1.1M unless ≥2 gates red → stop + report.
+Drift lever (pre-authorized, v1.2): if drift cosine @H=5 < 0.8 but all other gates are
+green → apply the single lever `--imag_horizon 8` and resume (the one authorized response
+to deterministic-decode drift; document in the report).
 **Stage G3 — checkpoint @300k.** Score ≥ 5%; unique ≥ 11; **collect_stone appeared**.
 Branch: if score ≥ 5% but collect_stone = 0 AND benchmark movement% < 30% (mean over the
 50 games) → apply the ONE pre-authorized lever `--eps_base 0.05` and resume (document in
 report). Anything else → continue.
-**Stage G4 — 1.1M (TARGET).** Score ≥ 10% = mission accomplished (stretch 15%). Score 8–10%
+**Stage G4 — 1.1M (TARGET).** At G4 also run ONE N=50 benchmark with NO 1000-step episode
+cap (official-protocol parity — DreamerV3's 19.4 is measured uncapped; v1.2 addition).
+Score ≥ 10% = mission accomplished (stretch 15%). Score 8–10%
 → continue same run to 3M (one command). Score < 8% with all gates healthy → continue to 3M
 and report at 2M. Score < 5% → STOP, full forensic report (§9 instruments), no config changes.
 **Stage G5 — beyond.** Post-G4 upgrades (MaskGIT refinement S=3, T=32, categorical latents
@@ -576,16 +601,20 @@ A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of t
 ## 14. EXPECTATIONS & BUDGET MATH (set the bar honestly)
 
 - DreamerV3 official Crafter: **19.4 @1.1M** (fixed v2 paper; 14.5 in v1) with train_ratio 512
-  on A100-class hardware. Δ-IRIS: 9.3 @1M. SAPNA is the compute-poor replica: train_ratio ~16,
-  ~2.5M params, T4 — targeting **10–15% at 1.1M** means "DreamerV3-v1 territory at
-  DreamerV3's own budget". Achievable; not guaranteed; gates decide.
+  on A100-class hardware. Δ-IRIS: 9.3 @1M. SAPNA is the compute-poor replica: train_ratio
+  ~8 raw (16 stored transitions) per update (v1.2 corrected derivation), ~1.7–2.5M params, T4
+  — targeting **10–15% at 1.1M** means "DreamerV3-v1 territory at DreamerV3's own budget".
+  Achievable; not guaranteed; gates decide. Single-seed Crafter variance is ±2–4 score
+  points — the G4 8%-vs-10% branch sits inside that noise band; when in doubt, continue to
+  3M rather than stop.
 - Worked example of what score 10 needs: per-achievement rates {wake_up 90, sapling 70,
   place_plant 60, collect_wood 50, collect_drink 40, eat_cow 30, place_table 20,
   collect_stone 10, make_wood_pickaxe 5} → Σln(1+S_i)=2.98 → score = exp(2.98/22)−1 ≈ **14.5%**.
   Nine solid early/mid achievements — no diamond required.
-- Wall-clock: at SPS 40, 1.1M steps ≈ 7.6 h of pure env time; with evals/saves budget
-  ~10–12 h → one Colab session with auto-resume, or 2–3 sessions (checkpoint every 5k makes
-  preemption cheap). 25k validation ≈ 15–20 min.
+- Wall-clock: at SPS 25–40 (update_every=1 spends more time on gradients; SPS gate is 20),
+  1.1M steps ≈ 8–12 h of pure env time; with evals/saves budget ~12–16 h → one Colab
+  session with auto-resume, or 2–3 sessions (checkpoint every 5k makes preemption cheap).
+  25k validation ≈ 20–30 min.
 
 ---
 
