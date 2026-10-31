@@ -67,6 +67,7 @@ class SeniorForensicSuite:
         results["item10"] = self.audit_item10_tier2_xray()
         results["item11"] = self.audit_item11_config_audit()
         results["item12"] = self.audit_item12_behavior_video()
+        results["item13"] = self.audit_item13_stagewise_probe()
 
         # Save markdown report to disk
         report_path = self.output_dir / "FORENSIC_DIAGNOSTIC_REPORT.md"
@@ -513,50 +514,82 @@ class SeniorForensicSuite:
         return errors_by_event
 
     # -------------------------------------------------------------------------
-    # 9. Multi-step rollout drift (H=10)
+    # 9. Multi-step rollout drift (H=1..10) — The Dreaming Gate
     # -------------------------------------------------------------------------
     def audit_item9_rollout_drift(self) -> Dict[str, Any]:
         self.log("\n" + "=" * 80)
-        self.log("  [ITEM 9] MULTI-STEP LATENT ROLLOUT DRIFT (H=10)")
+        self.log("  [ITEM 9] MULTI-STEP LATENT ROLLOUT DRIFT (H=1..10) — THE DREAMING GATE")
         self.log("=" * 80)
 
-        env = crafter.Env(seed=888)
         self.agent.eval()
+        H_max = 10
+        n_trajs = 5
+        cos_by_h: Dict[int, List[float]] = {h: [] for h in range(1, H_max + 1)}
+        l2_by_h: Dict[int, List[float]] = {h: [] for h in range(1, H_max + 1)}
 
-        obs = env.reset()
-        true_frames = [obs]
-        actions_taken = []
-        for _ in range(10):
-            a = int(env.action_space.sample())
-            obs, _, term, _ = env.step(a)
-            true_frames.append(obs)
-            actions_taken.append(a)
-            if term:
-                break
+        for traj_i in range(n_trajs):
+            env = crafter.Env(seed=1000 + traj_i)
+            obs = env.reset()
+            true_frames = [obs]
+            actions = []
+            for _ in range(H_max):
+                a = int(np.random.randint(0, env.action_space.n))
+                obs, _, done, _ = env.step(a)
+                true_frames.append(obs)
+                actions.append(a)
+                if done:
+                    break
 
-        H = len(actions_taken)
-        # Encode ground truth futures with target encoder
-        x_all = torch.stack([torch.from_numpy(f).permute(2, 0, 1).float() / 255.0 for f in true_frames]).to(self.device)
-        with torch.no_grad():
-            z_true = self.agent.target_encoder(x_all)
+            H = len(actions)
+            x_all = torch.stack([torch.from_numpy(f).permute(2, 0, 1).float() / 255.0 for f in true_frames]).to(self.device)
+            with torch.no_grad():
+                z_true = self.agent.target_encoder(x_all)
 
-        # Rollout in latent space
-        z_sim = [z_true[0:1]]
-        for t in range(H):
-            a_t = torch.tensor([actions_taken[t]], dtype=torch.long, device=self.device)
-            pred_next, _ = self.agent.predictor(z_sim[-1], a_t)
-            z_sim.append(pred_next)
+            z_sim = z_true[0:1]
+            h_dim = getattr(self.agent, "hidden_dim", getattr(self.agent, "mem_hidden", 256))
+            h_sim = torch.zeros(1, h_dim, device=self.device)
 
-        z_sim = torch.cat(z_sim, dim=0)
+            for t in range(H):
+                a_t = torch.tensor([actions[t]], dtype=torch.long, device=self.device)
+                with torch.no_grad():
+                    pred_next, _ = self.agent.predictor(z_sim, a_t, h=h_sim)
+                    if hasattr(self.agent, "gru"):
+                        h_sim = self.agent.gru(z_sim, h_sim)
+                    z_sim = pred_next
+                    cos = F.cosine_similarity(z_sim, z_true[t+1:t+2]).item()
+                    l2 = torch.norm(z_sim - z_true[t+1:t+2], p=2).item()
+                    cos_by_h[t+1].append(cos)
+                    l2_by_h[t+1].append(l2)
 
-        self.log(f"{'Horizon t':<10} | {'Cosine Similarity':>18} | {'Latent L2 Distance':>20}")
+        self.log(f"{'Horizon t':<10} | {'Cosine Similarity':>18} | {'Latent L2 Distance':>20} | {'Dreaming Gate Status'}")
         self.log("-" * 80)
-        for t in range(1, H + 1):
-            cos = F.cosine_similarity(z_sim[t:t+1], z_true[t:t+1]).item()
-            l2 = torch.norm(z_sim[t:t+1] - z_true[t:t+1], p=2).item()
-            self.log(f"{t:10d} | {cos:18.4f} | {l2:20.4f}")
+        mean_cos = {}
+        mean_l2 = {}
+        for h in range(1, H_max + 1):
+            c_m = float(np.mean(cos_by_h[h])) if cos_by_h[h] else 0.0
+            l_m = float(np.mean(l2_by_h[h])) if l2_by_h[h] else 0.0
+            mean_cos[h] = c_m
+            mean_l2[h] = l_m
+            gate_status = "PASS (≥0.80)" if c_m >= 0.80 else "DRIFTING (<0.80)"
+            self.log(f"{h:10d} | {c_m:18.4f} | {l_m:20.4f} | {gate_status}")
 
-        return {"horizon": H}
+        cos_at_h5 = mean_cos.get(5, 0.0)
+        cos_at_h10 = mean_cos.get(10, 0.0)
+        gate_passed = cos_at_h5 >= 0.80
+        self.log("-" * 80)
+        self.log(f"  [DREAMING GATE VERDICT] H=5 Cosine: {cos_at_h5:.4f} | H=10 Cosine: {cos_at_h10:.4f}")
+        if gate_passed:
+            self.log("  [+] GATE PASSED: Latent rollout fidelity meets U4 dreaming threshold (cosine ≥ 0.80 at H=5).")
+        else:
+            self.log("  [!] GATE LOCKED: Latent drift exceeds threshold at H=5 (requires map & memory refinement before dreaming).")
+
+        return {
+            "cosines": mean_cos,
+            "l2_distances": mean_l2,
+            "cos_at_h5": cos_at_h5,
+            "cos_at_h10": cos_at_h10,
+            "gate_passed": gate_passed,
+        }
 
     # -------------------------------------------------------------------------
     # 10. Tier-2 Memory X-Ray
@@ -681,3 +714,20 @@ class SeniorForensicSuite:
         plt.close(fig)
 
         return str(gif_path)
+
+    # -------------------------------------------------------------------------
+    # 13. Stage-Wise Policy Probe (The 4 Canonical Crafting Stages)
+    # -------------------------------------------------------------------------
+    def audit_item13_stagewise_probe(self) -> Dict[str, Any]:
+        self.log("\n" + "=" * 80)
+        self.log("  [ITEM 13] STAGE-WISE POLICY PROBE (THE 4 CANONICAL CRAFTING STAGES)")
+        self.log("=" * 80)
+        from src.diagnostics import run_stagewise_policy_probe
+        results = run_stagewise_policy_probe(self.agent)
+        for stage_name, actions in results.items():
+            self.log(f"\n--- {stage_name} ---")
+            self.log(f"{'Rank':<6} | {'Action':<22} | {'Probability':>12} | {'Q-Value':>12}")
+            self.log("-" * 58)
+            for a in actions:
+                self.log(f"#{a['rank']:<5} | {a['action']:<22} | {a['prob']*100:11.2f}% | {a['q']:12.4f}")
+        return results
