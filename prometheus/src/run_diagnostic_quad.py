@@ -18,6 +18,11 @@ import torch.nn.functional as F
 import numpy as np
 import crafter
 
+# Ensure prometheus dir is in sys.path
+PROMETHEUS_DIR = Path(__file__).resolve().parent.parent
+if str(PROMETHEUS_DIR) not in sys.path:
+    sys.path.insert(0, str(PROMETHEUS_DIR))
+
 from src.agent.agent import JEPAAgent
 from src.diagnostics import CRAFTER_ACTION_NAMES
 
@@ -33,6 +38,7 @@ def locate_checkpoint(custom_path: Optional[str] = None) -> Path:
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3/state.pt"),
         Path("checkpoints_v3/state.pt"),
         Path("../checkpoints_v3/state.pt"),
+        PROMETHEUS_DIR / "checkpoints_v3/state.pt",
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v3/checkpoint_step_25000.pt"),
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3/checkpoint_step_25000.pt"),
     ])
@@ -46,6 +52,7 @@ def locate_checkpoint(custom_path: Optional[str] = None) -> Path:
         "/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v3",
         "/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3",
         "checkpoints_v3",
+        str(PROMETHEUS_DIR / "checkpoints_v3"),
     ]:
         p = Path(dir_path)
         if p.exists():
@@ -59,32 +66,47 @@ def locate_checkpoint(custom_path: Optional[str] = None) -> Path:
 
 def run_item_a():
     print("## A. Hotfix-6 status (3 code checks — raw output)\n")
+    buffer_py = PROMETHEUS_DIR / "src/memory/buffer.py"
+    train_py = PROMETHEUS_DIR / "src/train.py"
+
     print("--- 1. Does the buffer store the memory state h? ---")
-    try:
-        r1 = subprocess.run('grep -n "def add" src/memory/buffer.py | head -2', shell=True, capture_output=True, text=True)
-        print(r1.stdout.strip())
-        r2 = subprocess.run('grep -n "t1_h\\|\'h\'\\|\\\"h\\\"" src/memory/buffer.py | head -8', shell=True, capture_output=True, text=True)
-        print(r2.stdout.strip())
-    except Exception as e:
-        print(f"Error running buffer check: {e}")
+    if buffer_py.exists():
+        with open(buffer_py, "r") as f:
+            buf_lines = f.readlines()
+        
+        # grep -n "def add"
+        add_matches = [(i + 1, line.rstrip()) for i, line in enumerate(buf_lines) if "def add" in line]
+        for idx, line in add_matches[:2]:
+            print(f"{idx}:{line}")
+            
+        # grep -n "t1_h\|'h'\|\"h\""
+        h_matches = [(i + 1, line.rstrip()) for i, line in enumerate(buf_lines) if ("t1_h" in line or "'h'" in line or '"h"' in line)]
+        for idx, line in h_matches[:8]:
+            print(f"{idx}:{line}")
+    else:
+        print(f"Error: {buffer_py} not found")
 
     print("\n--- 2. What does actor training feed the actor? (lines 1000-1015 requested, plus actor lines 1110-1125) ---")
-    try:
-        r3 = subprocess.run("sed -n '1000,1015p' src/train.py", shell=True, capture_output=True, text=True)
+    if train_py.exists():
+        with open(train_py, "r") as f:
+            train_lines = f.readlines()
         print("sed -n '1000,1015p' src/train.py:")
-        print(r3.stdout.strip())
-        print("\nsed -n '1112,1124p' src/train.py (Actor policy update):")
-        r3_actor = subprocess.run("sed -n '1112,1124p' src/train.py", shell=True, capture_output=True, text=True)
-        print(r3_actor.stdout.strip())
-    except Exception as e:
-        print(f"Error running train.py check: {e}")
+        for line in train_lines[999:1015]:
+            print(line.rstrip())
+        print("\nsed -n '1112,1125p' src/train.py (Actor policy update):")
+        for line in train_lines[1111:1125]:
+            print(line.rstrip())
+    else:
+        print(f"Error: {train_py} not found")
 
     print("\n--- 3. What does collection pass? ---")
-    try:
-        r4 = subprocess.run('grep -n "get_readout" src/train.py | head -6', shell=True, capture_output=True, text=True)
-        print(r4.stdout.strip())
-    except Exception as e:
-        print(f"Error running get_readout check: {e}")
+    if train_py.exists():
+        readout_matches = [(i + 1, line.rstrip()) for i, line in enumerate(train_lines) if "get_readout" in line]
+        for idx, line in readout_matches[:6]:
+            print(f"{idx}:{line}")
+    else:
+        print(f"Error: {train_py} not found")
+        
     print("\n" + "=" * 80 + "\n")
 
 
@@ -176,8 +198,8 @@ def run_item_d(agent: JEPAAgent, scene_b: torch.Tensor, device: torch.device):
             print(f"  Action {act_idx:2d} ({act_name:<16}): {val:.6f}")
             
         print("\nSummary Statistics:")
-        print(f"  Min disagreement:    {disc_vals.min():.6f} (Action: {CRAFTER_ACTION_NAMES[int(disc_vals.argmin())]})")
-        print(f"  Max disagreement:    {disc_vals.max():.6f} (Action: {CRAFTER_ACTION_NAMES[int(disc_vals.argmax())]})")
+        print(f"  Min disagreement:    {disc_vals.min():.6f} ({CRAFTER_ACTION_NAMES[int(disc_vals.argmin())]})")
+        print(f"  Max disagreement:    {disc_vals.max():.6f} ({CRAFTER_ACTION_NAMES[int(disc_vals.argmax())]})")
         print(f"  Spread (max - min):  {disc_vals.max() - disc_vals.min():.6f}")
         print(f"  Mean disagreement:   {disc_vals.mean():.6f}")
         print(f"  Std disagreement:    {disc_vals.std():.6f}")
@@ -204,10 +226,21 @@ def main():
     print(f"Loading JEPAAgent weights from: {ckpt_path}...")
     ck = torch.load(str(ckpt_path), map_location=device, weights_only=False)
     agent = JEPAAgent(latent_dim=256, num_actions=17, device=device)
+    
+    # Robust weights loading
     if "components" in ck and "agent" in ck["components"]:
-        agent.load_state_dict(ck["components"]["agent"].state_dict())
+        agent_comp = ck["components"]["agent"]
+        if hasattr(agent_comp, "state_dict"):
+            agent.load_state_dict(agent_comp.state_dict())
+        elif isinstance(agent_comp, dict):
+            agent.load_state_dict(agent_comp)
+        else:
+            agent.load_state_dict(agent_comp)
+    elif "agent_state_dict" in ck:
+        agent.load_state_dict(ck["agent_state_dict"])
     else:
-        agent.load_state_dict(ck.get("agent_state_dict", ck))
+        agent.load_state_dict(ck)
+        
     agent.eval()
     print("Agent weights successfully loaded!\n")
 
