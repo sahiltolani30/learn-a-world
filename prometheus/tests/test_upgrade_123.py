@@ -674,6 +674,58 @@ class TestUpgrade123(unittest.TestCase):
 
         self.assertEqual(pipeline.buffer.t1_size, 250)
 
+    def test_17_safety_lock_flips_allow_fresh_buffer_to_false_after_checkpoint(self):
+        """
+        Safety lock test:
+        Once a checkpoint is saved (with the new diary inside), allow_fresh_buffer
+        is locked permanently to False. Subsequent resumes also lock it to False.
+        """
+        v3_dir = Path(self.temp_dir) / "checkpoints_v3_safety_lock"
+        v3_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = TrainingPipeline({
+            "total_steps": 100,
+            "warmup_steps": 10,
+            "num_envs": 1,
+            "checkpoint_dir": str(v3_dir),
+            "allow_fresh_buffer": True,
+            "no_resume": False,
+        })
+        self.assertTrue(pipeline.allow_fresh_buffer)
+
+        # Add 5 transitions and save checkpoint
+        obs_shape = (3, 64, 64)
+        for i in range(5):
+            pipeline.buffer.add(
+                obs=np.zeros(obs_shape, dtype=np.uint8),
+                action=0,
+                reward=0.0,
+                next_obs=np.zeros(obs_shape, dtype=np.uint8),
+                done=False,
+                r_int=0.0,
+                is_milestone=False,
+            )
+
+        pipeline.save_checkpoint()
+
+        # The flag must be flipped back to False
+        self.assertFalse(pipeline.allow_fresh_buffer)
+        self.assertFalse(pipeline.cfg["allow_fresh_buffer"])
+
+        # When a new pipeline instance resumes from this directory:
+        pipeline_resumed = TrainingPipeline({
+            "total_steps": 100,
+            "warmup_steps": 10,
+            "num_envs": 1,
+            "checkpoint_dir": str(v3_dir),
+            "allow_fresh_buffer": True,  # User left it True
+            "no_resume": False,
+        })
+        # It must be locked back to False
+        self.assertFalse(pipeline_resumed.allow_fresh_buffer)
+        self.assertFalse(pipeline_resumed.cfg["allow_fresh_buffer"])
+        self.assertEqual(pipeline_resumed.buffer.size, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

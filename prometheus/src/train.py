@@ -541,6 +541,10 @@ class TrainingPipeline:
                         f"Resumed step {self.current_step} but buffer is empty — state.pt is missing buffer arrays. Aborting to protect the lineage."
                     )
 
+                # Safety lock: Resuming an existing run must NEVER allow discarding the active diary.
+                self.allow_fresh_buffer = False
+                self.cfg["allow_fresh_buffer"] = False
+
                 print(
                     f"[+] Resumed successfully at step {self.current_step}, "
                     f"episode {self.current_episode}, buffer size {self.buffer.size}, best return {self.best_eval_return:.2f}"
@@ -1295,6 +1299,12 @@ class TrainingPipeline:
         save_numbered_buffer = save_replay_buffer and (
             force_buffer or (self.buffer_save_every > 0 and self.checkpoint_count % self.buffer_save_every == 0)
         )
+
+        # Safety lock: Once a checkpoint is saved (with the new diary inside),
+        # permanently flip allow_fresh_buffer back to False so future resumes
+        # will never silently discard the active diary.
+        self.allow_fresh_buffer = False
+        self.cfg["allow_fresh_buffer"] = False
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
