@@ -13,6 +13,7 @@ Fulfills requirements:
 
 from typing import Dict, Any, Optional, Union, List
 from pathlib import Path
+import pathlib
 import os
 import glob
 import re
@@ -21,6 +22,25 @@ import shutil
 import gc
 import torch
 import torch.nn as nn
+
+
+def sanitize_payload_for_serialization(obj: Any) -> Any:
+    """
+    Recursively converts pathlib.PurePath objects to strings and sanitizes
+    nested dicts/lists/tuples so that PyTorch safe unpickling (weights_only=True)
+    does not fail on unsupported Path globals (V3_FIX_AND_RUN_PLAN.md HOTFIX 3).
+    """
+    if isinstance(obj, (pathlib.PurePath, Path)):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: sanitize_payload_for_serialization(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_payload_for_serialization(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(sanitize_payload_for_serialization(v) for v in obj)
+    elif isinstance(obj, set):
+        return {sanitize_payload_for_serialization(v) for v in obj}
+    return obj
 
 
 class CheckpointManager:
@@ -61,12 +81,14 @@ class CheckpointManager:
         """
         Rule 2: Preemption-Resilient Atomic Checkpointing.
         Saves directly to a .pt.tmp file first, flushes, and performs atomic rename via os.replace.
+        Payload is sanitized of pathlib.Path objects for PyTorch 2.6 safe-load compatibility.
         """
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = path.with_suffix(".pt.tmp")
+        sanitized_payload = sanitize_payload_for_serialization(payload)
         try:
-            torch.save(payload, str(tmp_path))
+            torch.save(sanitized_payload, str(tmp_path))
             os.replace(str(tmp_path), str(path))
         except Exception as e:
             if tmp_path.exists():
@@ -109,18 +131,19 @@ class CheckpointManager:
         # Ensure parent directory exists
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Assemble checkpoint payload
+        # Assemble checkpoint payload and sanitize Paths for PyTorch 2.6 safe-load compatibility
         payload: Dict[str, Any] = {
             "components": {k: self._extract_state(v) for k, v in components.items()},
             "metadata": metadata or {},
         }
+        sanitized_payload = sanitize_payload_for_serialization(payload)
 
         # Write atomically via temp file in same directory (guarantees same filesystem)
         temp_filename = f"{target_path.name}.tmp.{uuid.uuid4().hex}"
         temp_path = target_path.parent / temp_filename
 
         try:
-            torch.save(payload, str(temp_path))
+            torch.save(sanitized_payload, str(temp_path))
             # Flush to disk and atomic rename
             os.replace(str(temp_path), str(target_path))
         except Exception as e:

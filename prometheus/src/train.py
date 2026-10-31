@@ -278,6 +278,18 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         default=80.0,
         help="Emergency save and abort threshold on system RAM percentage (default 80.0, RAM Rule R3)",
     )
+    parser.add_argument(
+        "--allow_fresh_buffer",
+        action="store_true",
+        default=False,
+        help="Explicitly permit starting Stage C with an empty replay buffer if carry-over fails (V3_FIX_AND_RUN_PLAN.md)",
+    )
+    parser.add_argument(
+        "--carry_source",
+        type=str,
+        default=None,
+        help="Path to previous stage checkpoint (e.g. checkpoints_v2/checkpoint_step_100000.pt) to carry over replay buffer",
+    )
 
     return parser.parse_args(args)
 
@@ -337,6 +349,8 @@ class TrainingPipeline:
         self.mem_hidden: int = int(self.cfg.get("mem_hidden", 256))
         self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
         self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
+        self.allow_fresh_buffer: bool = bool(self.cfg.get("allow_fresh_buffer", False))
+        self.carry_source: Optional[str] = self.cfg.get("carry_source", None)
         
         # Parallel Environment Configuration (PARALLEL_ENV_PLAN.md)
         self.num_envs: int = int(self.cfg.get("num_envs", 8))
@@ -463,9 +477,18 @@ class TrainingPipeline:
                 if arch != "v3-spatial":
                     print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3-spatial; carrying over replay buffer only.")
                     comp_states = raw_ckpt.get("components", {})
-                    if "buffer" in comp_states and comp_states["buffer"] is not None:
-                        self.buffer.load_state_dict(comp_states["buffer"])
-                        print(f"[+] Replay buffer successfully carried over: T1={self.buffer.t1_size}, T2={self.buffer.t2_size}")
+                    buf_dict = comp_states.get("buffer") or raw_ckpt.get("buffer_arrays")
+                    if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
+                        self.buffer.load_state_dict(buf_dict)
+                        print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {latest_ckpt}")
+                        print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
+                    else:
+                        if not self.allow_fresh_buffer:
+                            raise RuntimeError(
+                                f"Diary carry-over FAILED (no buffer arrays found in {latest_ckpt}). Refusing to start with an empty buffer. "
+                                f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
+                            )
+                        print(f"[!] Legacy checkpoint had no buffer arrays — starting FRESH by explicit flag.")
                     self.current_step = 0
                     self.vector_step = 0
                     self.checkpoint_count = 0
@@ -479,6 +502,7 @@ class TrainingPipeline:
                     if "success_actions" in metadata:
                         self.success_actions = dict(metadata["success_actions"])
                     self.loss_history = metadata.get("loss_history", [])
+                    return True
                 else:
                     metadata = self.checkpoint_manager.restore(
                         filepath=latest_ckpt,
@@ -519,11 +543,64 @@ class TrainingPipeline:
                 return True
             except Exception as e:
                 # Re-raise P0.1 assertion RuntimeError directly
-                if isinstance(e, RuntimeError) and "Aborting to protect the lineage" in str(e):
+                if isinstance(e, RuntimeError) and ("Aborting to protect the lineage" in str(e) or "Diary carry-over FAILED" in str(e)):
                     raise
                 print(f"[!] Warning: Failed to restore checkpoint at {latest_ckpt}: {e}")
                 return False
-        return False
+        else:
+            return self.carry_over_buffer()
+
+    def carry_over_buffer(self, source_path: Optional[Union[str, Path]] = None) -> bool:
+        """
+        Carries over replay buffer from a previous stage checkpoint (e.g. Stage B 100k)
+        into the current pipeline's replay buffer.
+        Fails loud if allow_fresh_buffer is False (V3_FIX_AND_RUN_PLAN.md Hotfix 2).
+        """
+        if source_path is None:
+            if self.carry_source is not None:
+                source_path = Path(self.carry_source)
+            else:
+                ckpt_dir = Path(self.checkpoint_dir)
+                candidates = [
+                    ckpt_dir.parent / "checkpoints_v2" / "checkpoint_step_100000.pt",
+                    ckpt_dir.parent / "checkpoints_v2" / "state.pt",
+                    Path("./checkpoints_v2/checkpoint_step_100000.pt"),
+                    Path("./checkpoints_v2/state.pt"),
+                ]
+                for cand in candidates:
+                    if cand.exists():
+                        source_path = cand
+                        break
+
+        if source_path is None or not Path(source_path).exists():
+            if (self.carry_source is not None or "checkpoints_v3" in str(self.checkpoint_dir)) and not self.allow_fresh_buffer and not self.cfg.get("no_resume", False):
+                raise RuntimeError(
+                    f"Diary carry-over FAILED (source checkpoint not found: {source_path}). Refusing to start with an empty buffer. "
+                    f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
+                )
+            return False
+
+        source_path = Path(source_path)
+        print(f"[*] Checking for Stage B buffer carry-over from: {source_path}")
+        try:
+            buffer_state = torch.load(str(source_path), map_location="cpu", weights_only=False)
+            comp_states = buffer_state.get("components", {})
+            buf_dict = comp_states.get("buffer") or buffer_state.get("buffer_arrays")
+            if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
+                self.buffer.load_state_dict(buf_dict)
+                print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {source_path}")
+                print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
+                return True
+            else:
+                raise ValueError(f"No valid replay buffer arrays found in {source_path}")
+        except Exception as e:
+            if not self.allow_fresh_buffer:
+                raise RuntimeError(
+                    f"Diary carry-over FAILED ({e}). Refusing to start with an empty buffer. "
+                    f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
+                ) from e
+            print(f"[!] Buffer carry-over failed ({e}) — starting FRESH by explicit flag.")
+            return False
 
     def collect_batch_step(self) -> int:
         """

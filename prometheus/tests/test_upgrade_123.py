@@ -335,6 +335,131 @@ class TestUpgrade123(unittest.TestCase):
         self.assertIn("Aborting to protect the lineage", str(ctx.exception))
         self.assertIn("buffer is empty", str(ctx.exception))
 
+    def test_09_carry_over_from_valid_v2_checkpoint(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance 1:
+        Carry-over from a valid v2-format checkpoint restores t1_size and t2_size exactly,
+        even when metadata contains pathlib.Path objects.
+        """
+        v2_dir = Path(self.temp_dir) / "v2_test"
+        v2_dir.mkdir(parents=True, exist_ok=True)
+        mgr_v2 = CheckpointManager(checkpoint_dir=v2_dir)
+
+        buf = TwoTierReplayBuffer(tier1_capacity=20_000, tier2_capacity=5_000, seed=42)
+        obs_shape = (3, 64, 64)
+        for i in range(1_000):
+            buf.add(
+                obs=np.full(obs_shape, fill_value=(i % 256), dtype=np.uint8),
+                action=(i % 17),
+                reward=float(i % 10 == 0),
+                next_obs=np.full(obs_shape, fill_value=((i + 1) % 256), dtype=np.uint8),
+                done=(i % 100 == 0),
+                r_int=0.1,
+                is_milestone=(i % 5 == 0),
+            )
+
+        self.assertEqual(buf.t1_size, 1_000)
+        t2_expected = buf.t2_size
+
+        v2_ckpt = v2_dir / "checkpoint_step_100000.pt"
+        mgr_v2.save(
+            filepath=v2_ckpt,
+            components={"buffer": buf},
+            metadata={
+                "step": 100_000,
+                "arch": "v2-legacy",
+                "checkpoint_dir": Path("/content/drive/MyDrive/test_path"),
+            },
+        )
+
+        v3_dir = Path(self.temp_dir) / "checkpoints_v3"
+        v3_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = TrainingPipeline({
+            "total_steps": 25_000,
+            "warmup_steps": 100,
+            "num_envs": 1,
+            "checkpoint_dir": str(v3_dir),
+            "carry_source": str(v2_ckpt),
+            "allow_fresh_buffer": False,
+            "no_resume": False,
+        })
+
+        self.assertEqual(pipeline.buffer.t1_size, 1_000)
+        self.assertEqual(pipeline.buffer.t2_size, t2_expected)
+        self.assertEqual(pipeline.current_step, 0)  # Stage C starts at step 0 with carried buffer
+
+    def test_10_carry_over_fails_loud_on_missing_or_corrupt_file(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance 2:
+        Carry-over from a corrupted or missing file raises RuntimeError when
+        allow_fresh_buffer=False, and proceeds with empty buffer only when flag is set.
+        """
+        v3_dir = Path(self.temp_dir) / "v3_fail_loud"
+        v3_dir.mkdir(parents=True, exist_ok=True)
+        missing_ckpt = self.temp_dir + "/non_existent_step_100000.pt"
+
+        # 1. With allow_fresh_buffer=False -> must raise RuntimeError
+        with self.assertRaises(RuntimeError) as ctx:
+            TrainingPipeline({
+                "total_steps": 25_000,
+                "warmup_steps": 100,
+                "num_envs": 1,
+                "checkpoint_dir": str(v3_dir),
+                "carry_source": missing_ckpt,
+                "allow_fresh_buffer": False,
+                "no_resume": False,
+            })
+        self.assertIn("Diary carry-over FAILED", str(ctx.exception))
+        self.assertIn("Refusing to start with an empty buffer", str(ctx.exception))
+
+        # 2. With allow_fresh_buffer=True -> starts fresh without crashing
+        pipeline = TrainingPipeline({
+            "total_steps": 25_000,
+            "warmup_steps": 100,
+            "num_envs": 1,
+            "checkpoint_dir": str(v3_dir),
+            "carry_source": missing_ckpt,
+            "allow_fresh_buffer": True,
+            "no_resume": False,
+        })
+        self.assertEqual(pipeline.buffer.t1_size, 0)
+        self.assertEqual(pipeline.current_step, 0)
+
+    def test_11_checkpoint_sanitization_loads_weights_only(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance 3:
+        Saved checkpoint with Path objects in metadata is sanitized to strings,
+        allowing safe-loading via torch.load(..., weights_only=True) without error.
+        """
+        ckpt_dir = Path(self.temp_dir) / "ckpt_sanitize"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        mgr = CheckpointManager(checkpoint_dir=ckpt_dir)
+
+        model = nn.Linear(10, 5)
+        metadata = {
+            "step": 500,
+            "save_path": Path("/content/drive/MyDrive/model.pt"),
+            "config": {
+                "checkpoint_dir": Path("/content/drive/MyDrive/checkpoints_v3"),
+                "paths_list": [Path("/a/b"), Path("/c/d")],
+            },
+        }
+
+        saved_path = mgr.save(
+            filepath="model_step_500.pt",
+            components={"model": model},
+            metadata=metadata,
+        )
+
+        # Must load cleanly under torch.load(..., weights_only=True)
+        loaded = torch.load(saved_path, weights_only=True)
+        self.assertIn("components", loaded)
+        self.assertIn("metadata", loaded)
+        self.assertIsInstance(loaded["metadata"]["save_path"], str)
+        self.assertIsInstance(loaded["metadata"]["config"]["checkpoint_dir"], str)
+        self.assertEqual(loaded["metadata"]["config"]["paths_list"], ["/a/b", "/c/d"])
+
 
 if __name__ == "__main__":
     unittest.main()

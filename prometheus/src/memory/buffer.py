@@ -178,6 +178,11 @@ class TwoTierReplayBuffer:
         """Total transitions stored across Tier 1 and Tier 2."""
         return self.t1_size + self.t2_size
 
+    @property
+    def total_size(self) -> int:
+        """Alias for size for backward compatibility."""
+        return self.size
+
     def __len__(self) -> int:
         return self.t1_size
 
