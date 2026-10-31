@@ -34,11 +34,17 @@ def locate_checkpoint(custom_path: Optional[str] = None) -> Path:
         candidates.append(Path(custom_path))
 
     candidates.extend([
+        Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v4/state.pt"),
+        Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v4/state.pt"),
+        Path("checkpoints_v4/state.pt"),
+        Path("../checkpoints_v4/state.pt"),
+        PROMETHEUS_DIR / "checkpoints_v4/state.pt",
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v3/state.pt"),
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3/state.pt"),
         Path("checkpoints_v3/state.pt"),
         Path("../checkpoints_v3/state.pt"),
         PROMETHEUS_DIR / "checkpoints_v3/state.pt",
+        Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v4/checkpoint_step_25000.pt"),
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v3/checkpoint_step_25000.pt"),
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3/checkpoint_step_25000.pt"),
     ])
@@ -49,6 +55,10 @@ def locate_checkpoint(custom_path: Optional[str] = None) -> Path:
 
     # Search in directory if exists
     for dir_path in [
+        "/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v4",
+        "/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v4",
+        "checkpoints_v4",
+        str(PROMETHEUS_DIR / "checkpoints_v4"),
         "/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v3",
         "/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v3",
         "checkpoints_v3",

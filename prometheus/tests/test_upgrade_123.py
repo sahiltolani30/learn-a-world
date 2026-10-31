@@ -319,7 +319,7 @@ class TestUpgrade123(unittest.TestCase):
         mgr.save(
             filepath="state.pt",
             components={"buffer": empty_buf},
-            metadata={"step": 6_000, "arch": "v3-spatial"},
+            metadata={"step": 6_000, "arch": "v3.1-w1a"},
         )
 
         # Attempt to resume with step > 5000 and empty buffer -> must raise RuntimeError

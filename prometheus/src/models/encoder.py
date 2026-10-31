@@ -99,13 +99,21 @@ class ObservationEncoder(nn.Module):
         # U1: token_proj Conv2d(64, token_dim, 1) mapping feature map to token channels
         self.token_proj = nn.Conv2d(c3, token_dim, kernel_size=1)
 
-        # U1: Learned query pooling MultiheadAttention
-        self.pool_query = nn.Parameter(torch.randn(1, 1, token_dim) * 0.02)
-        self.pool = nn.MultiheadAttention(embed_dim=token_dim, num_heads=num_heads, batch_first=True)
-
-        # U1: Dense projection to 256-d latent dimension + LayerNorm
+        # W1a-3: Mean pooling projection to 256-d latent dimension + LayerNorm
         self.pooled_proj = nn.Linear(token_dim, latent_dim)
         self.ln = nn.LayerNorm(latent_dim)
+
+        # W1a-0: Reconstruction auxiliary head (each token decodes its own 8x8 patch)
+        self.recon_head = nn.Linear(token_dim, 3 * 8 * 8)
+
+    def decode_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
+        """
+        W1a-0: tokens (B, 64, token_dim) -> reconstructed frame (B, 3, 64, 64) in [0,1]-scale.
+        """
+        B = tokens.size(0)
+        patches = self.recon_head(tokens).view(B, 8, 8, 3, 8, 8)
+        frame = patches.permute(0, 3, 1, 4, 2, 5).reshape(B, 3, 64, 64)
+        return frame
 
     def _preprocess_obs(self, x: torch.Tensor) -> Tuple[torch.Tensor, bool]:
         """Convert input observation to standard (B, C, H, W) float32 tensor."""
@@ -137,7 +145,7 @@ class ObservationEncoder(nn.Module):
 
     def pool_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         """
-        Pool a sequence of spatial tokens into a single 256-d latent vector.
+        Pool a sequence of spatial tokens into a single 256-d latent vector via mean pooling (W1a-3).
         
         Args:
             tokens: Tensor of shape (B, num_tokens, token_dim) or (num_tokens, token_dim).
@@ -149,10 +157,8 @@ class ObservationEncoder(nn.Module):
             unbatched = True
             tokens = tokens.unsqueeze(0)
 
-        B = tokens.size(0)
-        q = self.pool_query.expand(B, -1, -1)  # (B, 1, token_dim)
-        attn_out, _ = self.pool(query=q, key=tokens, value=tokens)  # (B, 1, token_dim)
-        pooled_token = attn_out.squeeze(1)  # (B, token_dim)
+        # W1a-3: Mean pooling preserves every spatial region equally
+        pooled_token = tokens.mean(dim=1)  # (B, token_dim)
         z = self.ln(self.pooled_proj(pooled_token))  # (B, latent_dim)
 
         if unbatched:

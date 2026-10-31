@@ -128,6 +128,7 @@ class SpatialTransformerPredictor(nn.Module):
         # Action and Memory projection to token_dim
         self.action_embedding = ActionEmbedding(num_actions=num_actions, action_dim=action_dim)
         self.action_proj = nn.Linear(action_dim, token_dim)
+        self.a_proj = nn.Linear(action_dim, token_dim)
         self.default_mem = nn.Parameter(torch.randn(1, mem_hidden) * 0.05)
         self.mem_proj = nn.Linear(mem_hidden, token_dim)
 
@@ -179,8 +180,10 @@ class SpatialTransformerPredictor(nn.Module):
         """
         B = tokens.size(0)
 
-        # 1. Embed action and project to token_dim
+        # 1. Embed action and inject into every token position (W1a-1)
         a_emb = self.action_embedding(a)  # (B, action_dim)
+        a_broadcast = self.a_proj(a_emb)  # (B, token_dim)
+        tokens = tokens + a_broadcast.unsqueeze(1)  # (B, 64, token_dim) += broadcast
         a_tok = self.action_proj(a_emb).unsqueeze(1)  # (B, 1, token_dim)
 
         # 2. Project memory state to token_dim (uses learnable default_mem if h is None)
@@ -245,16 +248,18 @@ class SpatialTransformerPredictor(nn.Module):
         all_pred_tokens: torch.Tensor,
         target_tokens: torch.Tensor,
         mask: torch.Tensor,
+        position_weights: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Compute masked token prediction MSE loss.
-        Loss is computed strictly on masked positions only:
+        Compute masked token prediction MSE loss with optional dynamic-tile weighting (W1a-2).
+        Loss is computed on masked positions:
         normalized per-sample, then averaged across the batch and ensemble heads.
         
         Args:
             all_pred_tokens: (num_heads, B, 64, token_dim) or (B, 64, token_dim).
             target_tokens: (B, 64, token_dim) true target tokens from TargetEncoder.
             mask: (B, 64) boolean tensor where True = masked position.
+            position_weights: Optional (B, 64) dynamic tile weighting (W1a-2).
             
         Returns:
             L_tokens: Scalar tensor loss.
@@ -264,15 +269,21 @@ class SpatialTransformerPredictor(nn.Module):
 
         num_heads = all_pred_tokens.size(0)
         mask_float = mask.float()
-        num_masked_per_sample = mask_float.sum(dim=-1).clamp(min=1.0)  # (B,)
+
+        if position_weights is not None:
+            eff_mask = mask_float * position_weights
+            norm_per_sample = eff_mask.sum(dim=-1).clamp(min=1e-6)
+        else:
+            eff_mask = mask_float
+            norm_per_sample = mask_float.sum(dim=-1).clamp(min=1.0)
 
         head_losses = []
         for k in range(num_heads):
             # Squared error per token: (B, 64)
             sq_diff = ((all_pred_tokens[k] - target_tokens) ** 2).sum(dim=-1)
-            # Masked sum per sample
-            masked_sq_diff = (sq_diff * mask_float).sum(dim=-1)  # (B,)
-            sample_loss = masked_sq_diff / num_masked_per_sample  # (B,)
+            # Masked weighted sum per sample
+            masked_sq_diff = (sq_diff * eff_mask).sum(dim=-1)  # (B,)
+            sample_loss = masked_sq_diff / norm_per_sample  # (B,)
             head_losses.append(sample_loss.mean())
 
         return torch.stack(head_losses).mean()
@@ -463,12 +474,15 @@ class ResidualMLPPredictor(nn.Module):
         all_pred_tokens: torch.Tensor,
         target_tokens: torch.Tensor,
         mask: torch.Tensor,
+        position_weights: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if all_pred_tokens.dim() == 4:
             all_pred_tokens = all_pred_tokens.mean(dim=0)
         mask_f = mask.unsqueeze(-1).float()
+        if position_weights is not None:
+            mask_f = mask_f * position_weights.unsqueeze(-1)
         diff = ((all_pred_tokens - target_tokens) ** 2) * mask_f
-        return diff.sum() / mask_f.sum().clamp(min=1.0)
+        return diff.sum() / mask_f.sum().clamp(min=1e-6)
 
     def forward(
         self,

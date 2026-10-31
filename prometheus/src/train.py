@@ -285,6 +285,12 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="Explicitly permit starting Stage C with an empty replay buffer if carry-over fails (V3_FIX_AND_RUN_PLAN.md)",
     )
     parser.add_argument(
+        "--token_var_floor",
+        type=float,
+        default=0.05,
+        help="Per-token batch variance floor for W1a-4 anti-collapse (default 0.05)",
+    )
+    parser.add_argument(
         "--carry_source",
         type=str,
         default=None,
@@ -350,6 +356,7 @@ class TrainingPipeline:
         self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
         self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
         self.allow_fresh_buffer: bool = bool(self.cfg.get("allow_fresh_buffer", False))
+        self.token_var_floor: float = float(self.cfg.get("token_var_floor", 0.05))
         self.carry_source: Optional[str] = self.cfg.get("carry_source", None)
         
         # Parallel Environment Configuration (PARALLEL_ENV_PLAN.md)
@@ -473,8 +480,8 @@ class TrainingPipeline:
                 step = metadata.get("step", 0)
 
                 # Check architecture compatibility (Pitfall 5)
-                if arch != "v3-spatial":
-                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3-spatial; carrying over replay buffer only.")
+                if arch != "v3.1-w1a":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3.1-w1a; carrying over replay buffer only.")
                     comp_states = raw_ckpt.get("components", {})
                     buf_dict = comp_states.get("buffer") or raw_ckpt.get("buffer_arrays")
                     if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
@@ -986,21 +993,35 @@ class TrainingPipeline:
         with torch.no_grad():
             target_tokens, target_pooled = self.agent.target_encoder.forward_tokens(batch["next_obs"])
 
+        # W1a-0: Reconstruction auxiliary head (THE KEYSTONE)
+        recon = self.agent.encoder.decode_tokens(curr_tokens)          # (B, 3, 64, 64)
+        l_recon = F.mse_loss(recon, batch["obs"])                       # batch["obs"] is float [0,1]
+
         # 2. Spatial Transformer Prediction (conditioned on actions and stored h, Hotfix 6)
         mean_pred_tokens, all_pred_tokens = self.agent.predictor.forward_tokens(
             curr_tokens, batch["actions"], h=batch.get("h")
         )
 
-        # 3. U1: Masked Token Prediction Loss (35% tokens masked per sample)
+        # W1a-2: Dynamic-tile loss weighting (the missing scene-information gradient)
+        with torch.no_grad():
+            delta = (target_tokens - curr_tokens).norm(dim=-1)          # (B, 64)
+            weights = torch.ones_like(delta)
+            topk = torch.topk(delta, k=8, dim=-1).indices                # the 8 most-changing tiles
+            weights.scatter_(1, topk, 5.0)
+            weights = weights / weights.mean(dim=-1, keepdim=True)       # mean weight = 1 per sample
+
+        # 3. U1: Masked Token Prediction Loss with dynamic tile weights
         mask = sample_token_mask(
             batch_size=curr_tokens.size(0),
             num_tokens=self.agent.predictor.num_tokens,
             mask_ratio=self.mask_ratio,
             device=self.device,
         )
-        l_tokens = self.agent.predictor.compute_masked_loss(all_pred_tokens, target_tokens, mask)
+        l_tokens = self.agent.predictor.compute_masked_loss(
+            all_pred_tokens, target_tokens, mask, position_weights=weights
+        )
 
-        # 4. Pooled VICReg Loss on pooled latents
+        # 4. Pooled VICReg Loss on pooled latents (W1a-3 mean pooling)
         mean_pred_pooled = self.agent.encoder.pool_tokens(mean_pred_tokens)
         all_pred_pooled = torch.stack([
             self.agent.encoder.pool_tokens(all_pred_tokens[k])
@@ -1010,7 +1031,11 @@ class TrainingPipeline:
         loss_dict = self.vicreg_loss(all_pred_pooled, target_pooled)
         l_pool = loss_dict["loss"]
 
-        # 5. U3: Auxiliary Reward & Done Heads (trained on WM optimizer)
+        # W1a-4: Per-token variance floor (free-bits analogue)
+        tok_var = curr_tokens.var(dim=0)                                 # (64, token_dim) batch variance per position-feature
+        l_tokfloor = F.relu(self.token_var_floor - tok_var).mean()       # floor 0.05, weight 1.0
+
+        # 5. U3 & W1a-5: Auxiliary Reward & Done Heads (bumped weight 0.5 -> 1.0)
         pred_r = self.agent.reward_head(mean_pred_pooled).squeeze(-1)
         pred_d_logits = self.agent.done_head(mean_pred_pooled).squeeze(-1)
         l_reward = F.mse_loss(pred_r, batch["rewards"])
@@ -1019,10 +1044,12 @@ class TrainingPipeline:
         # Anti-collapse variance and covariance regularization on online latents
         var_z, cov_z, min_std_z, _ = self.vicreg_loss._compute_var_cov(curr_pooled.unsqueeze(0))
         wm_loss = (
-            1.0 * l_tokens
-            + 1.0 * l_pool
-            + 0.5 * l_reward
-            + 0.5 * l_done
+            1.0 * l_tokens            # masked tile prediction (with W1a-2 weights)
+            + 1.0 * l_pool            # VICReg on pooled (unchanged)
+            + 0.3 * l_recon           # W1a-0 reconstruction anchor
+            + 1.0 * l_tokfloor        # W1a-4 per-token variance floor
+            + 1.0 * l_reward          # U3 (bumped from 0.5 to 1.0)
+            + 1.0 * l_done            # U3 (bumped from 0.5 to 1.0)
             + self.vicreg_loss.var_coeff * var_z
             + self.vicreg_loss.cov_coeff * cov_z
         )
@@ -1047,6 +1074,8 @@ class TrainingPipeline:
             "wm_loss": float(wm_loss.item()),
             "l_tokens": float(l_tokens.item()),
             "l_pool": float(l_pool.item()),
+            "l_recon": float(l_recon.item()),
+            "l_tokfloor": float(l_tokfloor.item()),
             "l_reward": float(l_reward.item()),
             "l_done": float(l_done.item()),
             "invariance": float(loss_dict["invariance"].item()),
@@ -1321,7 +1350,7 @@ class TrainingPipeline:
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
-            "arch": "v3-spatial",
+            "arch": "v3.1-w1a",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,

@@ -29,6 +29,7 @@ import sys
 import time
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 # ABI & compatibility shim for NumPy 2.x and SciPy internal array_api_compat
@@ -263,7 +264,11 @@ def run_smoke_test() -> Dict[str, Any]:
     agent.train()
     vicreg = VICRegLoss(sim_coeff=1.0, var_coeff=1.0, cov_coeff=0.04)
 
-    batch_z = agent.encoder(batch["obs"])
+    batch_obs = batch["obs"].float() / 255.0 if batch["obs"].dtype == torch.uint8 else batch["obs"]
+    batch_tokens, batch_z = agent.encoder.forward_tokens(batch_obs)
+    recon = agent.encoder.decode_tokens(batch_tokens)
+    l_recon = F.mse_loss(recon, batch_obs)
+
     with torch.no_grad():
         batch_z_target = agent.target_encoder(batch["next_obs"])
 
@@ -274,7 +279,7 @@ def run_smoke_test() -> Dict[str, Any]:
         assert req_key in loss_dict, f"Missing {req_key} in VICRegLoss output"
         assert not torch.isnan(loss_dict[req_key]), f"NaN in {req_key}"
 
-    total_loss = loss_dict["loss"]
+    total_loss = loss_dict["loss"] + 0.3 * l_recon
     inv_loss = loss_dict["invariance"].item()
     var_loss = loss_dict["variance"].item()
     cov_loss = loss_dict["covariance"].item()

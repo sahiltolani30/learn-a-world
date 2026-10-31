@@ -52,13 +52,14 @@ class TestChallenge1GradientFlowAndTargetFreezing(unittest.TestCase):
         actions = torch.arange(0, 17, dtype=torch.long)  # All actions 0..16 present
 
         # Forward pass
-        z_t = encoder(x_t)
+        tokens, z_t = encoder.forward_tokens(x_t)
         mean_pred, all_preds = predictor(z_t, actions)
         z_target = target_encoder(x_next)
 
         # Compute loss
         loss_dict = loss_fn(all_preds, z_target)
-        loss = loss_dict["loss"]
+        recon = encoder.decode_tokens(tokens)
+        loss = loss_dict["loss"] + 0.3 * ((recon - x_t) ** 2).mean()
         loss.backward()
 
         # 1. Check ObservationEncoder parameters
