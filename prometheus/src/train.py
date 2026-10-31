@@ -466,10 +466,10 @@ class TrainingPipeline:
                     if "buffer" in comp_states and comp_states["buffer"] is not None:
                         self.buffer.load_state_dict(comp_states["buffer"])
                         print(f"[+] Replay buffer successfully carried over: T1={self.buffer.t1_size}, T2={self.buffer.t2_size}")
-                    self.current_step = step
-                    self.vector_step = metadata.get("vector_step", step // self.num_envs)
-                    self.checkpoint_count = metadata.get("checkpoint_count", 0)
-                    self.current_episode = metadata.get("episode", 0)
+                    self.current_step = 0
+                    self.vector_step = 0
+                    self.checkpoint_count = 0
+                    self.current_episode = 0
                     self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
                     self.best_eval_return = metadata.get("best_eval_return", -float("inf"))
                     self.achievement_history = metadata.get("achievement_history", {})
