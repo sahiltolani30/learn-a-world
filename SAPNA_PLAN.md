@@ -44,7 +44,8 @@ them; they are listed for provenance):
 - DreamerV3 official config (github.com/danijar/dreamerv3, `dreamerv3/configs.yaml`, crafter
   section: steps 1.1e6, envs 1, train_ratio 512, batch 16×64, imag_length 15, symexp_twohot
   bins 255, unimix 0.01, free_nats 1.0, loss_scales rew/con 1.0, imag_loss {lam 0.95,
-  actent 3e-4}, shared lr 4e-5) and DreamerV3 paper v2 (arXiv 2301.04104: Crafter 19.4 @1M).
+  actent 3e-4}, shared lr 4e-5) and the official leaderboard scores (danijar/crafter
+  `scores/`: vanilla DreamerV3 **14.5±1.6** @1.1M; the 19.4±1.6 entry is Curious Replay).
 - EMERALD, "Accurate and Efficient World Modeling with Masked Latent Prediction"
   (Burchi & Timofte, ICML 2025, arXiv 2507.04075): current Crafter SOTA, 58.1 @10M, first to
   beat human (50.5). Paper Table 10: B=16, T=64, 16 envs, LR WM 1e-4 / actor-critic 3e-5,
@@ -200,6 +201,19 @@ role DreamerV3's RSSM plays; ours is built from JEPA tokens instead of categoric
 4. Sequence training (T=16 BPTT) replaces v3's 1-step batch; the §4 block is the sequence
    form of the same losses. GRU h starts at 0 per window (TBPTT-stateless, like
    DreamerV3's sequence resets) — a documented approximation.
+5. **Imagination decode must not accumulate action broadcasts (v1.4 — critical).** The
+   copied `forward_tokens` adds the action broadcast into the token grid AND builds
+   predictions on the post-broadcast grid (`pred = (tokens + b(a_t)) + head(...)`,
+   `predictor.py:186-211`). Fine at 1 step (the heads learn to cancel `b(a_t)` against
+   clean next-frame targets), but in a 15-step closed loop the residue accumulates
+   LINEARLY — `tokens_{k+1}` still contains `b(a_k)`, step k+1 adds `b(a_{k+1})`, … an
+   input distribution never seen in training. This alone would fire the drift gate and
+   look like "mysterious" world-model failure. Documented one-line deviation: in
+   `sapna/dynamics.py` add `forward_tokens_clean(tokens, a, h)` — identical to the copied
+   method except predictions are built on the PRE-broadcast grid:
+   `pred = tokens_input + head(spatial_out)` (the transformer still sees tokens+b(a)
+   internally as conditioning). Use `forward_tokens_clean` for ALL imagination decode;
+   keep `forward_tokens` for the training-time masked loss. Acceptance test T13 pins it.
 
 ---
 
@@ -234,7 +248,7 @@ Tag legend: **[D3]** = DreamerV3 official config, **[EM]** = EMERALD paper Table
 | grad clip | 1.0 (global norm) | [V3] | known-good in this repo |
 | update_every | **1** (vec step = 16 raw env steps → train ratio 8 raw / 16 stored) | [AMEND v1.2] | doubles gradient contact per life (v1.0's ratio 4 was mis-derived); pre-registered fallback if SPS < 20 at G1: `update_every=2` + `batch_seqs=16, seq_len=8` (same 128 frames, 256 imagination starts from 16 episodes) |
 | warmup_steps | 200 vec-steps random-uniform | OURS | buffer needs valid ≥16-length windows first |
-| buffer capacity | 100,000 transitions | OURS | 1.23 GB uint8 — Colab RAM contract (§7) |
+| buffer capacity | **300,000 transitions** | [AMEND v1.4] | 3.7 GB RAM, still inside the Colab contract; preserves the milestone pool across the whole run (100k evicts the discovery epoch). Drive quota math: state.pt ≈ 3.7 GB/save → retention = **latest + 1 numbered** (2 files ≈ 7.4 GB); pre-save psutil check ≥ 3 GB free; keep the whole `learn-a-world/sapna/` Drive folder ≤ 8 GB (free Drive is 15 GB, shared with other models' folders) |
 | replay sampling | 70% uniform / 30% milestone-window | [V3 C2] | validated mechanism, carried over |
 | eps_base (ε-greedy) | **0.0** | [D3][EM] | champions use none; entropy + unimix only. Pre-registered lever: 0→0.05 at G3 branch (§13) |
 | curiosity (disagreement) weight in actor | **0.0** (off) | [OURS] | champions show entropy suffices; disagreement still computed + logged (diagnostics + milestone admission). Do not enable without a plan revision |
@@ -261,7 +275,10 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
            z_{t+1} = Encoder(x_next);  h = GRUCell(concat[z_t, emb(a)], h);  reset slot on done
            buffer.add(obs, a, r_sum_over_repeat, done, episode_id, step_in_ep, milestone_flag)
            milestone_flag = new achievement this episode (per-env set) OR r_int_norm > 1.0  (§6)
-           r_int = predictor.compute_epistemic_disagreement(all_preds_t, mask_t)  # stored, NOT rewarded
+           r_int = ONE extra predictor forward on the 8 current frames with a fresh mask
+                   → compute_epistemic_disagreement → RunningMeanStd-normalize
+                   (v1.4: the collection loop must run this small forward itself —
+                   the training-loop tensors do not exist here; stored, NOT rewarded)
   if step < warmup or buffer.valid_windows < 64: continue
   if step % update_every != 0: continue
 
@@ -292,6 +309,8 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
   # CRITICAL (DreamerV3 semantics): the TRAJECTORY is computed under torch.no_grad() so no
   # imagination gradient ever reaches opt_wm; actor/critic are then evaluated WITH grad on
   # top of the detached states.
+  # v1.4: the WM phase's graph was freed by opt_wm.step() — .detach() z, toks, h_seq
+  # BEFORE building imagination starts; decode via forward_tokens_clean (§2.5 item 5).
   with torch.no_grad():
       starts = all (z[t], h[t]) posterior states from the SAME batch → N = 8*16 = 128
       tokens_0 = the real frame's token grid of each start (posterior tokens)
@@ -312,7 +331,9 @@ loop over vec-steps (one vec-step = one action per env, action_repeat applied in
   loss_critic = twohot_ce(Critic(concat[z_k, h_k]), symlog(clamp(G, ±20)))   # G detached
   opt_actor.step();  opt_critic.step();  SlowCritic.ema_update(tau=0.98)
 
-  every 5k env steps: checkpoint (§11); every 5k: eval (§9); log telemetry every update (§10)
+  every 25k env steps: checkpoint (§3 retention rules); every 5k: eval (§9);
+  telemetry: accumulate floats per update, flush to history every 10 updates (v1.4:
+  a .item() GPU sync every update fights the SPS gate)
 ```
 
 Indexing convention (memorize): `RewardHead(concat[z_t, h_t])` is trained against
@@ -332,8 +353,10 @@ Critic/Actor always read `concat[z, h]` of the state they act FROM.
 G_H = v_bootstrap
 G_k = r_k + γ·(1−d_k)·[ (1−λ)·v_{k+1} + λ·G_{k+1} ]     for k = H−1 .. 0
 ```
-`reward_grad` (DreamerV3) is deliberately NOT used in v1: reward/continuation predictions
-stay detached (documented decision, v1.3).
+`reward_grad` (DreamerV3 uses True) is deliberately NOT used in v1: reward/continuation
+predictions stay detached (documented decision; v1.4 trigger to reconsider in a later
+revision: G2 drift gate passes AND policy metrics still flat at G3 — valuable but
+instability-prone at ~69k updates).
 `r_k, d_k` are the detached **arrival-state** head predictions (the reward / termination of
 arriving at imagined state k+1, §2.2); `v_{k+1}` = the SLOW critic's scalar value at the NEXT
 imagined state (detached inside the return computation; gradients reach the critic only
@@ -346,12 +369,18 @@ through `loss_critic`). Shapes: all `(N,15)` with `N=128`; bootstrap `v_H` shape
 - loss: `CrossEntropy(logits, twohot_target)` (i.e., −Σ target·log_softmax(logits)).
 - scalar readout: `symexp( Σ softmax(logits)·linspace(−20,20,255) )`.
 
-**5.4 Actor objective (DreamerV3 form):**
-`advantage_k = sg(G_k − v_k)` (both sides detached inside the advantage);
-`loss_actor = −mean_k( logprob(a_k | probs_k) · advantage_k ) − 3e-4 · mean_k(entropy(probs_k))`.
-The entropy term is a SEPARATE additive term with its own gradient — it must NOT be placed
-inside the advantage (that would kill its gradient). REINFORCE with value baseline.
-No PPO clipping, no DPG — copy the champion form exactly.
+**5.4 Actor objective (champion form, v1.4 — normalization is REQUIRED):**
+`adv_raw_k = G_k − v_slow_k`; then standardize per update:
+`adv_k = (adv_raw − mean(adv_raw)) / (std(adv_raw) + 1e-3)`;
+`loss_actor = −mean_k( logprob(a_k | probs_k) · adv_k ) − 3e-4 · mean_k(entropy(probs_k))`.
+Why normalization is mandatory (v1.4, from independent review): `actent=3e-4` is calibrated
+for a scale-free advantage — DreamerV3 normalizes returns (percentile retnorm) AND
+advantages (advnorm); EMERALD uses EMA return normalization (momentum 0.99, 5–95th
+percentile). On raw magnitudes, once |G| reaches 5–10 mid-run, the policy gradient
+outweighs the entropy term by 10⁴–10⁵ → premature entropy collapse or oscillation.
+**The CRITIC still trains on RAW G** (two-hot 255 bins need absolute scale) — normalize
+the actor advantage ONLY. The entropy term stays a SEPARATE additive term with its own
+gradient — never inside the advantage. No PPO clipping, no DPG.
 
 **5.5 VICReg** (copy v3 `src/models/losses.py` semantics): sim = MSE on normalized vectors,
 coeff 1.0; var hinge coeff 1.0 (γ=1.0, ε=1e-4 inside sqrt); cov coeff 0.04; reduction
@@ -492,7 +521,7 @@ sapna/
   train.py             # loop per §4, evaluate per §9, checkpoint/resume per §11, CLI per below
   benchmark.py         # §9
 tests/
-  test_sapna.py        # §12 acceptance tests (one file, numbered T1..T12)
+  test_sapna.py        # §12 acceptance tests (one file, numbered T1..T13)
 notebooks/
   train_sapna_colab.ipynb   # §14
 SAPNA_PLAN.md          # this document (already at repo root)
@@ -545,6 +574,10 @@ or buffer roundtrip failure (Hotfix-2 lesson).
   agent path; milestone flag consumed only from `eval_info` count.
 - **T12 smoke end-to-end (CPU, 200 steps, tiny config):** runs to completion, telemetry has
   all §9 keys, imagination-reward-corr computed at least once, `verify_non_collapse` passes.
+- **T13 closed-loop purity (v1.4):** 15-step imagination rollout with a CONSTANT action from
+  a fixed start → token drift bounded (max|tokens_k − tokens_0| < 1.0); identical rollouts
+  with identical seeds → identical trajectories; `forward_tokens_clean` output equals
+  `tokens_input + head(spatial_out)` exactly (no broadcast residue).
 
 ---
 
@@ -585,8 +618,12 @@ list as the existing Cell 3 (crafter, gymnasium, imageio, matplotlib, psutil).
 **Stage G0 — Smoke (CPU, 200 steps).** All §11 tests green. → proceed.
 **Stage G1 — Validation run, 25k steps** (`--total_steps 25000`, fresh `checkpoints_v1`,
 `--no_resume`). Gates: no NaN; `wm_loss` declining; `reward_ce < 1.5` (init ≈ ln 255 ≈ 5.5);
-`done_bce < 0.3`; stochastic eval mean achievements ≥ 2.5; SPS ≥ 15 (v1.3 recalibrated to
-T4 + 2-vCPU reality); imagination reward corr
+`done_bce < 0.3`; **reward head skill gate (v1.4): reward CE < 4.0 AND mean predicted
+reward on milestone windows > mean predicted reward on random windows** (a raw-CE threshold
+passes trivially by predicting all-zero rewards — ~99.7% of rewards are 0); stochastic
+eval mean unique achievements per episode ≥ 2.0 (v1.4: "achievements" = count of DISTINCT
+achievements per episode, averaged — a ≥2.5 gate likely failed healthy runs since random
+gets 1–2); SPS ≥ 15 (v1.3 recalibrated to T4 + 2-vCPU reality); imagination reward corr
 ≥ 0.3 — with the v1.2 caveat: if fewer than 10 of the 32 sampled windows contain nonzero
 cumulative reward, log "insufficient reward variance" and PASS-with-caveat instead of
 stopping; `var_hinge > 0.1` (no collapse). **PASS → extend the SAME run** to 1.1M
@@ -610,7 +647,9 @@ wording: uncapped is neither official nor safe). Reading: **≥5% = breakthrough
 (breaks the 2–4% lineage plateau into PPO/Rainbow territory); ≥10% = stretch,
 DreamerV2-level breadth. Score 4–5% → continue same run to 3M (one command). Score < 4%
 with all gates healthy → continue to 3M and report at 2M. Score < 3% → STOP, full forensic
-report (§9 instruments), no config changes.
+report (§9 instruments), no config changes. v1.4 caveat: the training-episode basis keeps
+every early bad episode in the denominator, so it reads LOWER than a final-policy benchmark
+by design — always report BOTH numbers side by side.
 **Stage G5 — beyond.** Post-G4 upgrades (MaskGIT refinement S=3, T=32, categorical latents
 A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of this document.
 
@@ -641,8 +680,13 @@ A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of t
   ~8 raw (16 stored transitions) per update (v1.2 corrected derivation), ~1.7–2.5M params, T4
   — targeting **10–15% at 1.1M** means "DreamerV3-v1 territory at DreamerV3's own budget".
   Achievable; not guaranteed; gates decide. Single-seed Crafter variance is ±2–4 score
-  points — the G4 8%-vs-10% branch sits inside that noise band; when in doubt, continue to
-  3M rather than stop.
+  points — the G4 branch boundaries sit inside that noise band; when in doubt, continue to
+  3M rather than stop. Honest compute-deficit framing (v1.4, first-principles):
+  DreamerV3@14.5 did ~550k updates × 1024 frames ≈ 563M world-model frame-visits and 8.4B
+  imagined steps; SAPNA gets ~69k updates × 128 frames ≈ 8.8M frame-visits and 132M
+  imagined steps — a **64× deficit on the axis DreamerV3's own scaling data says improves
+  performance monotonically**. Also: EMERALD's 58.1 is a 10M-STEP result — never quote it
+  as a 1M-step expectation (v1.4).
 - Worked examples (v1.3, corrected — the v1.0 example used the fraction form of S_i and was
   wrong by ~4×; S_i enters in PERCENT): rates {90,70,60,50,40,30,20,10,5} → Σln(1+S)=31.2 →
   score **3.13**. Score 5 needs Σ≈39.5 — e.g., those nine plus three more at ~30%.
@@ -661,7 +705,7 @@ A/B, self-imitation) are OUT OF SCOPE for this plan; require a new revision of t
 1. `sapna/envs.py` (copy) + T11 → 2. `sapna/encoder.py` (copy) + T1/T2 →
 3. `sapna/dynamics.py` + `sapna/policy.py` + T1/T3/T5 → 4. `sapna/imagination.py` + T3/T4/T7 →
 5. `sapna/buffer.py` + T6 → 6. `sapna/config.py`, `sapna/train.py`, `sapna/benchmark.py` +
-T8/T9/T10/T12 → 7. notebook §14 → 8. run G0 → G1 → report.
+T8/T9/T10/T12/T13 → 7. notebook §14 → 8. run G0 → G1 → report.
 The whole pass is ~1.5–2 implementation days. When any step is ambiguous, §0.3 applies:
 stop and report — never guess.
 
