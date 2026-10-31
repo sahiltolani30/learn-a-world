@@ -312,13 +312,25 @@ class AgentForensics:
             ep_steps = 0
             done = False
             unlocked_this_ep = set()
+            mem_dim = getattr(self.agent, "mem_hidden", 256)
+            eval_h = torch.zeros(1, mem_dim, device=self.device)
 
             while not done:
-                action = self.agent.act(obs, eval_mode=not stochastic, planning=planning)
+                action = self.agent.act(obs, eval_mode=not stochastic, planning=planning, h=eval_h)
                 obs, reward, term, trunc, info = env.step(action)
                 ep_ret += float(reward)
                 ep_steps += 1
                 done = term or trunc
+
+                if done:
+                    eval_h = torch.zeros(1, mem_dim, device=self.device)
+                else:
+                    with torch.no_grad():
+                        x = self.agent.validate_and_prepare_obs(obs)
+                        if x.dim() == 3:
+                            x = x.unsqueeze(0)
+                        z = self.agent.encoder(x)
+                        eval_h = self.agent.gru(z, eval_h)
 
                 eval_info = info.get("eval_info", {})
                 for ach in eval_info.get("unlocked_achievements", []):

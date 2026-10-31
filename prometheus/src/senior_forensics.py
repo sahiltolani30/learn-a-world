@@ -118,11 +118,21 @@ class SeniorForensicSuite:
         for _ in range(5):
             obs = eval_env.reset()
             done = False
+            eval_h = torch.zeros(1, getattr(self.agent, "mem_hidden", 256), device=self.device)
             while not done:
-                a = self.agent.act(obs, eval_mode=True, planning=False)
+                a = self.agent.act(obs, eval_mode=True, planning=False, h=eval_h)
                 eval_acts.append(a)
                 obs, _, term, trunc, _ = eval_env.step(a)
                 done = term or trunc
+                if done:
+                    eval_h = torch.zeros(1, getattr(self.agent, "mem_hidden", 256), device=self.device)
+                else:
+                    with torch.no_grad():
+                        x = self.agent.validate_and_prepare_obs(obs)
+                        if x.dim() == 3:
+                            x = x.unsqueeze(0)
+                        z = self.agent.encoder(x)
+                        eval_h = self.agent.gru(z, eval_h)
         eval_acts = np.array(eval_acts)
 
         self.log(f"{'Index':>5} | {'Action Name':<20} | {'Tier 1 (FIFO)':>14} | {'Tier 2 (Milestone)':>18} | {'Eval Policy':>14}")
@@ -623,9 +633,10 @@ class SeniorForensicSuite:
         obs = env.reset()
         done = False
         step_count = 0
+        eval_h = torch.zeros(1, getattr(self.agent, "mem_hidden", 256), device=self.device)
 
         while not done and step_count < num_steps:
-            a = self.agent.act(obs, eval_mode=True, planning=False)
+            a = self.agent.act(obs, eval_mode=True, planning=False, h=eval_h)
             obs, r, term, trunc, info = env.step(a)
             rendered = env.render()
             frames.append(rendered)
@@ -633,6 +644,13 @@ class SeniorForensicSuite:
             rewards.append(r)
             step_count += 1
             done = term or trunc
+            if not done:
+                with torch.no_grad():
+                    x = self.agent.validate_and_prepare_obs(obs)
+                    if x.dim() == 3:
+                        x = x.unsqueeze(0)
+                    z = self.agent.encoder(x)
+                    eval_h = self.agent.gru(z, eval_h)
 
         # Save animated GIF with text overlay
         fig, ax = plt.subplots(figsize=(6, 6))

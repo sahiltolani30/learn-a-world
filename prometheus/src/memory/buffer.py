@@ -77,6 +77,7 @@ class TwoTierReplayBuffer:
         milestone_t1_priority: float = 0.25,
         milestone_t2_priority: float = 0.80,
         seed: Optional[int] = None,
+        mem_hidden: int = 256,
     ):
         """
         Initialize TwoTierReplayBuffer.
@@ -89,6 +90,7 @@ class TwoTierReplayBuffer:
             milestone_t1_priority: Sampling priority for milestone transitions in Tier 1.
             milestone_t2_priority: Sampling priority for milestone transitions in Tier 2.
             seed: Optional random seed for reproducible sampling.
+            mem_hidden: Dimension of recurrent memory state h (default 256, Hotfix 6).
         """
         if tier1_capacity <= 0:
             raise ValueError(f"tier1_capacity must be positive, got {tier1_capacity}")
@@ -101,6 +103,7 @@ class TwoTierReplayBuffer:
         self.default_tier2_ratio = default_tier2_ratio
         self.milestone_t1_priority = milestone_t1_priority
         self.milestone_t2_priority = milestone_t2_priority
+        self.mem_hidden = int(mem_hidden)
         self.rng = np.random.RandomState(seed)
 
         # Lazy allocation placeholders for Tier 1 preallocated storage
@@ -117,6 +120,7 @@ class TwoTierReplayBuffer:
         self.t1_is_milestone: Optional[np.ndarray] = None
         self.t1_episode_id: Optional[np.ndarray] = None
         self.t1_step_in_ep: Optional[np.ndarray] = None
+        self.t1_h: Optional[np.ndarray] = None
 
         self.t1_ptr: int = 0
         self.t1_size: int = 0
@@ -133,6 +137,7 @@ class TwoTierReplayBuffer:
         self.t2_is_milestone: Optional[np.ndarray] = None
         self.t2_episode_id: Optional[np.ndarray] = None
         self.t2_step_in_ep: Optional[np.ndarray] = None
+        self.t2_h: Optional[np.ndarray] = None
 
         self.t2_size: int = 0
 
@@ -152,6 +157,7 @@ class TwoTierReplayBuffer:
         self.t1_is_milestone = np.empty(self.tier1_capacity, dtype=np.bool_)
         self.t1_episode_id = np.empty(self.tier1_capacity, dtype=np.int64)
         self.t1_step_in_ep = np.empty(self.tier1_capacity, dtype=np.int64)
+        self.t1_h = np.zeros((self.tier1_capacity, self.mem_hidden), dtype=np.float16)
         self._t1_allocated = True
 
     def _allocate_tier2(self, obs_shape: Tuple[int, ...]) -> None:
@@ -166,6 +172,7 @@ class TwoTierReplayBuffer:
         self.t2_is_milestone = np.empty(self.tier2_capacity, dtype=np.bool_)
         self.t2_episode_id = np.empty(self.tier2_capacity, dtype=np.int64)
         self.t2_step_in_ep = np.empty(self.tier2_capacity, dtype=np.int64)
+        self.t2_h = np.zeros((self.tier2_capacity, self.mem_hidden), dtype=np.float16)
         self._t2_allocated = True
 
     def flag_milestone_at(self, index: int) -> None:
@@ -218,6 +225,7 @@ class TwoTierReplayBuffer:
         epistemic_error: Optional[float] = None,
         episode_id: int = -1,
         step_in_ep: int = -1,
+        h: Optional[Union[np.ndarray, torch.Tensor]] = None,
     ) -> bool:
         """
         Insert transition into TwoTierReplayBuffer.
@@ -235,6 +243,9 @@ class TwoTierReplayBuffer:
             r_int: Epistemic intrinsic reward.
             is_milestone: True if transition unlocked achievement or broke survival record.
             epistemic_error: Raw predictor ensemble disagreement (defaults to r_int if None).
+            episode_id: Optional tracking index of the episode.
+            step_in_ep: Step index within the episode.
+            h: Recurrent memory state h at decision time (Hotfix 6).
             
         Returns:
             admitted_to_tier2: True if transition was captured in Tier 2 Archive.
@@ -268,6 +279,19 @@ class TwoTierReplayBuffer:
         self.t1_episode_id[idx] = int(episode_id)
         self.t1_step_in_ep[idx] = int(step_in_ep)
 
+        # Store recurrent memory state h (float16)
+        if h is not None and self.t1_h is not None:
+            if isinstance(h, torch.Tensor):
+                h_arr = h.detach().cpu().to(dtype=torch.float16).numpy().reshape(-1)
+            else:
+                h_arr = np.asarray(h, dtype=np.float16).reshape(-1)
+            if h_arr.shape[0] == self.mem_hidden:
+                self.t1_h[idx] = h_arr
+            else:
+                self.t1_h[idx] = 0.0
+        elif self.t1_h is not None:
+            self.t1_h[idx] = 0.0
+
         self.t1_ptr = (self.t1_ptr + 1) % self.tier1_capacity
         self.t1_size = min(self.t1_size + 1, self.tier1_capacity)
 
@@ -290,6 +314,7 @@ class TwoTierReplayBuffer:
                 is_milestone=is_milestone,
                 episode_id=int(episode_id),
                 step_in_ep=int(step_in_ep),
+                h=h,
             )
 
         return admit_to_tier2
@@ -306,6 +331,7 @@ class TwoTierReplayBuffer:
         is_milestone: bool,
         episode_id: int = -1,
         step_in_ep: int = -1,
+        h: Optional[Union[np.ndarray, torch.Tensor]] = None,
     ) -> None:
         """Insert or replace transition in Tier 2 Milestone Archive."""
         if self.t2_size < self.tier2_capacity:
@@ -336,6 +362,24 @@ class TwoTierReplayBuffer:
         self.t2_actions[idx] = action
         self.t2_rewards[idx] = reward
         self.t2_dones[idx] = done
+        self.t2_int_rewards[idx] = r_int
+        self.t2_epistemic_errors[idx] = epistemic_error
+        self.t2_is_milestone[idx] = is_milestone
+        self.t2_episode_id[idx] = int(episode_id)
+        self.t2_step_in_ep[idx] = int(step_in_ep)
+
+        # Store recurrent memory state h (float16)
+        if h is not None and self.t2_h is not None:
+            if isinstance(h, torch.Tensor):
+                h_arr = h.detach().cpu().to(dtype=torch.float16).numpy().reshape(-1)
+            else:
+                h_arr = np.asarray(h, dtype=np.float16).reshape(-1)
+            if h_arr.shape[0] == self.mem_hidden:
+                self.t2_h[idx] = h_arr
+            else:
+                self.t2_h[idx] = 0.0
+        elif self.t2_h is not None:
+            self.t2_h[idx] = 0.0
         self.t2_int_rewards[idx] = r_int
         self.t2_epistemic_errors[idx] = epistemic_error
         self.t2_is_milestone[idx] = is_milestone
@@ -440,6 +484,7 @@ class TwoTierReplayBuffer:
             b_errors = np.concatenate([self.t1_epistemic_errors[t1_indices], self.t2_epistemic_errors[t2_indices]], axis=0)
             b_is_t2 = np.concatenate([np.zeros(actual_n1, dtype=np.bool_), np.ones(actual_n2, dtype=np.bool_)], axis=0)
             b_is_ms = np.concatenate([self.t1_is_milestone[t1_indices], self.t2_is_milestone[t2_indices]], axis=0)
+            b_h = np.concatenate([self.t1_h[t1_indices], self.t2_h[t2_indices]], axis=0)
         elif actual_n1 > 0:
             b_obs = self.t1_obs[t1_indices]
             b_next_obs = self.t1_next_obs[t1_indices]
@@ -450,6 +495,7 @@ class TwoTierReplayBuffer:
             b_errors = self.t1_epistemic_errors[t1_indices]
             b_is_t2 = np.zeros(actual_n1, dtype=np.bool_)
             b_is_ms = self.t1_is_milestone[t1_indices]
+            b_h = self.t1_h[t1_indices]
         else:
             b_obs = self.t2_obs[t2_indices]
             b_next_obs = self.t2_next_obs[t2_indices]
@@ -460,6 +506,7 @@ class TwoTierReplayBuffer:
             b_errors = self.t2_epistemic_errors[t2_indices]
             b_is_t2 = np.ones(actual_n2, dtype=np.bool_)
             b_is_ms = self.t2_is_milestone[t2_indices]
+            b_h = self.t2_h[t2_indices]
 
         # RAM-optimized lazy conversion to float32 [0.0, 1.0] upon sampling
         dev = torch.device(device)
@@ -473,6 +520,7 @@ class TwoTierReplayBuffer:
             "epistemic_errors": torch.from_numpy(b_errors).to(device=dev, dtype=torch.float32),
             "is_tier2": torch.from_numpy(b_is_t2).to(device=dev, dtype=torch.bool),
             "is_milestone": torch.from_numpy(b_is_ms).to(device=dev, dtype=torch.bool),
+            "h": torch.from_numpy(b_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
         }
 
     def sample_nstep(
@@ -558,6 +606,7 @@ class TwoTierReplayBuffer:
             b_errors = np.concatenate([self.t1_epistemic_errors[t1_indices], self.t2_epistemic_errors[t2_indices]], axis=0)
             b_is_t2 = np.concatenate([np.zeros(actual_n1, dtype=np.bool_), np.ones(actual_n2, dtype=np.bool_)], axis=0)
             b_is_ms = np.concatenate([self.t1_is_milestone[t1_indices], self.t2_is_milestone[t2_indices]], axis=0)
+            b_h = np.concatenate([self.t1_h[t1_indices], self.t2_h[t2_indices]], axis=0)
         elif actual_n1 > 0:
             b_obs = self.t1_obs[t1_indices]
             b_next_obs = self.t1_next_obs[t1_indices]
@@ -568,6 +617,7 @@ class TwoTierReplayBuffer:
             b_errors = self.t1_epistemic_errors[t1_indices]
             b_is_t2 = np.zeros(actual_n1, dtype=np.bool_)
             b_is_ms = self.t1_is_milestone[t1_indices]
+            b_h = self.t1_h[t1_indices]
         else:
             b_obs = self.t2_obs[t2_indices]
             b_next_obs = self.t2_next_obs[t2_indices]
@@ -578,12 +628,14 @@ class TwoTierReplayBuffer:
             b_errors = self.t2_epistemic_errors[t2_indices]
             b_is_t2 = np.ones(actual_n2, dtype=np.bool_)
             b_is_ms = self.t2_is_milestone[t2_indices]
+            b_h = self.t2_h[t2_indices]
 
         # 2. Compute n-step returns and bootstrap states
         nstep_returns = np.empty(batch_size, dtype=np.float32)
         boot_obs = np.empty_like(b_next_obs)
         boot_gamma = np.empty(batch_size, dtype=np.float32)
         boot_valid = np.empty(batch_size, dtype=np.bool_)
+        boot_h = np.empty_like(b_h)
 
         cap = self.tier1_capacity
 
@@ -599,6 +651,7 @@ class TwoTierReplayBuffer:
                 boot_obs[batch_i] = self.t1_next_obs[idx]
                 boot_gamma[batch_i] = gamma
                 boot_valid[batch_i] = not self.t1_dones[idx]
+                boot_h[batch_i] = self.t1_h[idx]
                 continue
 
             # Start chain at k=0
@@ -630,6 +683,17 @@ class TwoTierReplayBuffer:
             boot_gamma[batch_i] = float(gamma ** num_terms)
             boot_valid[batch_i] = not is_terminal
 
+            # Look up stored h from next slot along episode if valid, else fallback to slot's stored h (Hotfix 6)
+            next_cand = (last_valid_slot + 1) % cap
+            if (
+                not is_terminal
+                and self.t1_episode_id[next_cand] == base_ep
+                and self.t1_step_in_ep[next_cand] == self.t1_step_in_ep[last_valid_slot] + 1
+            ):
+                boot_h[batch_i] = self.t1_h[next_cand]
+            else:
+                boot_h[batch_i] = self.t1_h[last_valid_slot]
+
         # Process Tier 2 items (1-step fallback)
         for t2_i in range(actual_n2):
             batch_i = actual_n1 + t2_i
@@ -638,6 +702,7 @@ class TwoTierReplayBuffer:
             boot_obs[batch_i] = self.t2_next_obs[idx]
             boot_gamma[batch_i] = gamma
             boot_valid[batch_i] = not self.t2_dones[idx]
+            boot_h[batch_i] = self.t2_h[idx]
 
         dev = torch.device(device)
         return {
@@ -654,6 +719,8 @@ class TwoTierReplayBuffer:
             "boot_obs": torch.from_numpy(boot_obs).to(device=dev, dtype=torch.float32) / 255.0,
             "boot_gamma": torch.from_numpy(boot_gamma).to(device=dev, dtype=torch.float32),
             "boot_valid": torch.from_numpy(boot_valid).to(device=dev, dtype=torch.bool),
+            "h": torch.from_numpy(b_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
+            "boot_h": torch.from_numpy(boot_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
         }
 
     def state_dict(self) -> Dict[str, Any]:
@@ -667,6 +734,7 @@ class TwoTierReplayBuffer:
             "t1_size": self.t1_size,
             "t2_size": self.t2_size,
             "obs_shape": self._obs_shape,
+            "mem_hidden": self.mem_hidden,
             "milestone_t1_priority": self.milestone_t1_priority,
             "milestone_t2_priority": self.milestone_t2_priority,
             "t1_obs": self.t1_obs[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
@@ -679,6 +747,7 @@ class TwoTierReplayBuffer:
             "t1_is_milestone": self.t1_is_milestone[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_episode_id": self.t1_episode_id[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
             "t1_step_in_ep": self.t1_step_in_ep[:self.t1_size] if self._t1_allocated and self.t1_size > 0 else None,
+            "t1_h": self.t1_h[:self.t1_size] if self._t1_allocated and self.t1_h is not None and self.t1_size > 0 else None,
             "t2_obs": self.t2_obs[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_next_obs": self.t2_next_obs[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_actions": self.t2_actions[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
@@ -689,6 +758,7 @@ class TwoTierReplayBuffer:
             "t2_is_milestone": self.t2_is_milestone[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_episode_id": self.t2_episode_id[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
             "t2_step_in_ep": self.t2_step_in_ep[:self.t2_size] if self._t2_allocated and self.t2_size > 0 else None,
+            "t2_h": self.t2_h[:self.t2_size] if self._t2_allocated and self.t2_h is not None and self.t2_size > 0 else None,
             "recent_novelties": list(self._recent_novelties),
         }
 
@@ -701,6 +771,7 @@ class TwoTierReplayBuffer:
         self.default_tier2_ratio = state.get("default_tier2_ratio", self.default_tier2_ratio)
         self.milestone_t1_priority = state.get("milestone_t1_priority", self.milestone_t1_priority)
         self.milestone_t2_priority = state.get("milestone_t2_priority", self.milestone_t2_priority)
+        self.mem_hidden = state.get("mem_hidden", self.mem_hidden)
         self.t1_ptr = state.get("t1_ptr", 0)
         self.t1_size = state.get("t1_size", 0)
         self.t2_size = state.get("t2_size", 0)
@@ -737,6 +808,11 @@ class TwoTierReplayBuffer:
                     self.t1_step_in_ep[:self.t1_size] = t1_st
                 else:
                     self.t1_step_in_ep[:self.t1_size] = -1
+                t1_h = state.pop("t1_h", None)
+                if t1_h is not None and self.t1_h is not None:
+                    self.t1_h[:self.t1_size] = t1_h
+                elif self.t1_h is not None:
+                    self.t1_h[:self.t1_size] = 0.0
 
             if self.t2_size > 0 and "t2_obs" in state:
                 t2_o = state.pop("t2_obs")
@@ -761,6 +837,11 @@ class TwoTierReplayBuffer:
                     self.t2_step_in_ep[:self.t2_size] = t2_st
                 else:
                     self.t2_step_in_ep[:self.t2_size] = -1
+                t2_h = state.pop("t2_h", None)
+                if t2_h is not None and self.t2_h is not None:
+                    self.t2_h[:self.t2_size] = t2_h
+                elif self.t2_h is not None:
+                    self.t2_h[:self.t2_size] = 0.0
 
         if "recent_novelties" in state:
             self._recent_novelties = deque(state["recent_novelties"], maxlen=2000)

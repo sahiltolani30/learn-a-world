@@ -423,7 +423,6 @@ class TrainingPipeline:
             list(self.agent.encoder.parameters())
             + list(self.agent.predictor.parameters())
             + list(self.agent.gru.parameters())
-            + list(self.agent.readout_proj.parameters())
             + list(self.agent.reward_head.parameters())
             + list(self.agent.done_head.parameters())
         )
@@ -436,7 +435,7 @@ class TrainingPipeline:
             lr=self.critic_lr,
         )
         self.actor_optimizer = torch.optim.Adam(
-            self.agent.actor.parameters(),
+            list(self.agent.actor.parameters()) + list(self.agent.readout_proj.parameters()),
             lr=self.lr,
         )
 
@@ -498,7 +497,10 @@ class TrainingPipeline:
                     self.achievement_history = metadata.get("achievement_history", {})
                     self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
                     if "success_counts" in metadata:
-                        self.success_counts = dict(metadata["success_counts"])
+                        self.success_counts = {
+                            k: v for k, v in dict(metadata["success_counts"]).items()
+                            if k in self.all_unlocked_achievements
+                        }
                     if "success_actions" in metadata:
                         self.success_actions = dict(metadata["success_actions"])
                     self.loss_history = metadata.get("loss_history", [])
@@ -525,7 +527,10 @@ class TrainingPipeline:
                     self.achievement_history = metadata.get("achievement_history", {})
                     self.all_unlocked_achievements = set(metadata.get("all_unlocked_achievements", []))
                     if "success_counts" in metadata:
-                        self.success_counts = dict(metadata["success_counts"])
+                        self.success_counts = {
+                            k: v for k, v in dict(metadata["success_counts"]).items()
+                            if k in self.all_unlocked_achievements
+                        }
                     if "success_actions" in metadata:
                         self.success_actions = dict(metadata["success_actions"])
                     self.loss_history = metadata.get("loss_history", [])
@@ -695,6 +700,7 @@ class TrainingPipeline:
                 epistemic_error=err_i,
                 episode_id=self.env_episode_ids[env_i],
                 step_in_ep=self.envs.episode_step[env_i],
+                h=self.env_hidden_states[env_i],
             )
             written_slot = (self.buffer.t1_ptr - 1) % self.buffer.tier1_capacity
             self.recent_t1_indices_per_env[env_i].append(written_slot)
@@ -704,7 +710,7 @@ class TrainingPipeline:
                 for past_idx in self.recent_t1_indices_per_env[env_i]:
                     self.buffer.flag_milestone_at(past_idx)
 
-            # U2 Memory update: reset on done, else step GRU
+            # U2 Memory update: reset on done, else step GRU under torch.no_grad() (Hotfix 6)
             if done_i:
                 self.current_episode += 1
                 self.env_episode_ids[env_i] = self.current_episode
@@ -713,7 +719,8 @@ class TrainingPipeline:
                 self.episodic_novelties[env_i].reset()
                 self.env_hidden_states[env_i] = 0.0
             else:
-                self.env_hidden_states[env_i] = self.agent.gru(z[env_i:env_i+1], self.env_hidden_states[env_i:env_i+1]).squeeze(0)
+                with torch.no_grad():
+                    self.env_hidden_states[env_i] = self.agent.gru(z[env_i:env_i+1], self.env_hidden_states[env_i:env_i+1]).squeeze(0)
 
             self.current_step += 1
             transitions_added += 1
@@ -827,7 +834,7 @@ class TrainingPipeline:
         if r_int > 0.5:
             is_milestone = True
 
-        # Insert transition into Two-Tier Buffer
+        # Insert transition into Two-Tier Buffer (with stored h, Hotfix 6)
         self.buffer.add(
             obs=obs,
             action=action,
@@ -839,13 +846,15 @@ class TrainingPipeline:
             epistemic_error=r_int,
             episode_id=episode_id,
             step_in_ep=step_in_ep,
+            h=self.env_hidden_states[0],
         )
 
-        # U2 Memory update
+        # U2 Memory update under torch.no_grad()
         if done:
             self.env_hidden_states[0] = 0.0
         else:
-            self.env_hidden_states[0] = self.agent.gru(z_t, self.env_hidden_states[:1]).squeeze(0)
+            with torch.no_grad():
+                self.env_hidden_states[0] = self.agent.gru(z_t, self.env_hidden_states[:1]).squeeze(0)
 
         # C2.2: Capture written T1 slot and retroactively flag trailing 30-step window on milestone
         written_slot = (self.buffer.t1_ptr - 1) % self.buffer.tier1_capacity
@@ -882,9 +891,9 @@ class TrainingPipeline:
         with torch.no_grad():
             target_tokens, target_pooled = self.agent.target_encoder.forward_tokens(batch["next_obs"])
 
-        # 2. Spatial Transformer Prediction
+        # 2. Spatial Transformer Prediction (conditioned on actions and stored h, Hotfix 6)
         mean_pred_tokens, all_pred_tokens = self.agent.predictor.forward_tokens(
-            curr_tokens, batch["actions"]
+            curr_tokens, batch["actions"], h=batch.get("h")
         )
 
         # 3. U1: Masked Token Prediction Loss (35% tokens masked per sample)
@@ -930,7 +939,6 @@ class TrainingPipeline:
             list(self.agent.encoder.parameters())
             + list(self.agent.predictor.parameters())
             + list(self.agent.gru.parameters())
-            + list(self.agent.readout_proj.parameters())
             + list(self.agent.reward_head.parameters())
             + list(self.agent.done_head.parameters()),
             max_norm=1.0,
@@ -970,17 +978,21 @@ class TrainingPipeline:
             z_curr = self.agent.encoder(batch["obs"])
             z_boot = self.agent.target_encoder(batch["boot_obs"])
 
+            # Compute readouts matching collection distribution (Hotfix 6)
+            readout_curr = self.agent.get_readout(z_curr, batch["h"])
+            readout_boot = self.agent.get_readout(z_boot, batch["boot_h"])
+
             # Discrete Double-Q Target with n-step discounted return & bootstrapped future value
-            q1b, q2b = self.agent.critic(z_boot)
+            q1b, q2b = self.agent.critic.target_forward(readout_boot)
             best_boot_actions = torch.argmax(torch.min(q1b, q2b), dim=-1)
-            boot_q_raw = self.agent.critic.target_q_min(z_boot, best_boot_actions)
+            boot_q_raw = self.agent.critic.target_q_min(readout_boot, best_boot_actions)
             boot_q = symexp(boot_q_raw) if self.symlog_values else boot_q_raw
             r_total = batch["nstep_return"] + self.critic_intrinsic_weight * batch["int_rewards"]
             target_q = r_total + batch["boot_gamma"] * batch["boot_valid"].float() * boot_q
 
-        # 1. Update Twin Critic with symlog target transformation (U3)
+        # 1. Update Twin Critic with symlog target transformation (Hotfix 6: trains on readouts)
         critic_loss, c_metrics = self.agent.critic.compute_loss(
-            z_curr.detach(),
+            readout_curr.detach(),
             batch["actions"],
             target_q,
             symlog_targets=self.symlog_values,
@@ -998,19 +1010,20 @@ class TrainingPipeline:
             B = z_curr.shape[0]
             z_rep = z_curr.unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
             a_rep = torch.arange(self.agent.num_actions, device=z_curr.device).repeat(B)
-            _, all_preds = self.agent.predictor(z_rep, a_rep)
+            h_rep = batch["h"].unsqueeze(1).expand(B, self.agent.num_actions, -1).reshape(B * self.agent.num_actions, -1)
+            _, all_preds = self.agent.predictor(z_rep, a_rep, h=h_rep)
             disc = self.agent.predictor.compute_epistemic_disagreement(all_preds).view(B, -1)
             self.per_action_disc_stats.update(disc)
             disc_norm = disc / (self.per_action_disc_stats.std + self.per_action_disc_stats.epsilon)
             disc_norm = torch.clamp(disc_norm, min=0.0, max=5.0)
 
         # 2. Update Actor Policy Prior via exact discrete expectation on readout
-        readout_curr = self.agent.get_readout(z_curr.detach())
-        logits = self.agent.actor(readout_curr)
+        readout_curr_actor = self.agent.get_readout(z_curr.detach(), batch["h"])
+        logits = self.agent.actor(readout_curr_actor)
         probs = torch.softmax(logits, dim=-1)
         log_probs = torch.log_softmax(logits, dim=-1)
 
-        q1_all, q2_all = self.agent.critic(readout_curr)
+        q1_all, q2_all = self.agent.critic(readout_curr_actor.detach())
         q_min_raw = torch.min(q1_all, q2_all).detach()
         q_all = symexp(q_min_raw) if self.symlog_values else q_min_raw
 
@@ -1032,7 +1045,10 @@ class TrainingPipeline:
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.agent.actor.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(
+            list(self.agent.actor.parameters()) + list(self.agent.readout_proj.parameters()),
+            max_norm=1.0,
+        )
         self.actor_optimizer.step()
 
         q_spread = (q_all.max(dim=-1).values - q_all.min(dim=-1).values).mean()
@@ -1070,7 +1086,7 @@ class TrainingPipeline:
         self.agent.eval()
         n_eps = num_episodes if num_episodes is not None else self.eval_episodes
 
-        # 1. Greedy evaluation episodes (eval_mode=True)
+        # 1. Greedy evaluation episodes (eval_mode=True, Hotfix 4)
         greedy_returns: List[float] = []
         greedy_lengths: List[int] = []
         greedy_achievements: Set[str] = set()
@@ -1081,13 +1097,24 @@ class TrainingPipeline:
             ep_ret = 0.0
             ep_len = 0
             done = False
+            eval_h = torch.zeros(1, self.mem_hidden, device=self.device)
 
             while not done:
-                action = self.agent.act(obs, eval_mode=True, planning=False)
+                action = self.agent.act(obs, eval_mode=True, planning=False, h=eval_h)
                 obs, reward, term, trunc, info = self.eval_env.step(action)
                 ep_ret += float(reward)
                 ep_len += 1
                 done = term or trunc
+
+                if done:
+                    eval_h = torch.zeros(1, self.mem_hidden, device=self.device)
+                else:
+                    with torch.no_grad():
+                        x = self.agent.validate_and_prepare_obs(obs)
+                        if x.dim() == 3:
+                            x = x.unsqueeze(0)
+                        z = self.agent.encoder(x)
+                        eval_h = self.agent.gru(z, eval_h)
 
                 eval_info = info.get("eval_info", {})
                 unlocked = eval_info.get("unlocked_achievements", [])
@@ -1096,7 +1123,7 @@ class TrainingPipeline:
             greedy_returns.append(ep_ret)
             greedy_lengths.append(ep_len)
 
-        # 2. Stochastic evaluation episodes (eval_mode=False)
+        # 2. Stochastic evaluation episodes (eval_mode=False, Hotfix 4)
         stoch_returns: List[float] = []
         stoch_lengths: List[int] = []
         stoch_achievements: Set[str] = set()
@@ -1107,13 +1134,24 @@ class TrainingPipeline:
             ep_ret = 0.0
             ep_len = 0
             done = False
+            eval_h = torch.zeros(1, self.mem_hidden, device=self.device)
 
             while not done:
-                action = self.agent.act(obs, eval_mode=False, planning=False)
+                action = self.agent.act(obs, eval_mode=False, planning=False, h=eval_h)
                 obs, reward, term, trunc, info = self.eval_env.step(action)
                 ep_ret += float(reward)
                 ep_len += 1
                 done = term or trunc
+
+                if done:
+                    eval_h = torch.zeros(1, self.mem_hidden, device=self.device)
+                else:
+                    with torch.no_grad():
+                        x = self.agent.validate_and_prepare_obs(obs)
+                        if x.dim() == 3:
+                            x = x.unsqueeze(0)
+                        z = self.agent.encoder(x)
+                        eval_h = self.agent.gru(z, eval_h)
 
                 eval_info = info.get("eval_info", {})
                 unlocked = eval_info.get("unlocked_achievements", [])

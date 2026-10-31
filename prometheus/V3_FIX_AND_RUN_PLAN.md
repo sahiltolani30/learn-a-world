@@ -73,6 +73,31 @@ else:     eval_h = self.agent.gru(pooled_z, eval_h)   # same update rule as trai
 - The stochastic benchmark ran 50 games while the header said 20 and greedy ran 20 — standardize: **both policies N=50**, N printed in the header and the summary computed over the same games.
 - `success_counts` reporting: label the wake_up-coincidence issue as fixed by P0.3's achievement-verified counting (already implemented — verify the new counts contain no entries absent from the unlocked list).
 
+## 1d. HOTFIX 6 — Make the memory state `h` a first-class part of the stored transition (CRITICAL — found in full-code audit)
+
+**Three input-distribution mismatches found by line-by-line audit (all one root cause):**
+
+1. **Critic input mismatch (CRITICAL).** The critic is trained on the RAW pooled latent: `z_curr = encoder(obs)` → `compute_loss(z_curr, ...)` (train.py:970/982). But every greedy action and every evaluation feeds the critic the READOUT: `act()` eval-mode → `critic(get_readout(z, h))` (agent.py:367-369). The critic is queried on inputs from a distribution it was never trained on (a Linear warp of its training inputs, plus an h-half it never saw). This corrupts every argmax the eval policy makes.
+2. **Actor input mismatch (CRITICAL).** The actor is trained on `get_readout(z_curr, h=None → zeros)` (train.py:1008) but acts during collection on `get_readout(z, h_evolved)` (train.py:541/618). The h-half of `readout_proj`'s weights is never trained (h≡0 during training ⇒ the h-columns only add their bias), so from step 1 of every episode the actor acts on inputs shifted by an untrained transform.
+3. **Predictor mismatch (MEDIUM).** World-model training calls the predictor WITHOUT h (train.py:886), but collection-time curiosity calls it WITH h (train.py:641). `mem_proj` receives no gradient during training (h never passed) → at collection the memory token is a random projection injecting noise into the disagreement signal.
+
+**Root cause:** the memory state `h_t` depends on the episode's history, but the replay buffer stores only (obs, action, reward, done) — so h cannot be reconstructed for sampled transitions, and the implementer trained everything h-free while acting h-full.
+
+**Fix — store h per transition (cheap and complete):**
+- Buffer: add `t1_h` / `t2_h` arrays, float16 (N, 256) → ~25 MB at 50k. `add(..., h=None)` stores the h that was CURRENT when the transition was taken (pre-update, matching what the actor actually used to act).
+- `sample`/`sample_nstep` return `batch["h"]` (float32 converted) for base transitions; `sample_nstep` also returns `boot_h` read from the boot slot's stored h (fallback: base h).
+- **Critic training:** `readout_curr = get_readout(z_curr, batch["h"])` → critic trains on readouts — SAME distribution as acting. Bellman bootstrap: compute target Q on `get_readout(z_boot, boot_h)` (target encoder pooled + stored boot h).
+- **Actor training:** `readout_curr = get_readout(z_curr, batch["h"])` — actor trains on h-bearing readouts, matching collection.
+- **Predictor training:** `forward_tokens(curr_tokens, actions, h=batch["h"])` — mem_proj finally trains; collection curiosity becomes in-distribution.
+- **Eval:** Hotfix 4's `eval_h` (unchanged) now matches training semantics.
+- GRU updates at collection: wrap in `torch.no_grad()` (they currently build autograd graphs — train.py:716/848).
+
+**Acceptance tests:** (a) train 200 updates with h-bearing batches — assert `readout_proj` h-half weights receive nonzero gradients; (b) critic loss on stored-h readouts converges below the h=0 baseline on the same data; (c) buffer roundtrip includes `t1_h` checksum.
+
+**Stopgap (if hotfix must ship same-day):** 1-line alternative — make `act()` eval-mode feed the critic the RAW pooled z instead of the readout (fixes mismatch #1 only; #2/#3 remain). Not recommended as the end state.
+
+**Severity without the fix:** the policy/critic act on inputs they never trained on whenever h≠0 (i.e., always after each episode's first step) — this is plausibly a contributor to weak greedy behavior beyond the Hotfix-4 eval bug.
+
 ## 2. HOTFIX 2 — Fail loud: no more silent fresh buffers
 
 The carry-over must never silently degrade to an empty buffer. New behavior in the same section:

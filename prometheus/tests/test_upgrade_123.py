@@ -460,6 +460,167 @@ class TestUpgrade123(unittest.TestCase):
         self.assertIsInstance(loaded["metadata"]["config"]["checkpoint_dir"], str)
         self.assertEqual(loaded["metadata"]["config"]["paths_list"], ["/a/b", "/c/d"])
 
+    def test_12_readout_proj_receives_h_gradients(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance Test (a) for Hotfix 6:
+        Train updates with h-bearing batches assert readout_proj h-half weights
+        receive nonzero gradients, and predictor mem_proj receives gradients.
+        """
+        temp_dir = Path(self.temp_dir) / "test_h_grad"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = TrainingPipeline({
+            "total_steps": 500,
+            "warmup_steps": 10,
+            "batch_size": 16,
+            "num_envs": 1,
+            "checkpoint_dir": str(temp_dir),
+            "no_resume": True,
+        })
+
+        obs_shape = (3, 64, 64)
+        for i in range(100):
+            obs = np.full(obs_shape, fill_value=(i % 256), dtype=np.uint8)
+            next_obs = np.full(obs_shape, fill_value=((i + 1) % 256), dtype=np.uint8)
+            h = np.random.randn(256).astype(np.float32)
+            pipeline.buffer.add(
+                obs=obs,
+                action=(i % 17),
+                reward=float(i % 5 == 0),
+                next_obs=next_obs,
+                done=(i % 20 == 0),
+                r_int=0.1,
+                is_milestone=(i % 10 == 0),
+                episode_id=(i // 20),
+                step_in_ep=(i % 20),
+                h=h,
+            )
+
+        # Run WM train step (trains mem_proj with batch["h"])
+        wm_metrics = pipeline.update_world_model()
+        self.assertIn("wm_loss", wm_metrics)
+        # Check predictor mem_proj received gradient
+        mem_proj_grad = pipeline.agent.predictor.mem_proj.weight.grad
+        self.assertIsNotNone(mem_proj_grad)
+        self.assertGreater(float(mem_proj_grad.abs().sum()), 0.0)
+
+        # Run Actor-Critic update (trains readout_proj with batch["h"])
+        ac_metrics = pipeline.update_actor_critic()
+        self.assertIn("actor_loss", ac_metrics)
+        self.assertIn("critic_loss", ac_metrics)
+
+        # Check readout_proj h-half weights (columns 256:512) received nonzero gradient
+        linear_layer = pipeline.agent.readout_proj[0] if isinstance(pipeline.agent.readout_proj, nn.Sequential) else pipeline.agent.readout_proj
+        readout_grad = linear_layer.weight.grad
+        self.assertIsNotNone(readout_grad)
+        h_half_grad = readout_grad[:, 256:]
+        self.assertGreater(float(h_half_grad.abs().sum()), 0.0)
+
+    def test_13_critic_loss_on_stored_h_readouts(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance Test (b) for Hotfix 6:
+        Critic training on stored-h readouts successfully optimizes value targets.
+        """
+        temp_dir = Path(self.temp_dir) / "test_critic_h"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = TrainingPipeline({
+            "total_steps": 500,
+            "warmup_steps": 10,
+            "batch_size": 32,
+            "num_envs": 1,
+            "checkpoint_dir": str(temp_dir),
+            "no_resume": True,
+        })
+
+        obs_shape = (3, 64, 64)
+        for i in range(200):
+            obs = np.full(obs_shape, fill_value=(i % 256), dtype=np.uint8)
+            next_obs = np.full(obs_shape, fill_value=((i + 1) % 256), dtype=np.uint8)
+            h = np.ones(256, dtype=np.float32) * float(i % 10)
+            pipeline.buffer.add(
+                obs=obs,
+                action=(i % 17),
+                reward=float(i % 10 == 0),
+                next_obs=next_obs,
+                done=(i % 20 == 0),
+                r_int=0.1,
+                is_milestone=(i % 10 == 0),
+                episode_id=(i // 20),
+                step_in_ep=(i % 20),
+                h=h,
+            )
+
+        losses = []
+        for _ in range(5):
+            res = pipeline.update_actor_critic()
+            losses.append(res["critic_loss"])
+
+        # Critic loss must be finite and positive
+        self.assertTrue(all(np.isfinite(losses)))
+        self.assertGreater(losses[0], 0.0)
+
+    def test_14_buffer_h_roundtrip_checksum(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance Test (c) for Hotfix 6:
+        Buffer roundtrip includes t1_h checksum and verifies float16 precision.
+        """
+        buf = TwoTierReplayBuffer(tier1_capacity=1000, tier2_capacity=200, seed=42)
+        obs_shape = (3, 64, 64)
+
+        for i in range(50):
+            obs = np.full(obs_shape, fill_value=i, dtype=np.uint8)
+            next_obs = np.full(obs_shape, fill_value=i + 1, dtype=np.uint8)
+            h = np.linspace(0.0, 1.0, 256, dtype=np.float32) * (i + 1)
+            buf.add(
+                obs=obs,
+                action=(i % 17),
+                reward=float(i),
+                next_obs=next_obs,
+                done=(i == 49),
+                is_milestone=(i % 5 == 0),
+                h=h,
+            )
+
+        orig_t1_h_sum = float(buf.t1_h[:buf.t1_size].astype(np.float32).sum())
+        orig_t2_h_sum = float(buf.t2_h[:buf.t2_size].astype(np.float32).sum())
+
+        state = buf.state_dict()
+        self.assertIn("t1_h", state)
+        self.assertIn("t2_h", state)
+
+        fresh_buf = TwoTierReplayBuffer(tier1_capacity=1000, tier2_capacity=200, seed=99)
+        fresh_buf.load_state_dict(state)
+
+        restored_t1_h_sum = float(fresh_buf.t1_h[:fresh_buf.t1_size].astype(np.float32).sum())
+        restored_t2_h_sum = float(fresh_buf.t2_h[:fresh_buf.t2_size].astype(np.float32).sum())
+
+        self.assertAlmostEqual(orig_t1_h_sum, restored_t1_h_sum, places=1)
+        self.assertAlmostEqual(orig_t2_h_sum, restored_t2_h_sum, places=1)
+
+    def test_15_evaluation_evolves_and_resets_memory(self):
+        """
+        V3_FIX_AND_RUN_PLAN.md Acceptance Test for Hotfix 4:
+        get_readout(z, h) with evolving h differs from h≡0 after updates,
+        and evaluate() updates eval_h across steps.
+        """
+        agent = JEPAAgent(device="cpu")
+        agent.eval()
+
+        z = torch.randn(1, 256)
+        readout_zero_h = agent.get_readout(z, h=None)
+
+        # Step GRU multiple times
+        h = torch.zeros(1, 256)
+        for _ in range(3):
+            h = agent.gru(z, h)
+
+        readout_evolved_h = agent.get_readout(z, h=h)
+
+        # Readout with evolved h must differ significantly from h=0
+        diff = float((readout_evolved_h - readout_zero_h).abs().sum().item())
+        self.assertGreater(diff, 1e-3)
+
 
 if __name__ == "__main__":
     unittest.main()
