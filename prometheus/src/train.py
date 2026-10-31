@@ -569,6 +569,11 @@ class TrainingPipeline:
         """
         import re
 
+        # If fresh buffer is explicitly configured, skip carry-over search entirely
+        if self.carry_source is False or self.cfg.get("fresh_start", False) or str(self.carry_source).lower() in ["none", "false", "off"]:
+            print("[*] Starting Stage C with a fresh replay buffer (fresh_start requested).")
+            return False
+
         explicit_target: Optional[Path] = None
         search_dirs: List[Path] = []
 
@@ -612,6 +617,9 @@ class TrainingPipeline:
             if not d.exists() or not d.is_dir():
                 continue
             for f in d.glob("*"):
+                # Skip temporary / incomplete atomic write files
+                if ".tmp" in f.name:
+                    continue
                 if f.is_file() and (".pt" in f.name or f.suffix in [".pt", ".ckpt"]):
                     if f not in candidate_files:
                         candidate_files.append(f)

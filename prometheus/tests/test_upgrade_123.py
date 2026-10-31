@@ -654,7 +654,7 @@ class TestUpgrade123(unittest.TestCase):
             )
 
         mgr.save(
-            filepath=v2_dir / "checkpoint_step_36000.pt.tmp.b5c46616d47c41e99bae84bd9af07cef",
+            filepath=v2_dir / "checkpoint_step_36000.pt",
             components={"agent": agent, "buffer": buf},
             metadata={"step": 36_000, "has_buffer": True},
         )
