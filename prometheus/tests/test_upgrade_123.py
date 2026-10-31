@@ -621,6 +621,59 @@ class TestUpgrade123(unittest.TestCase):
         diff = float((readout_evolved_h - readout_zero_h).abs().sum().item())
         self.assertGreater(diff, 1e-3)
 
+    def test_16_carry_over_skips_weights_only_and_finds_large_buffer(self):
+        """
+        Auto-detection test:
+        When a directory contains both a weights-only checkpoint (like step 100k, ~24MB)
+        and an earlier buffer checkpoint (like checkpoint_step_36000.pt.tmp..., ~1.4GB),
+        carry_over_buffer automatically skips the weights-only file and loads the buffer.
+        """
+        v2_dir = Path(self.temp_dir) / "v2_skip_test"
+        v2_dir.mkdir(parents=True, exist_ok=True)
+        mgr = CheckpointManager(checkpoint_dir=v2_dir)
+
+        # 1. Save weights-only file (checkpoint_step_100000.pt)
+        agent = JEPAAgent(device="cpu")
+        mgr.save(
+            filepath=v2_dir / "checkpoint_step_100000.pt",
+            components={"agent": agent},
+            metadata={"step": 100_000, "has_buffer": False},
+        )
+
+        # 2. Save buffer file with transitions (checkpoint_step_36000.pt.tmp.b5c46616d47c41e99bae84bd9af07cef)
+        buf = TwoTierReplayBuffer(tier1_capacity=5000, tier2_capacity=1000, seed=42)
+        for i in range(250):
+            buf.add(
+                obs=np.full((3, 64, 64), fill_value=i % 256, dtype=np.uint8),
+                action=i % 17,
+                reward=float(i % 10 == 0),
+                next_obs=np.full((3, 64, 64), fill_value=(i + 1) % 256, dtype=np.uint8),
+                done=(i == 249),
+                r_int=0.05,
+                is_milestone=(i % 5 == 0),
+            )
+
+        mgr.save(
+            filepath=v2_dir / "checkpoint_step_36000.pt.tmp.b5c46616d47c41e99bae84bd9af07cef",
+            components={"agent": agent, "buffer": buf},
+            metadata={"step": 36_000, "has_buffer": True},
+        )
+
+        v3_dir = Path(self.temp_dir) / "checkpoints_v3_auto"
+        v3_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = TrainingPipeline({
+            "total_steps": 25_000,
+            "warmup_steps": 100,
+            "num_envs": 1,
+            "checkpoint_dir": str(v3_dir),
+            "carry_source": str(v2_dir),
+            "allow_fresh_buffer": False,
+            "no_resume": False,
+        })
+
+        self.assertEqual(pipeline.buffer.t1_size, 250)
+
 
 if __name__ == "__main__":
     unittest.main()

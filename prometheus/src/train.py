@@ -557,55 +557,133 @@ class TrainingPipeline:
 
     def carry_over_buffer(self, source_path: Optional[Union[str, Path]] = None) -> bool:
         """
-        Carries over replay buffer from a previous stage checkpoint (e.g. Stage B 100k)
+        Carries over replay buffer from a previous stage checkpoint (e.g. Stage B 100k or 36k)
         into the current pipeline's replay buffer.
+        Auto-detects checkpoints with replay buffer arrays (e.g. checkpoint_step_36000.pt.tmp... or state.pt),
+        skipping weights-only checkpoints (e.g. checkpoint_step_100000.pt).
         Fails loud if allow_fresh_buffer is False (V3_FIX_AND_RUN_PLAN.md Hotfix 2).
         """
-        if source_path is None:
-            if self.carry_source is not None:
-                source_path = Path(self.carry_source)
-            else:
-                ckpt_dir = Path(self.checkpoint_dir)
-                candidates = [
-                    ckpt_dir.parent / "checkpoints_v2" / "checkpoint_step_100000.pt",
-                    ckpt_dir.parent / "checkpoints_v2" / "state.pt",
-                    Path("./checkpoints_v2/checkpoint_step_100000.pt"),
-                    Path("./checkpoints_v2/state.pt"),
-                ]
-                for cand in candidates:
-                    if cand.exists():
-                        source_path = cand
-                        break
+        import re
 
-        if source_path is None or not Path(source_path).exists():
+        explicit_target: Optional[Path] = None
+        search_dirs: List[Path] = []
+
+        if source_path is not None:
+            sp = Path(source_path)
+            if sp.is_file():
+                explicit_target = sp
+                search_dirs.append(sp.parent)
+            elif sp.is_dir():
+                search_dirs.append(sp)
+            else:
+                explicit_target = sp
+        elif self.carry_source is not None:
+            sp = Path(self.carry_source)
+            if sp.is_file():
+                explicit_target = sp
+                search_dirs.append(sp.parent)
+            elif sp.is_dir():
+                search_dirs.append(sp)
+            else:
+                explicit_target = sp
+
+        # Candidate discovery directories
+        ckpt_dir = Path(self.checkpoint_dir)
+        default_dirs = [
+            ckpt_dir.parent / "checkpoints_v2",
+            Path("./checkpoints_v2"),
+            Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v2"),
+            Path("/content/drive/MyDrive/learn-a-world/checkpoints_v2"),
+        ]
+        for d in default_dirs:
+            if d.exists() and d.is_dir() and d not in search_dirs:
+                search_dirs.append(d)
+
+        candidate_files: List[Path] = []
+        if explicit_target is not None and explicit_target.exists():
+            candidate_files.append(explicit_target)
+
+        # Discover all checkpoint candidate files in search directories
+        for d in search_dirs:
+            if not d.exists() or not d.is_dir():
+                continue
+            for f in d.glob("*"):
+                if f.is_file() and (".pt" in f.name or f.suffix in [".pt", ".ckpt"]):
+                    if f not in candidate_files:
+                        candidate_files.append(f)
+
+        # Prioritize candidates:
+        # 1. explicit_target (if specified and exists)
+        # 2. Large files (>= 50 MB, which contain replay buffer arrays)
+        # 3. Step number descending (e.g. step 36000 before 30500)
+        # 4. File size descending
+        def candidate_sort_key(p: Path) -> tuple:
+            try:
+                sz = p.stat().st_size
+            except OSError:
+                sz = 0
+            has_buffer_size = 1 if sz >= 50 * 1024 * 1024 else 0
+            m = re.search(r"step_(\d+)", p.name)
+            step_num = int(m.group(1)) if m else 0
+            is_explicit = 1 if (explicit_target is not None and p == explicit_target) else 0
+            return (is_explicit, has_buffer_size, step_num, sz)
+
+        candidate_files.sort(key=candidate_sort_key, reverse=True)
+
+        if not candidate_files:
             if (self.carry_source is not None or "checkpoints_v3" in str(self.checkpoint_dir)) and not self.allow_fresh_buffer and not self.cfg.get("no_resume", False):
                 raise RuntimeError(
-                    f"Diary carry-over FAILED (source checkpoint not found: {source_path}). Refusing to start with an empty buffer. "
+                    f"Diary carry-over FAILED (source checkpoint not found: {explicit_target or search_dirs}). "
+                    f"Refusing to start with an empty buffer. "
                     f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
                 )
             return False
 
-        source_path = Path(source_path)
-        print(f"[*] Checking for Stage B buffer carry-over from: {source_path}")
-        try:
-            buffer_state = torch.load(str(source_path), map_location="cpu", weights_only=False)
-            comp_states = buffer_state.get("components", {})
-            buf_dict = comp_states.get("buffer") or buffer_state.get("buffer_arrays")
-            if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
-                self.buffer.load_state_dict(buf_dict)
-                print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {source_path}")
-                print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
-                return True
-            else:
-                raise ValueError(f"No valid replay buffer arrays found in {source_path}")
-        except Exception as e:
-            if not self.allow_fresh_buffer:
-                raise RuntimeError(
-                    f"Diary carry-over FAILED ({e}). Refusing to start with an empty buffer. "
-                    f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
-                ) from e
-            print(f"[!] Buffer carry-over failed ({e}) — starting FRESH by explicit flag.")
-            return False
+        loaded = False
+        attempted_reasons = []
+        for cand in candidate_files:
+            try:
+                cand_size_mb = cand.stat().st_size / (1024 * 1024)
+            except OSError:
+                cand_size_mb = 0.0
+
+            print(f"[*] Checking for Stage B buffer carry-over from: {cand} ({cand_size_mb:.1f} MB)")
+            buffer_state = None
+            try:
+                buffer_state = torch.load(str(cand), map_location="cpu", weights_only=False)
+                comp_states = buffer_state.get("components", {})
+                buf_dict = comp_states.get("buffer") or buffer_state.get("buffer_arrays")
+                if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
+                    self.buffer.load_state_dict(buf_dict)
+                    print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {cand}")
+                    print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
+                    loaded = True
+                    break
+                else:
+                    msg = f"Candidate {cand.name} contains no replay buffer arrays ({cand_size_mb:.1f} MB, weights-only)."
+                    print(f"[*] {msg} Checking other candidates...")
+                    attempted_reasons.append(msg)
+            except Exception as e:
+                msg = f"Could not load buffer from {cand.name}: {e}"
+                print(f"[*] {msg} Checking other candidates...")
+                attempted_reasons.append(msg)
+            finally:
+                if buffer_state is not None:
+                    del buffer_state
+                    gc.collect()
+
+        if loaded:
+            return True
+
+        if not self.allow_fresh_buffer:
+            details = "; ".join(attempted_reasons[:3])
+            raise RuntimeError(
+                f"Diary carry-over FAILED. Refusing to start with an empty buffer. "
+                f"Checked {len(candidate_files)} candidate(s) in {search_dirs} ({details}). "
+                f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
+            )
+        print(f"[!] Buffer carry-over failed ({len(candidate_files)} candidates tested) — starting FRESH by explicit flag.")
+        return False
 
     def collect_batch_step(self) -> int:
         """
