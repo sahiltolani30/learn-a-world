@@ -912,14 +912,16 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             pred_rew_ms = 0.0
             pred_rew_rand = 0.0
 
-    # Non-collapse audit per §5.5
+    # Non-collapse audit per §5.5 (sample uniform frames across buffer)
     with torch.no_grad():
-        if buffer.count_valid_windows(T=check_T) >= 1:
-            audit_batch = buffer.sample_sequences(B=min(config.batch_seqs, buffer.count_valid_windows(check_T)), T=check_T)
-            _, audit_z = encoder.forward_tokens(audit_batch.obs.flatten(0, 1).to(device))
+        if buffer.size >= 16:
+            audit_sz = min(128, buffer.size)
+            audit_idx = np.random.choice(buffer.size, size=audit_sz, replace=False)
+            audit_obs = torch.from_numpy(buffer.obs[audit_idx].astype(np.float32) / 255.0).to(device)
+            _, audit_z = encoder.forward_tokens(audit_obs)
             final_nc = verify_non_collapse(audit_z, min_var_threshold=0.05, strict=False)
         else:
-            final_nc = {"is_valid": True, "min_variance": 1.0, "effective_rank": 1.0}
+            final_nc = {"is_valid": True, "min_variance": 1.0, "mean_variance": 1.0, "effective_rank": 1.0}
 
     final_report = {
         "final_step": step,
