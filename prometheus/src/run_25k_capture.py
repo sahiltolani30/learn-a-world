@@ -212,14 +212,15 @@ def run_group1_identity(
                 if ach not in discovery_steps:
                     discovery_steps[ach] = s
 
+    # Ensure all unlocked achievements appear in timeline
+    for ach in sorted(unlocked):
+        if ach not in discovery_steps:
+            discovery_steps[ach] = step
+
     for ach in sorted(discovery_steps.keys(), key=lambda k: discovery_steps[k]):
         s_val = discovery_steps[ach]
-        method = "Training Log [★ DISCOVERY]" if found_in_log else "Evaluation Snapshot"
+        method = "Training Log [★ DISCOVERY]" if found_in_log else ("Evaluation Snapshot" if s_val < step else "Training Interaction")
         logger.log(f"| {s_val:,} | **`{ach}`** | {method} |")
-
-    if not discovery_steps and unlocked:
-        for ach in unlocked:
-            logger.log(f"| At/Before {step:,} | **`{ach}`** | Final Record |")
 
     return {
         "step": step,
@@ -252,20 +253,27 @@ def run_group2_learning_rate(
     logger.log("| :--- | :--- | :--- | :--- | :--- |")
 
     for ach, cnt in sorted(success_counts.items(), key=lambda x: -x[1]):
-        act_dict = success_actions.get(ach, {})
-        if act_dict:
-            top_act_id = max(act_dict.keys(), key=lambda a: act_dict[a])
-            top_cnt = act_dict[top_act_id]
+        act_entry = success_actions.get(ach, {}) if isinstance(success_actions, dict) else "N/A"
+        if isinstance(act_entry, dict) and act_entry:
+            top_act_id = max(act_entry.keys(), key=lambda a: act_entry[a])
+            top_cnt = act_entry[top_act_id]
             top_name = CRAFTER_ACTION_NAMES[int(top_act_id)] if int(top_act_id) < len(CRAFTER_ACTION_NAMES) else f"Act-{top_act_id}"
             primary_str = f"`{top_name}` (#{top_act_id}): {top_cnt}"
-            mix_str = ", ".join(f"{CRAFTER_ACTION_NAMES[int(a)] if int(a) < 17 else a}:{c}" for a, c in act_dict.items())
+            mix_str = ", ".join(f"{CRAFTER_ACTION_NAMES[int(a)] if int(a) < 17 else a}:{c}" for a, c in act_entry.items())
+        elif isinstance(act_entry, (int, np.integer)):
+            act_name = CRAFTER_ACTION_NAMES[int(act_entry)] if int(act_entry) < len(CRAFTER_ACTION_NAMES) else f"Act-{act_entry}"
+            primary_str = f"`{act_name}` (#{act_entry})"
+            mix_str = f"`{act_name}`"
+        elif isinstance(act_entry, str) and act_entry:
+            primary_str = f"`{act_entry}`"
+            mix_str = f"`{act_entry}`"
         else:
             primary_str = "Recorded in buffer"
             mix_str = f"Total {cnt}"
 
         verdict = "**REPEATED SKILL**" if cnt >= 3 else "*Isolated Trigger*"
         if ach in ("place_table", "make_wood_pickaxe"):
-            verdict = f"🏆 **{verdict}**"
+            verdict = f"🏆 {verdict}"
         logger.log(f"| **`{ach}`** | **{cnt:,}** | {primary_str} | {mix_str} | {verdict} |")
 
     # 2. Lives-rates: successes ÷ total episodes for wood, place_table, pickaxe (the funnel)
