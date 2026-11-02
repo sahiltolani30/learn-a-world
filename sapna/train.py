@@ -794,12 +794,15 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             total_eps_safe = max(1, total_episodes)
             official_rates = {ach: (official_counts[ach] / float(total_eps_safe)) * 100.0 for ach in ALL_CRAFTER_ACHIEVEMENTS}
             official_score = compute_crafter_score(official_rates)
+            current_entropy = float(telemetry_history[-1].get("entropy", 0.0)) if telemetry_history else 0.0
+            latest_eval_metrics["eval_actor_entropy"] = current_entropy
 
             print(
                 f"[Eval @ Step {step:7d}] "
                 f"Dev Greedy Ret: {latest_eval_metrics['eval_greedy_return']:.2f} | "
                 f"Dev Stoch Ret: {latest_eval_metrics['eval_stochastic_return']:.2f} | "
                 f"Stoch Unique Achs: {latest_eval_metrics['eval_stochastic_unique_achievements']:.2f} | "
+                f"Entropy: {current_entropy:.3f} | "
                 f"Official Score: {official_score:.2f}% | "
                 f"RAM: {psutil.virtual_memory().percent:.1f}%"
             )

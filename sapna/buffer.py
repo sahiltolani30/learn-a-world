@@ -221,7 +221,19 @@ class SAPNAReplayBuffer:
     def load_state(self, state: Dict[str, Union[int, np.ndarray]]) -> None:
         """Restore buffer state and rebuild per-episode index per §6."""
         expected_size = int(state["size"])
-        self.capacity = int(state["capacity"])
+        target_capacity = max(self.capacity, int(state.get("capacity", expected_size)))
+        if target_capacity > len(self.obs):
+            # Grow arrays safely to target_capacity when expanding at resume
+            self.obs = np.zeros((target_capacity, 3, 64, 64), dtype=np.uint8)
+            self.action = np.zeros(target_capacity, dtype=np.int64)
+            self.reward = np.zeros(target_capacity, dtype=np.float32)
+            self.done = np.zeros(target_capacity, dtype=np.float32)
+            self.episode_id = np.zeros(target_capacity, dtype=np.int64)
+            self.step_in_ep = np.zeros(target_capacity, dtype=np.int64)
+            self.milestone = np.zeros(target_capacity, dtype=bool)
+            self.r_int_norm = np.zeros(target_capacity, dtype=np.float32)
+
+        self.capacity = target_capacity
         self.size = expected_size
         self.ptr = int(state["ptr"])
 
