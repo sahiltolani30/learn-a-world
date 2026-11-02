@@ -13,7 +13,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-from sapna.imagination import twohot_score, twohot_ce, twohot_encode
+def __getattr__(name: str):
+    """PEP 562 lazy attribute lookup to avoid circular import with sapna.imagination."""
+    if name in ("twohot_score", "twohot_ce", "twohot_encode"):
+        import sapna.imagination as _imag
+        return getattr(_imag, name)
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 def symlog(x: Union[torch.Tensor, float, np.ndarray]) -> Union[torch.Tensor, float, np.ndarray]:
