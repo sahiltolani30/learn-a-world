@@ -227,6 +227,7 @@ def save_checkpoint(
     telemetry_history: List[Dict[str, Any]],
     official_counts: Dict[str, int],
     total_episodes: int,
+    adv_normalizer: Optional[RunningMeanStd] = None,
 ) -> None:
     """Atomic checkpoint save with disk-space checking and numbered retention."""
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -258,6 +259,7 @@ def save_checkpoint(
         "opt_actor": opt_actor.state_dict(),
         "opt_critic": opt_critic.state_dict(),
         "r_int_normalizer": r_int_normalizer.state_dict(),
+        "adv_normalizer": adv_normalizer.state_dict() if adv_normalizer is not None else None,
         "buffer": buffer.save_state(),
         "telemetry_history": telemetry_history,
         "official_counts": official_counts,
@@ -309,6 +311,7 @@ def load_checkpoint(
     opt_critic: torch.optim.Optimizer,
     buffer: SAPNAReplayBuffer,
     r_int_normalizer: RunningMeanStd,
+    adv_normalizer: Optional[RunningMeanStd] = None,
 ) -> Tuple[int, List[Dict[str, Any]], Dict[str, int], int]:
     """Load checkpoint with fail-loud integrity verification per §10."""
     print(f"[SAPNA] Resuming from checkpoint: {checkpoint_path}")
@@ -333,6 +336,8 @@ def load_checkpoint(
     opt_actor.load_state_dict(checkpoint["opt_actor"])
     opt_critic.load_state_dict(checkpoint["opt_critic"])
     r_int_normalizer.load_state_dict(checkpoint["r_int_normalizer"])
+    if adv_normalizer is not None and "adv_normalizer" in checkpoint and checkpoint["adv_normalizer"] is not None:
+        adv_normalizer.load_state_dict(checkpoint["adv_normalizer"])
 
     buffer.load_state(checkpoint["buffer"])
     telemetry_history = checkpoint.get("telemetry_history", [])
@@ -423,6 +428,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
     )
 
     r_int_normalizer = RunningMeanStd().to(device)
+    adv_normalizer = RunningMeanStd().to(device)
 
     # Optimizers
     opt_wm = torch.optim.Adam(
@@ -470,6 +476,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             opt_critic,
             buffer,
             r_int_normalizer,
+            adv_normalizer,
         )
 
     # Pre-registered gate tracking
@@ -499,6 +506,8 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                 logits = actor(state)
                 raw_probs = torch.softmax(logits, dim=-1)
                 probs = unimix(raw_probs, unimix_ratio=config.unimix)
+                if config.eps_base > 0:
+                    probs = (1.0 - config.eps_base) * probs + config.eps_base / float(config.num_actions)
                 a = Categorical(probs=probs).sample()
 
         # 2. Epistemic disagreement on fresh mask for milestone gating
@@ -708,7 +717,9 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             v_slow = twohot_score(slow_critic(imag_states))
 
         adv_raw = flat_G - v_slow
-        adv_k = (adv_raw - adv_raw.mean()) / (adv_raw.std() + 1e-3)
+        adv_normalizer.update(adv_raw)
+        adv_scale = torch.clamp(adv_normalizer.std, min=1.0)
+        adv_k = (adv_raw - adv_normalizer.mean) / adv_scale
         loss_actor = -(logprob * adv_k.detach()).mean() - config.entropy_coeff * entropy.mean()
 
         target_G = symlog(torch.clamp(flat_G, -config.reward_bins_range, config.reward_bins_range))
@@ -812,6 +823,9 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                             f"(effective rank = {nc_report['effective_rank']:.2f}) at step {step}"
                         )
 
+            if telemetry_history and latest_eval_metrics:
+                telemetry_history[-1].update(latest_eval_metrics)
+
         # Periodic checkpoint save (§3)
         if step % config.save_interval == 0:
             save_checkpoint(
@@ -836,6 +850,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                 telemetry_history,
                 official_counts,
                 total_episodes,
+                adv_normalizer=adv_normalizer,
             )
 
     envs.close()
@@ -878,6 +893,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
         telemetry_history,
         official_counts,
         total_episodes,
+        adv_normalizer=adv_normalizer,
     )
 
     # Compute final official score
@@ -969,7 +985,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--imag_horizon", type=int, default=15)
     p.add_argument("--mask_ratio", type=float, default=0.35)
     p.add_argument("--unimix", type=float, default=0.01)
-    p.add_argument("--entropy_coeff", type=float, default=3e-4)
+    p.add_argument("--entropy_coeff", type=float, default=0.01)
     p.add_argument("--gamma", type=float, default=0.997)
     p.add_argument("--lam", type=float, default=0.95)
     p.add_argument("--buffer_capacity", type=int, default=100000)

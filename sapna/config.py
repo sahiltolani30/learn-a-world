@@ -47,7 +47,7 @@ class SAPNAConfig:
     imag_horizon: int = 15  # H
     lam: float = 0.95  # lambda-returns
     gamma: float = 0.997
-    entropy_coeff: float = 3e-4  # actent
+    entropy_coeff: float = 0.01  # actent calibrated from 3e-4 to prevent mode collapse on sparse rewards
     unimix: float = 0.01
     eps_base: float = 0.0
     curiosity_weight: float = 0.0  # off in v1
