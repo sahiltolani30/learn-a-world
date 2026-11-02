@@ -59,6 +59,19 @@ def compute_crafter_score(success_rates: Dict[str, float]) -> float:
     return float(np.exp(log_sum / float(len(ALL_CRAFTER_ACHIEVEMENTS))) - 1.0)
 
 
+class BenchmarkResult(dict):
+    """Dictionary subclass supporting attribute access for benchmark metrics."""
+    def __getattr__(self, name: str) -> Any:
+        if name == "crafter_score":
+            return self.get("score", 0.0)
+        if name in self:
+            return self[name]
+        raise AttributeError(f"'BenchmarkResult' has no attribute '{name}'")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self)
+
+
 def run_benchmark(
     agent: SAPNAAgent,
     n: int = 50,
@@ -66,7 +79,8 @@ def run_benchmark(
     max_steps: int = 10000,
     seed_base: int = 42,
     save_path: Optional[str] = None,
-) -> Dict[str, Any]:
+    **kwargs,
+) -> BenchmarkResult:
     """
     Run N benchmark episodes with agent facade and compute official Crafter score.
     
@@ -79,8 +93,15 @@ def run_benchmark(
         save_path: Optional path to save JSON results.
         
     Returns:
-        dict containing official score, per-achievement success rates, returns, lengths, movement%.
+        BenchmarkResult dict containing official score, per-achievement success rates, returns, lengths, movement%.
     """
+    if "num_episodes" in kwargs:
+        n = int(kwargs["num_episodes"])
+    if "length" in kwargs:
+        max_steps = int(kwargs["length"])
+    if "greedy" in kwargs:
+        policy = "greedy" if kwargs["greedy"] else "stochastic"
+
     greedy = (policy == "greedy")
     achievement_counts = {ach: 0 for ach in ALL_CRAFTER_ACHIEVEMENTS}
     episode_returns = []
@@ -153,4 +174,4 @@ def run_benchmark(
         with open(save_path, "w") as f:
             json.dump(report, f, indent=2)
 
-    return report
+    return BenchmarkResult(report)
