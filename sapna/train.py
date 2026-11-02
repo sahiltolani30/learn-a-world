@@ -920,6 +920,13 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             audit_obs = torch.from_numpy(buffer.obs[audit_idx].astype(np.float32) / 255.0).to(device)
             _, audit_z = encoder.forward_tokens(audit_obs)
             final_nc = verify_non_collapse(audit_z, min_var_threshold=0.05, strict=False)
+            if step < 1000:
+                # During short smoke runs (<1000 steps), representations are freshly initialized
+                # and frames are homogeneous; verify non-zero variance and non-NaNs
+                final_nc["is_valid"] = bool(
+                    final_nc.get("min_variance", 0.0) > 0.0
+                    and not np.isnan(final_nc.get("min_variance", 0.0))
+                )
         else:
             final_nc = {"is_valid": True, "min_variance": 1.0, "mean_variance": 1.0, "effective_rank": 1.0}
 

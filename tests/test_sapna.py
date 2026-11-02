@@ -611,6 +611,7 @@ def test_t12_smoke_end_to_end():
         assert report["final_step"] >= 200, f"Final step {report['final_step']} < 200"
         assert "official_score" in report
         assert "imagination_reward_corr" in report
+        assert report["non_collapse_report"]["is_valid"] is True
         assert "eval_metrics" in report
         assert len(report["telemetry_recent"]) > 0, "Telemetry should not be empty"
         assert "wm_loss" in report["telemetry_recent"]
