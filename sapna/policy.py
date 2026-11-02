@@ -13,6 +13,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
+from sapna.imagination import twohot_score, twohot_ce, twohot_encode
+
 
 def symlog(x: Union[torch.Tensor, float, np.ndarray]) -> Union[torch.Tensor, float, np.ndarray]:
     """
