@@ -132,8 +132,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--warmup_steps",
         type=int,
-        default=100,
-        help="Initial exploration steps before performing model updates",
+        default=125,
+        help="Initial exploration steps before performing model updates (125 vector steps = 1,000 transitions)",
     )
     parser.add_argument(
         "--save_interval",
@@ -191,8 +191,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--update_every",
         type=int,
-        default=2,
-        help="Gradient update interval in env steps (default 2)",
+        default=1,
+        help="Gradient update interval in vector steps (default 1)",
     )
     parser.add_argument(
         "--action_repeat",
@@ -345,7 +345,7 @@ class TrainingPipeline:
         self.eval_episodes: int = int(self.cfg.get("eval_episodes", 3))
         self.lr: float = float(self.cfg.get("lr", 1e-4))
         self.critic_lr: float = float(self.cfg.get("critic_lr", 3e-4))
-        self.warmup_steps: int = int(self.cfg.get("warmup_steps", 100))
+        self.warmup_steps: int = int(self.cfg.get("warmup_steps", 125))
         self.save_interval: int = int(self.cfg.get("save_interval", 1_000))
         self.resume: bool = not bool(self.cfg.get("no_resume", False))
         self.tier2_ratio: float = float(self.cfg.get("tier2_ratio", 0.30))
@@ -355,7 +355,7 @@ class TrainingPipeline:
         self.gamma: float = float(self.cfg.get("gamma", 0.99))
         self.tau: float = float(self.cfg.get("tau", 0.99))
         self.log_interval: int = int(self.cfg.get("log_interval", 100))
-        self.update_every: int = int(self.cfg.get("update_every", 2))
+        self.update_every: int = int(self.cfg.get("update_every", 1))
         self.action_repeat: int = int(self.cfg.get("action_repeat", 1))
         self.actor_intrinsic_weight: float = float(self.cfg.get("actor_intrinsic_weight", 0.1))
         self.eps_base: float = float(self.cfg.get("eps_base", 0.10))
