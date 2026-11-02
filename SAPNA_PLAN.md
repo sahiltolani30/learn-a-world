@@ -814,3 +814,34 @@ noise is 8× higher, so the guard matters more, not less.
 forensic report (next diagnostic would be logging live per-env actor probs during collection to
 rule out actor-input wiring). Otherwise §13 G1 gates decide as written: PASS → extend to 1.1M;
 FAIL → stop and report.
+
+---
+
+## 18. G1r AUDIT ADJUDICATION (v1.7, 2026-11-03 — reporting-layer fixes only, NO training changes)
+
+The v1r 25k audit printed gates 8/9/10 as FAIL. Adjudication after cross-checking against the
+benchmark behavior (movement 16.7%, spread distribution, unique 2.18/50 games, rising official
+score — a deterministic policy is physically incapable of these):
+
+- **Gate 8 (entropy 0.000): TELEMETRY BUG.** Exactly 0.000 at every checkpoint = entropy
+  computed on the sampled one-hot action (identically zero) instead of the distribution.
+  Mandatory fix in sapna/train.py: `entropy = -(probs * probs.log()).sum(-1).mean()` over the
+  FULL 17-dim post-unimix probs used for sampling (log-probs from the same softmax; never on
+  one-hot). Expected healthy values ~2.5–2.8 nats early, drifting down slowly.
+- **Gate 9 instrument RULING: judged on the N=50 benchmark** (observed 2.18 ≥ 2.0 = PASS).
+  The 3-episode dev eval has granularity 1/3 and is noise for gating (predicted by review §e).
+  Dev eval remains a logged trend signal only.
+- **Gate 7 caveat must be EVIDENCED**: print the count of sampled windows with nonzero
+  cumulative reward; <10 of 32 → PASS-with-caveat per §13. Silent "(ok)" is invalid.
+- **Gate 10**: fix the audit script's buffer call to use the documented
+  `sample_sequences(B, T)` API (crash was in reporting, not training).
+- **Direct entropy verification (do this, 5 min, no retraining)**: load checkpoints_v1r
+  state.pt, sample 128 states via sample_sequences, run the actor forward, compute the
+  distribution entropy per §above. If ≥ 0.5 nats (expected ~2.5+), gate 8 = PASS by direct
+  measurement; the corrupted history telemetry is then irrelevant (still fix the logger for
+  the extension run).
+- **Extension authorization rule**: gates 1–7 pass (with evidenced caveat for 7), gate 8
+  passes by direct measurement, gate 9 passes on benchmark, gate 10 computes and passes →
+  resume SAME lineage to 1.1M (checkpoints_v1r, no_resume=False, total_steps=1100000,
+  buffer_capacity=300000, entropy in the eval log line, fixed entropy logger). Any RED beyond
+  these → stop and report.
