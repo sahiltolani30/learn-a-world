@@ -773,3 +773,44 @@ the same hardware class as the SOTA run. The compute barrier is a WALL-CLOCK bar
 hardware-class barrier. The pre-wired G4 continuation branch (1.1M → 3M → …) exists for
 exactly this. Standing rule unchanged: never scale a failing run — each extension requires its
 gate to pass.
+
+---
+
+## 17. G1-FAIL HOTFIX (v1.6, added after the first G1 run — pre-registered before re-run)
+
+**First G1 outcome (25k, checkpoints_v1):** all 7 printed gates passed BUT the run objectively
+FAILED the plan's G1 criteria — stochastic eval unique achievements 0.00 (gate: ≥2.0) and the
+reward-head skill gate were OMITTED from the implementer's checklist. Measured behavior: actor
+entropy 2.8 → 0.1 nats by 15k; state-blind policy (place_table ~63% in ALL probe scenes, near-
+identical values); benchmark movement 0.0–0.3% (static place_table-mash, -0.90 return
+fingerprint); official training-episode score DECLINED 1.15% → 0.72%. World model measured
+HEALTHY (imag-reward corr 0.435; drift cosine 0.91@H=1 → ~0.80@H=10) — encoder/predictor/heads
+are exonerated; the failure is isolated to the actor-objective balance.
+
+**Root cause (owned):** my v1.4 §5.4 spec used PER-BATCH advantage standardization. When the
+true advantage signal ≈ 0 (25k steps, no skills yet), per-batch std rescales pure noise to O(1)
+and REINFORCE climbs noise → single-action mode collapse → no diverse data → nothing corrects
+it (death spiral). DreamerV3 (retnorm/advnorm) and EMERALD (EMA 0.99) use RUNNING normalizers
+for exactly this reason; and at our 1,920 imagined samples/update (vs D3's 15,360) advantage
+noise is 8× higher, so the guard matters more, not less.
+
+**Mandatory changes (all four, one coupled fix set — the PG:entropy balance):**
+- **H1.** Advantage normalization uses RUNNING EMA statistics: maintain RunningMeanStd
+  (the copied `src/curiosity/ensemble.py` class) on `adv_raw = G − v_slow` with momentum 0.99;
+  `adv = (adv_raw − mean_run) / (std_run + 1e-3)`. NEVER per-batch mean/std. Update the running
+  stats with the CURRENT batch BEFORE normalizing it (standard practice; document order).
+- **H2.** `entropy_coeff` (actent): 3e-4 → **1e-2**. Justification: measured entropy collapse
+  under our 8×-noisier advantage regime; champion coefficient was calibrated at 64× the data
+  per update. Fixed at 1e-2 for v1 (no annealing); revisit only with run evidence.
+- **H3.** The G1 checklist MUST include ALL §13 G1 gates — explicitly: stochastic eval mean
+  unique achievements ≥ 2.0, and the reward-head skill gate (mean predicted reward on
+  milestone-flagged windows > mean on random windows, computed at report time). A report that
+  omits any §13 gate is INVALID and counts as FAIL.
+- **H4.** Fresh G1 re-run: NEW Drive folder `learn-a-world/sapna/checkpoints_v1r`, `--no_resume`,
+  25k steps, everything else per §3. Do NOT resume the collapsed lineage; do NOT touch
+  encoder/predictor/heads/WM; do NOT add ε/curiosity (one fix set at a time).
+
+**H5 — Stop rule for the re-run:** if actor entropy < 0.5 nats at ANY eval ≤ 15k → STOP, full
+forensic report (next diagnostic would be logging live per-env actor probs during collection to
+rule out actor-input wiring). Otherwise §13 G1 gates decide as written: PASS → extend to 1.1M;
+FAIL → stop and report.
