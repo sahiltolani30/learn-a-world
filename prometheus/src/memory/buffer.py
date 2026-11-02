@@ -723,6 +723,86 @@ class TwoTierReplayBuffer:
             "boot_h": torch.from_numpy(boot_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
         }
 
+    def sample_sequence_chains(
+        self,
+        num_chains: int = 8,
+        chain_len: int = 8,
+        device: Union[str, torch.device] = "cpu",
+    ) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        L-C: Sample consecutive transition chains for GRU BPTT-lite training.
+        Uses episode_id and step_in_ep metadata to find consecutive, done-terminated sequences.
+        Batch: num_chains chains × chain_len steps per update.
+        """
+        if self.t1_size == 0 or not self._t1_allocated or self.t1_episode_id is None:
+            return None
+
+        cap = self.tier1_capacity
+        chains_obs = []
+        chains_next_obs = []
+        chains_h = []
+        chains_mask = []
+
+        start_indices = self.rng.randint(0, self.t1_size, size=num_chains)
+
+        for idx in start_indices:
+            idx = int(idx)
+            base_ep = int(self.t1_episode_id[idx])
+            base_step = int(self.t1_step_in_ep[idx])
+
+            slot_indices = []
+            if base_ep >= 0 and base_step >= 0:
+                for k in range(chain_len):
+                    cand_slot = (idx + k) % cap
+                    if cand_slot >= self.t1_size:
+                        break
+                    if (
+                        self.t1_episode_id[cand_slot] != base_ep
+                        or self.t1_step_in_ep[cand_slot] != base_step + k
+                    ):
+                        break
+                    slot_indices.append(cand_slot)
+                    if self.t1_dones[cand_slot]:
+                        break
+
+            if len(slot_indices) == 0:
+                slot_indices = [idx]
+
+            actual_len = len(slot_indices)
+            h_init = self.t1_h[idx].astype(np.float32) if self.t1_h is not None else np.zeros(self.mem_hidden, dtype=np.float32)
+
+            c_obs = self.t1_obs[slot_indices]       # (actual_len, *obs_shape)
+            c_next = self.t1_next_obs[slot_indices] # (actual_len, *obs_shape)
+
+            if actual_len < chain_len:
+                pad_len = chain_len - actual_len
+                pad_shape = (pad_len, *self._obs_shape)
+                pad_obs = np.zeros(pad_shape, dtype=np.uint8)
+                pad_next = np.zeros(pad_shape, dtype=np.uint8)
+                c_obs = np.concatenate([c_obs, pad_obs], axis=0)
+                c_next = np.concatenate([c_next, pad_next], axis=0)
+                mask = [1.0] * actual_len + [0.0] * pad_len
+            else:
+                mask = [1.0] * chain_len
+
+            chains_obs.append(c_obs)
+            chains_next_obs.append(c_next)
+            chains_h.append(h_init)
+            chains_mask.append(mask)
+
+        b_obs = np.stack(chains_obs, axis=0)
+        b_next = np.stack(chains_next_obs, axis=0)
+        b_h = np.stack(chains_h, axis=0)
+        b_mask = np.array(chains_mask, dtype=np.float32)
+
+        dev = torch.device(device)
+        return {
+            "obs": torch.from_numpy(b_obs).to(device=dev, dtype=torch.float32) / 255.0,
+            "next_obs": torch.from_numpy(b_next).to(device=dev, dtype=torch.float32) / 255.0,
+            "h": torch.from_numpy(b_h).to(device=dev, dtype=torch.float32),
+            "mask": torch.from_numpy(b_mask).to(device=dev, dtype=torch.float32),
+        }
+
     def state_dict(self) -> Dict[str, Any]:
         """Serialize replay buffer state for checkpoint persistence."""
         return {

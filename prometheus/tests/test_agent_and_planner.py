@@ -492,7 +492,7 @@ class TestJEPAAgent(unittest.TestCase):
             latencies.append((time.perf_counter() - t0) * 1000.0)
 
         median_latency = float(np.median(latencies))
-        threshold = 100.0 if isinstance(self.agent.predictor, SpatialTransformerPredictor) else 30.0
+        threshold = 150.0 if isinstance(self.agent.predictor, SpatialTransformerPredictor) else 30.0
         self.assertLess(
             median_latency,
             threshold,

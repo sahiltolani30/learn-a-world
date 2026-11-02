@@ -82,12 +82,16 @@ def find_checkpoint(explicit_path: Optional[str] = None) -> Path:
         raise FileNotFoundError(f"Specified checkpoint not found: {explicit_path}")
 
     candidates = [
+        Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v7/state.pt"),
+        Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v7/state.pt"),
+        ROOT_DIR / "checkpoints_v7/state.pt",
+        Path("./checkpoints_v7/state.pt"),
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v6/state.pt"),
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v6/state.pt"),
         ROOT_DIR / "checkpoints_v6/state.pt",
         Path("./checkpoints_v6/state.pt"),
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v5/state.pt"),
-        ROOT_DIR / "checkpoints_v5/state.pt",
+        ROOT_DIR / "checkpoints_v5/state.pt"),
         Path("./checkpoints/jepa_crafter.pt"),
     ]
     for c in candidates:
@@ -95,6 +99,10 @@ def find_checkpoint(explicit_path: Optional[str] = None) -> Path:
             return c
 
     for d in [
+        Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v7"),
+        Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v7"),
+        ROOT_DIR / "checkpoints_v7",
+        Path("./checkpoints_v7"),
         Path("/content/drive/MyDrive/learn-a-world/prometheus/checkpoints_v6"),
         Path("/content/drive/.shortcut-targets-by-id/18tW0Bzv4yPHA5kCgtSjS-ytI4IDUYJaa/learn-a-world/prometheus/checkpoints_v6"),
         ROOT_DIR / "checkpoints_v6",

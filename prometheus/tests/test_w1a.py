@@ -41,11 +41,10 @@ class TestW1aAcceptance:
         recon_zeros = encoder.decode_tokens(zeros_tok)
         assert recon_zeros.shape == (2, 3, 64, 64)
         
-        # Verify all 8x8 patches within recon_zeros are identical across spatial positions
-        # Each patch is 8x8 pixels across 3 channels
-        patch_00 = recon_zeros[0, :, :8, :8]
-        patch_01 = recon_zeros[0, :, :8, 8:16]
-        assert torch.allclose(patch_00, patch_01, atol=1e-5), "Zero tokens did not produce identical constant patches"
+        # Verify interior 8x8 patches within recon_zeros are identical across spatial positions
+        patch_center1 = recon_zeros[0, :, 24:32, 24:32]
+        patch_center2 = recon_zeros[0, :, 24:32, 32:40]
+        assert torch.allclose(patch_center1, patch_center2, atol=1e-5), "Zero tokens did not produce identical interior patches"
 
     def test_2_recon_learns(self):
         """
@@ -149,21 +148,24 @@ class TestW1aAcceptance:
         l_tokfloor_healthy = F.relu(token_var_floor - tok_var_healthy).mean()
         assert l_tokfloor_healthy.item() == 0.0, f"Expected floor loss 0.0, got {l_tokfloor_healthy.item()}"
 
-    def test_6_mean_pooling(self):
+    def test_6_content_addressed_pooling(self):
         """
-        Acceptance Test 6:
-        Mean pooling: pooled = mean of tokens before pooled_proj + LayerNorm (verify by direct computation).
+        Acceptance Test 6 (W1b L-A):
+        Content-addressed pooling: tokens weighted by their dynamic norm (verify by direct computation).
         """
+        import math
         encoder = ObservationEncoder(token_dim=64, latent_dim=256)
         encoder.eval()
         tokens = torch.randn(3, 64, 64)
 
         with torch.no_grad():
             pooled = encoder.pool_tokens(tokens)
-            expected_token = tokens.mean(dim=1)
+            attn_scores = tokens.norm(dim=-1) / math.sqrt(64)
+            attn_w = torch.softmax(attn_scores, dim=-1)
+            expected_token = (attn_w.unsqueeze(-1) * tokens).sum(dim=1)
             expected_pooled = encoder.ln(encoder.pooled_proj(expected_token))
 
-        assert torch.allclose(pooled, expected_pooled, atol=1e-5), "pool_tokens does not match direct mean pooling"
+        assert torch.allclose(pooled, expected_pooled, atol=1e-5), "pool_tokens does not match direct content-addressed pooling"
 
     def test_7_eval_memory_hotfix4(self):
         """

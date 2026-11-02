@@ -41,7 +41,7 @@ class TestObservationEncoderAndTarget(unittest.TestCase):
         """Verifies parameter count is strictly under 800k."""
         enc = ObservationEncoder()
         params = sum(p.numel() for p in enc.parameters())
-        self.assertIn(params, (300_000, 304224, 793344))
+        self.assertIn(params, (300_000, 304224, 398400, 793344))
         self.assertLess(params, 800_000, f"Params {params} exceeds 800,000 budget")
 
     def test_04_encoder_cpu_latency_under_2ms(self):
@@ -175,7 +175,7 @@ class TestObservationEncoderAndTarget(unittest.TestCase):
         enc_params = list(enc.parameters())
         self.assertEqual(len(tgt_params), len(enc_params))
         total_tgt_params = sum(p.numel() for p in tgt_params)
-        self.assertIn(total_tgt_params, (300_000, 304_224, 793_344))
+        self.assertIn(total_tgt_params, (300_000, 304_224, 398_400, 793_344))
         self.assertLess(total_tgt_params, 800_000)
 
         # 2. All target parameters must have requires_grad=False

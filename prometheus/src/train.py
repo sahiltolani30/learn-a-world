@@ -503,21 +503,20 @@ class TrainingPipeline:
                 step = metadata.get("step", 0)
 
                 # Check architecture compatibility (Pitfall 5)
-                if arch != "v3.2-film":
-                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3.2-film; carrying over replay buffer only.")
-                    comp_states = raw_ckpt.get("components", {})
-                    buf_dict = comp_states.get("buffer") or raw_ckpt.get("buffer_arrays")
-                    if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
-                        self.buffer.load_state_dict(buf_dict)
-                        print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {latest_ckpt}")
-                        print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
-                    else:
-                        if not self.allow_fresh_buffer:
-                            raise RuntimeError(
-                                f"Diary carry-over FAILED (no buffer arrays found in {latest_ckpt}). Refusing to start with an empty buffer. "
-                                f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
-                            )
-                        print(f"[!] Legacy checkpoint had no buffer arrays — starting FRESH by explicit flag.")
+                if arch != "v3.2-w1b":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights and buffer restart fresh for v3.2-w1b per W1B plan.")
+                    self.current_step = 0
+                    self.vector_step = 0
+                    self.checkpoint_count = 0
+                    self.current_episode = 0
+                    self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
+                    self.best_eval_return = -float("inf")
+                    self.achievement_history = {}
+                    self.all_unlocked_achievements = set()
+                    self.success_counts = {}
+                    self.success_actions = {}
+                    self.loss_history = []
+                    return True
                     self.current_step = 0
                     self.vector_step = 0
                     self.checkpoint_count = 0
@@ -1102,12 +1101,37 @@ class TrainingPipeline:
         l_reward = F.mse_loss(pred_r, batch["rewards"])
         l_done = F.binary_cross_entropy_with_logits(pred_d_logits, batch["dones"].float())
 
-        # I3: GRU auxiliary memory loss (MATH_AUDIT §1)
-        # Trains GRU so h is predictive of the next state's pooled latent
-        h_next = self.agent.gru(curr_pooled.detach(), batch["h"].float())
-        pred_next_pooled = self.agent.mem_to_pooled(h_next)
-        valid = (~batch["dones"]).float().unsqueeze(-1)
-        l_mem = (F.mse_loss(pred_next_pooled, target_pooled.detach(), reduction="none") * valid).mean()
+        # L-C: GRU sequence training (BPTT-lite) through sampled chains (W1b)
+        # Subsumes stepwise l_mem to train GRU recurrently through time
+        chains = self.buffer.sample_sequence_chains(num_chains=8, chain_len=8, device=self.device)
+        if chains is not None:
+            c_obs = chains["obs"]           # (B_c, T, 3, 64, 64)
+            c_next_obs = chains["next_obs"] # (B_c, T, 3, 64, 64)
+            c_mask = chains["mask"]         # (B_c, T)
+            c_h = chains["h"]               # (B_c, 256)
+            B_c, T_c = c_obs.size(0), c_obs.size(1)
+
+            with torch.no_grad():
+                c_z = self.agent.encoder(c_obs.view(B_c * T_c, 3, 64, 64)).view(B_c, T_c, -1)
+                c_target = self.agent.target_encoder(c_next_obs.view(B_c * T_c, 3, 64, 64)).view(B_c, T_c, -1)
+
+            h_seq = c_h
+            total_seq_loss = torch.zeros(B_c, device=self.device)
+            steps_per_chain = c_mask.sum(dim=1).clamp(min=1.0)
+
+            for t in range(T_c):
+                h_seq = self.agent.gru(c_z[:, t], h_seq)
+                pred_next_pooled = self.agent.mem_to_pooled(h_seq)
+                step_loss = F.mse_loss(pred_next_pooled, c_target[:, t].detach(), reduction="none").mean(dim=-1)
+                total_seq_loss = total_seq_loss + (step_loss * c_mask[:, t])
+
+            l_seq = (total_seq_loss / steps_per_chain).mean()
+        else:
+            # Fallback to 1-step differentiable memory loss on batch if buffer has no chains yet
+            h_next = self.agent.gru(curr_pooled.detach(), batch["h"].float())
+            pred_next_pooled = self.agent.mem_to_pooled(h_next)
+            valid = (~batch["dones"]).float().unsqueeze(-1)
+            l_seq = (F.mse_loss(pred_next_pooled, target_pooled.detach(), reduction="none") * valid).mean()
 
         # I8: Lifelong Latent RND distillation loss (weight 0.2)
         l_rnd = self.rnd.compute_loss(curr_pooled.detach())
@@ -1119,7 +1143,7 @@ class TrainingPipeline:
             + 1.0 * l_pool            # VICReg on pooled (unchanged)
             + self.l_recon_weight * l_recon  # W1a-0 reconstruction anchor (I1: 1.0)
             + 1.0 * l_tokfloor        # W1a-4 per-token variance floor
-            + self.mem_loss_weight * l_mem # I3: GRU memory loss
+            + self.mem_loss_weight * l_seq # L-C: GRU sequence training (BPTT-lite)
             + 0.2 * l_rnd             # I8: Latent RND lifelong novelty
             + 1.0 * l_reward          # U3 (bumped from 0.5 to 1.0)
             + 1.0 * l_done            # U3 (bumped from 0.5 to 1.0)
@@ -1151,7 +1175,8 @@ class TrainingPipeline:
             "l_pool": float(l_pool.item()),
             "l_recon": float(l_recon.item()),
             "l_tokfloor": float(l_tokfloor.item()),
-            "l_mem": float(l_mem.item()),
+            "l_mem": float(l_seq.item()),
+            "l_seq": float(l_seq.item()),
             "l_rnd": float(l_rnd.item()),
             "l_reward": float(l_reward.item()),
             "l_done": float(l_done.item()),
@@ -1444,7 +1469,7 @@ class TrainingPipeline:
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
-            "arch": "v3.2-film",
+            "arch": "v3.2-w1b",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,
