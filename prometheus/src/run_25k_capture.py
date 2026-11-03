@@ -618,8 +618,9 @@ def run_group3_brain(
         ]).to(device)
 
         with torch.no_grad():
-            _, z_true_all = agent.encoder.forward_tokens(x_all)
+            tok_true_all, z_true_all = agent.encoder.forward_tokens(x_all)
 
+        tok_sim = tok_true_all[0:1]
         z_sim = z_true_all[0:1]
         h_sim = torch.zeros(1, 256, device=device)
 
@@ -627,11 +628,11 @@ def run_group3_brain(
             a_t = torch.tensor([actions[t]], dtype=torch.long, device=device)
             with torch.no_grad():
                 pred_next_tokens, _ = agent.predictor.forward_tokens(
-                    z_sim.view(1, 4, 64).repeat(1, 16, 1), a_t, h=h_sim
+                    tok_sim, a_t, h=h_sim
                 )
-                pred_next = agent.encoder.pooled_proj(pred_next_tokens.mean(dim=1))
-                pred_next = agent.encoder.ln(pred_next)
+                pred_next = agent.encoder.pool_tokens(pred_next_tokens)
                 h_sim = agent.gru(z_sim, h_sim)
+                tok_sim = pred_next_tokens
                 z_sim = pred_next
 
                 c = F.cosine_similarity(z_sim, z_true_all[t + 1:t + 2]).item()
@@ -1022,7 +1023,7 @@ def run_group5_memory_internals(
             q1, q2 = agent.critic(readout)
             q_vals = torch.min(q1, q2).squeeze(0).cpu().numpy()
 
-            chosen_a = int(np.argmax(q_vals))
+            chosen_a = int(np.argmax(probs))
             a_tensor = torch.tensor([chosen_a], device=device)
 
             pred_tokens, _ = agent.predictor.forward_tokens(tokens, a_tensor, h=mem_h)
