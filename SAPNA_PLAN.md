@@ -936,3 +936,88 @@ nats, benchmark unique ≥2.0 already at 2.18, skill gate computed with the F7 i
 caveat evidenced) → resume the SAME v1r lineage to 1,100,000 steps: `no_resume=False`,
 `buffer_capacity=300000`, eval 5k / save 25k, retention latest+1, fixed entropy logger.
 Any genuine red → stop and report per §13.
+
+---
+
+## 20. FIX-EXECUTION SPEC (v1.9 — zero-guess implementation of §19.3 F1–F11)
+
+**Run protocol after fixes (replaces §19.4's resume rule):** implement F1–F11 → tests T1–T13
+green (unweakened) → **FRESH 25k validation run** `checkpoints_v1r2`, `no_resume=True`,
+`buffer_capacity=300000` (F11 satisfied at birth — no expansion needed) → full §13 audit with
+fixed instruments → PASS → extend THAT lineage to 1,100,000 (`no_resume=False`). Rationale:
+F2 (normalizer) and F8 (L_pool VICReg) change learning math; a fresh 25k costs ~15–20 min at
+SPS 40 and removes every mixed-objective-lineage question. Resuming v1r under a changed
+objective is NOT authorized.
+
+**F1 — entropy key (1 line).** train.py:797: `.get("entropy_mean", 0.0)`. Keep the producer
+key `entropy_mean` (train.py:754) as the single source; the per-eval line then prints real
+values. Acceptance: eval line shows ~2.5–2.8 nats early; H5 rule executable from logs.
+
+**F2 — normalizer verbatim (H1).** In the RunningMeanStd used for advantages
+(train.py:46–91): add EMA form — on each `update(batch)`: `mean ← 0.99·mean + 0.01·batch_mean`;
+`var ← 0.99·var + 0.01·batch_var` (bias-corrected count for the first ~100 updates: initialize
+from the first batch, then EMA). Normalize `adv = (adv_raw − mean) / (std + 1e-3)`; DELETE
+`clamp(min=1.0)` (train.py:721). Keep update-before-normalize order. PERSIST the normalizer
+state (mean/var) in state.pt and restore on resume (if currently absent, add — an EMA reset at
+resume re-centers advantages and causes a transient spike). Acceptance: synthetic test —
+constant adv_raw=5.0 stream → adv→0 without NaN; changing stream → mean tracks with ~100-step
+lag; no clamp anywhere in the path.
+
+**F3 — interval crossing.** Replace modulo checks (train.py:792, 833) with running targets:
+`next_eval = eval_interval`, `if step >= next_eval: evaluate(); next_eval += eval_interval`
+(same for save at 25,000). Acceptance: log lines show evals at 5000/10000/15000… and saves at
+25000/50000/75000 during the fresh 25k (one save at 25k given the schedule).
+
+**F4 — retention latest+1.** train.py:283–293: after a successful new save, delete all
+numbered checkpoints except the newest. Acceptance: after 3 saves the folder holds exactly 2
+buffer-bearing files; at 300k buffer each ≈3.7 GB → folder ≤ ~7.5 GB.
+
+**F5 — save atomicity + RAM abort.** Reorder train.py:274–280: write numbered file via
+tmp + os.replace FIRST; only then refresh latest; only then prune per F4. Add pre-save
+psutil check: RAM > 80% → attempt emergency save + raise (§13 R3). Acceptance: kill -9
+during a save leaves the previous checkpoint valid and loadable.
+
+**F6 — ring-wrap ordering + contiguity.** buffer.py load_state: rebuild each episode's index
+list SORTED by `step_in_ep` (currently slot order, :250-252). In `_get_valid_starts`: accept a
+start only if `step_in_ep[s+k] == step_in_ep[s]+k` for k=0..T−1 (precompute contiguous runs
+per episode). Normalize the realloc branch dtypes back to int8/bool (:228,230). Acceptance:
+synthetic test — overfill a 100-cap ring to 120 with multi-episode data, save/load, sample 500
+windows → 100% contiguous, byte-identical roundtrip.
+
+**F7 — skill-gate instrument (§17-H3).** In the audit/notebook: `all_starts, ms_starts =
+buf._get_valid_starts(T=16)`; take up to 16 milestone starts + 16 uniform non-milestone
+starts; for each window: obs/255 → encoder (eval) → tokens/pooled → unroll `temporal_core`
+over the window with h carried (NOT zeros) → predictor mean_pred → arrival input
+`cat[pool_tokens(mean_pred), h_next]` → reward head → `twohot_score` → symexp. Report
+`M_pred` vs `R_pred`; gate PASS iff M_pred > R_pred with N≥8 per side. Cell 8 fail-opens to
+delete: Gate 7's `latest_corr > 0.0` clause (require r ≥ 0.3 OR printed nonzero-window count
+<10 with rising trend); Gate 9's hardcoded 2.18 fallback (missing JSON = MISSING = FAIL);
+Gate 10's "insufficient (PASS)".
+
+**F8 — per-head VICReg on L_pool.** train.py:618–623: replace plain per-head MSE with the
+existing VICRegLoss applied per head: `l_pool = mean_k( vicreg(pool_tokens(all_pred_tokens[k]),
+target_pooled)["loss"] )` (sim 1.0 / var 1.0 / cov 0.04, as §4); keep the var/cov hinge on
+curr_pooled unchanged. Expected telemetry signature: WM loss initially ~2–3 (higher than the
+MSE-only 1.375) declining; drift/eval unchanged after ~5k. If a written sign-off to keep MSE
+is preferred instead, it must be recorded in this plan — silence is not accepted (§0.3).
+
+**F9 — collapse abort.** Restore the abort threshold to min-var > 0.1 after the 5k grace
+window (currently 0.005; train.py:823). Acceptance: synthetic collapsed tensor triggers abort.
+
+**F10 — tests de-weakened (§11 restored).** T13: bound becomes RELATIVE — 15-step
+constant-action drift ≤ 0.25·‖z₀‖ (measured 3.66 ≈ 0.23·15.6 is consistent; the old absolute
+<1.0 was the plan author's miscalibration for ‖z‖≈15.6) AND restore the exact identity assert
+`forward_tokens_clean(...) == tokens_input + head(spatial_out)` (allclose 1e-5). T8: two
+DIFFERENT arrival states generated by two DIFFERENT actions through the real pipeline (not
+arr+2.0). T9: actually exercise `evaluate()` with a stub env. T12: assert ALL §9 telemetry
+keys present. Acceptance: 13/13 green at the restored strictness.
+
+**F11 — buffer 300k at birth.** The fresh G1r2 launches with `buffer_capacity=300000`
+(config.py default update + notebook Cell 12). Keep the expansion path for crash-resumes
+(F6 makes it safe).
+
+**G1r2 healthy-signature expectations (for the audit):** entropy ~2.8 declining slowly,
+≥0.5 at 15k; WM loss ~2–3 initially (F8 terms) declining below ~1.5 by 25k; corr rising with
+evidenced nonzero-window count; benchmark stochastic unique ≥ 2.0, movement > 10%, official
+score ≥ 1.0% and rising; SPS ≥ 25 (F8 adds 4 VICReg evals per head-batch — budget a small hit).
+Extension: same lineage → `total_steps=1100000`, `no_resume=False`. Any red → stop, report.
