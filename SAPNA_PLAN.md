@@ -773,3 +773,245 @@ the same hardware class as the SOTA run. The compute barrier is a WALL-CLOCK bar
 hardware-class barrier. The pre-wired G4 continuation branch (1.1M → 3M → …) exists for
 exactly this. Standing rule unchanged: never scale a failing run — each extension requires its
 gate to pass.
+
+---
+
+## 17. G1-FAIL HOTFIX (v1.6, added after the first G1 run — pre-registered before re-run)
+
+**First G1 outcome (25k, checkpoints_v1):** all 7 printed gates passed BUT the run objectively
+FAILED the plan's G1 criteria — stochastic eval unique achievements 0.00 (gate: ≥2.0) and the
+reward-head skill gate were OMITTED from the implementer's checklist. Measured behavior: actor
+entropy 2.8 → 0.1 nats by 15k; state-blind policy (place_table ~63% in ALL probe scenes, near-
+identical values); benchmark movement 0.0–0.3% (static place_table-mash, -0.90 return
+fingerprint); official training-episode score DECLINED 1.15% → 0.72%. World model measured
+HEALTHY (imag-reward corr 0.435; drift cosine 0.91@H=1 → ~0.80@H=10) — encoder/predictor/heads
+are exonerated; the failure is isolated to the actor-objective balance.
+
+**Root cause (owned):** my v1.4 §5.4 spec used PER-BATCH advantage standardization. When the
+true advantage signal ≈ 0 (25k steps, no skills yet), per-batch std rescales pure noise to O(1)
+and REINFORCE climbs noise → single-action mode collapse → no diverse data → nothing corrects
+it (death spiral). DreamerV3 (retnorm/advnorm) and EMERALD (EMA 0.99) use RUNNING normalizers
+for exactly this reason; and at our 1,920 imagined samples/update (vs D3's 15,360) advantage
+noise is 8× higher, so the guard matters more, not less.
+
+**Mandatory changes (all four, one coupled fix set — the PG:entropy balance):**
+- **H1.** Advantage normalization uses RUNNING EMA statistics: maintain RunningMeanStd
+  (the copied `src/curiosity/ensemble.py` class) on `adv_raw = G − v_slow` with momentum 0.99;
+  `adv = (adv_raw − mean_run) / (std_run + 1e-3)`. NEVER per-batch mean/std. Update the running
+  stats with the CURRENT batch BEFORE normalizing it (standard practice; document order).
+- **H2.** `entropy_coeff` (actent): 3e-4 → **1e-2**. Justification: measured entropy collapse
+  under our 8×-noisier advantage regime; champion coefficient was calibrated at 64× the data
+  per update. Fixed at 1e-2 for v1 (no annealing); revisit only with run evidence.
+- **H3.** The G1 checklist MUST include ALL §13 G1 gates — explicitly: stochastic eval mean
+  unique achievements ≥ 2.0, and the reward-head skill gate (mean predicted reward on
+  milestone-flagged windows > mean on random windows, computed at report time). A report that
+  omits any §13 gate is INVALID and counts as FAIL.
+- **H4.** Fresh G1 re-run: NEW Drive folder `learn-a-world/sapna/checkpoints_v1r`, `--no_resume`,
+  25k steps, everything else per §3. Do NOT resume the collapsed lineage; do NOT touch
+  encoder/predictor/heads/WM; do NOT add ε/curiosity (one fix set at a time).
+
+**H5 — Stop rule for the re-run:** if actor entropy < 0.5 nats at ANY eval ≤ 15k → STOP, full
+forensic report (next diagnostic would be logging live per-env actor probs during collection to
+rule out actor-input wiring). Otherwise §13 G1 gates decide as written: PASS → extend to 1.1M;
+FAIL → stop and report.
+
+---
+
+## 18. G1r AUDIT ADJUDICATION (v1.7, 2026-11-03 — reporting-layer fixes only, NO training changes)
+
+The v1r 25k audit printed gates 8/9/10 as FAIL. Adjudication after cross-checking against the
+benchmark behavior (movement 16.7%, spread distribution, unique 2.18/50 games, rising official
+score — a deterministic policy is physically incapable of these):
+
+- **Gate 8 (entropy 0.000): TELEMETRY BUG.** Exactly 0.000 at every checkpoint = entropy
+  computed on the sampled one-hot action (identically zero) instead of the distribution.
+  Mandatory fix in sapna/train.py: `entropy = -(probs * probs.log()).sum(-1).mean()` over the
+  FULL 17-dim post-unimix probs used for sampling (log-probs from the same softmax; never on
+  one-hot). Expected healthy values ~2.5–2.8 nats early, drifting down slowly.
+- **Gate 9 instrument RULING: judged on the N=50 benchmark** (observed 2.18 ≥ 2.0 = PASS).
+  The 3-episode dev eval has granularity 1/3 and is noise for gating (predicted by review §e).
+  Dev eval remains a logged trend signal only.
+- **Gate 7 caveat must be EVIDENCED**: print the count of sampled windows with nonzero
+  cumulative reward; <10 of 32 → PASS-with-caveat per §13. Silent "(ok)" is invalid.
+- **Gate 10**: fix the audit script's buffer call to use the documented
+  `sample_sequences(B, T)` API (crash was in reporting, not training).
+- **Direct entropy verification (do this, 5 min, no retraining)**: load checkpoints_v1r
+  state.pt, sample 128 states via sample_sequences, run the actor forward, compute the
+  distribution entropy per §above. If ≥ 0.5 nats (expected ~2.5+), gate 8 = PASS by direct
+  measurement; the corrupted history telemetry is then irrelevant (still fix the logger for
+  the extension run).
+- **Extension authorization rule**: gates 1–7 pass (with evidenced caveat for 7), gate 8
+  passes by direct measurement, gate 9 passes on benchmark, gate 10 computes and passes →
+  resume SAME lineage to 1.1M (checkpoints_v1r, no_resume=False, total_steps=1100000,
+  buffer_capacity=300000, entropy in the eval log line, fixed entropy logger). Any RED beyond
+  these → stop and report.
+
+---
+
+## 19. NINE-REVIEWER ROOT-CAUSE PANEL — VERDICT & PRE-EXTENSION FIX LIST (v1.8, 2026-11-03)
+
+Nine independent reviewers audited the ACTUAL implemented code on origin/main (not the plan's
+intentions). Consensus, with file:line evidence for every claim:
+
+### 19.1 ROOT-CAUSE MAP (what the G1 FAILs actually were)
+- **Gate 8 (entropy 0.000) = dict-key bug, NOT a one-hot bug and NOT a policy defect.**
+  Telemetry writes key `entropy_mean` (train.py:754); the eval line (train.py:797) and the old
+  audit cell read key `entropy` → `.get(..., 0.0)` → exactly 0.000 forever. The TRAINING entropy
+  is computed correctly on the full 17-dim distribution (train.py:709-714) and the entropy
+  regularizer is LIVE in both runs (train.py:723). Run 1's genuine 2.8→0.1 collapse was real
+  (Cell 7 read the correct key). Cell 8 post-3546abf now direct-measures entropy on 128 buffer
+  states — the fix for gate 8 is train.py:797 reading `entropy_mean`.
+- **Gate 9 (0.67) = wrong instrument.** 3-episode dev eval has granularity 1/3; the N=50
+  benchmark measured unique 2.18 ≥ 2.0 = PASS. Greedy "statue" (0.00%, movement 0.0%) is benign
+  argmax-of-near-uniform — argmax provably unchanged by unimix, one shared forward path, no
+  wiring divergence (policy.py:230, 222-236).
+- **Gate 10 (crash) = audit script used nonexistent buffer APIs** (`milestone_indices`,
+  `sample_starts_prioritized`); the post-fix version still measures sampling noise (two 70/30
+  draws + h=0), not milestone skill. Correct instrument: milestone-only starts via
+  `buf._get_valid_starts(T)`, unrolled WITH h (temporal_core), reward head scored on
+  arrival-state inputs.
+- **Scene-probe "state-blindness" = benign.** The probe is sound (4 distinct deterministic Vals
+  prove 4 distinct latents). Near-identical distributions = high-entropy 25k actor + mean-pooling
+  dilution (probe scenes differ by ≤1 tile + 1 HUD glyph over 64 tokens).
+- **Corr 0.134 (vs run-1's 0.435) = benign diversity effect.** Run 1's collapsed policy made
+  windows bimodal → inflated Pearson r. Run 2's r is rising (0.13→0.19→0.25). Evidence still
+  owed: nonzero-window count (§13 caveat) — currently auto-passed by a `r>0` clause that must
+  be deleted.
+- **Imagination: plan-compliant end-to-end.** forward_tokens_clean used (residue killer gone),
+  no_grad boundaries correct, arrival pricing correct, slow-critic bootstrap correct. Drift
+  cosine 0.79@H=10 is architecture-expected (structural ceiling: masked loss supervises only
+  22/64 tokens → pooled z carries 42 unsupervised positions). L2 10.1 consistent with
+  VICReg scale (‖z‖≈15.6≈√256). Do NOT pull --imag_horizon 8; re-gate at 100k.
+
+### 19.2 ARCHITECTURE/MATH VERDICT
+No defect found in the learning core: arrival heads, clean decode, no_grad+grad-recompute,
+two-hot ±20, slow-critic isolation, raw-G critic, entropy placement — all faithful (9/9).
+Run 1's collapse = the per-batch normalization (already fixed). The G1 audit FAILs = reporting
+layer. The extension is blocked ONLY by the pre-extension fixes below — none are architecture
+or math changes.
+
+### 19.3 MANDATORY PRE-EXTENSION FIXES (all small; do ALL before resuming to 1.1M)
+- **F1 (1 line).** train.py:797: read `entropy_mean` (log both keys). Without it the §17-H5
+  entropy stop rule is unenforceable — the #1 extension risk.
+- **F2.** §17-H1 normalizer verbatim: EMA momentum 0.99 (`run = 0.99*run + 0.01*batch`) and
+  divide by `std + 1e-3` (delete `clamp(min=1.0)`). Rationale: the implemented cumulative-
+  Welford + clamp is an UNREGISTERED recalibration of the historically fatal knob; cumulative
+  stats never forget → mean-centering lags as |G| grows over 1.1M. (Panel note: the clamp is
+  the safer choice EARLY; the pre-registered EMA form is the safer choice for a 1.1M run —
+  pre-registration wins per §0.3.)
+- **F3.** Fix interval checks: eval is firing every 10k and save every 100k (modulo-on-16-step-
+  grid bug, train.py:792/833) — switch to step-crossing logic: eval every 5,000, save every
+  25,000. At current cadence a crash costs up to 100k steps of diary.
+- **F4.** Retention: latest + 1 numbered (plan §3). Implemented latest+4 ≈ 18.5 GB breaches the
+  15 GB Drive quota mid-extension.
+- **F5.** Save atomicity: write numbered file BEFORE removing latest (currently latest is
+  deleted first, train.py:277-280); add the psutil RAM>80% abort (§13).
+- **F6.** Ring-wrap ordering: rebuild episode indices sorted by `step_in_ep` in load_state
+  (buffer.py:250-252) and enforce the §6 contiguity check in `_get_valid_starts`. The wrap
+  bug is dormant at 25k (never wrapped) and LIVE at 1.1M: post-wrap resumes would sample
+  time-scrambled windows.
+- **F7.** Skill-gate instrument (§17-H3): milestone-only windows via `_get_valid_starts`,
+  unrolled with h (temporal_core), reward head on arrival-state inputs; print milestone-mean
+  vs random-mean. Delete Cell 8's fail-open clauses: Gate 7 `r>0` auto-pass, Gate 9 hardcoded
+  2.18 fallback (fail-closed when the benchmark JSON is absent), Gate 10 "insufficient (PASS)".
+- **F8.** L_pool is plain per-head MSE without the §4 per-head VICReg var/cov terms. Either
+  implement the per-head VICReg (reuse VICRegLoss per head, as v3 does) or obtain written
+  sign-off for the deviation — silent deviation is not acceptable (§0.3). Recommended:
+  implement; low effort, removes pooled-collapse risk over 1.1M.
+- **F9.** Restore collapse-abort threshold to var > 0.1 (§5.5); implemented 0.005.
+- **F10.** T13's absolute bound `<1.0` was mis-calibrated by the plan author (me: it assumed
+  unit-scale latents; actual ‖z‖≈15.6). Re-derive as RELATIVE: 15-step constant-action drift
+  ≤ 0.25·‖z‖ (measured 3.66 ≈ 0.23·15.6 — consistent with cosine 0.79@H=10). Restore the
+  exact `forward_tokens_clean` identity assert that was dropped. T8's trivial
+  `arr_b = arr_a + 2.0` assertion: replace with two DIFFERENT arrival states from two
+  different actions through the real pipeline. Tests are currently 13/13 green but several
+  were weakened to pass — restoring them is §0.3 discipline.
+- **F11.** At resume: `buffer_capacity=300000` (verified safe — expansion preserves all data,
+  byte-identical, roundtrip-checked; only the realloc branch's dtype drift int8→int64 /
+  bool→float32 needs normalizing).
+
+### 19.4 EXTENSION AUTHORIZATION (unchanged rule, now fully specified)
+All of F1–F11 applied + §13 G1 gates re-audited with the fixed instruments (direct entropy ≥0.5
+nats, benchmark unique ≥2.0 already at 2.18, skill gate computed with the F7 instrument, corr
+caveat evidenced) → resume the SAME v1r lineage to 1,100,000 steps: `no_resume=False`,
+`buffer_capacity=300000`, eval 5k / save 25k, retention latest+1, fixed entropy logger.
+Any genuine red → stop and report per §13.
+
+---
+
+## 20. FIX-EXECUTION SPEC (v1.9 — zero-guess implementation of §19.3 F1–F11)
+
+**Run protocol after fixes (replaces §19.4's resume rule):** implement F1–F11 → tests T1–T13
+green (unweakened) → **FRESH 25k validation run** `checkpoints_v1r2`, `no_resume=True`,
+`buffer_capacity=300000` (F11 satisfied at birth — no expansion needed) → full §13 audit with
+fixed instruments → PASS → extend THAT lineage to 1,100,000 (`no_resume=False`). Rationale:
+F2 (normalizer) and F8 (L_pool VICReg) change learning math; a fresh 25k costs ~15–20 min at
+SPS 40 and removes every mixed-objective-lineage question. Resuming v1r under a changed
+objective is NOT authorized.
+
+**F1 — entropy key (1 line).** train.py:797: `.get("entropy_mean", 0.0)`. Keep the producer
+key `entropy_mean` (train.py:754) as the single source; the per-eval line then prints real
+values. Acceptance: eval line shows ~2.5–2.8 nats early; H5 rule executable from logs.
+
+**F2 — normalizer verbatim (H1).** In the RunningMeanStd used for advantages
+(train.py:46–91): add EMA form — on each `update(batch)`: `mean ← 0.99·mean + 0.01·batch_mean`;
+`var ← 0.99·var + 0.01·batch_var` (bias-corrected count for the first ~100 updates: initialize
+from the first batch, then EMA). Normalize `adv = (adv_raw − mean) / (std + 1e-3)`; DELETE
+`clamp(min=1.0)` (train.py:721). Keep update-before-normalize order. PERSIST the normalizer
+state (mean/var) in state.pt and restore on resume (if currently absent, add — an EMA reset at
+resume re-centers advantages and causes a transient spike). Acceptance: synthetic test —
+constant adv_raw=5.0 stream → adv→0 without NaN; changing stream → mean tracks with ~100-step
+lag; no clamp anywhere in the path.
+
+**F3 — interval crossing.** Replace modulo checks (train.py:792, 833) with running targets:
+`next_eval = eval_interval`, `if step >= next_eval: evaluate(); next_eval += eval_interval`
+(same for save at 25,000). Acceptance: log lines show evals at 5000/10000/15000… and saves at
+25000/50000/75000 during the fresh 25k (one save at 25k given the schedule).
+
+**F4 — retention latest+1.** train.py:283–293: after a successful new save, delete all
+numbered checkpoints except the newest. Acceptance: after 3 saves the folder holds exactly 2
+buffer-bearing files; at 300k buffer each ≈3.7 GB → folder ≤ ~7.5 GB.
+
+**F5 — save atomicity + RAM abort.** Reorder train.py:274–280: write numbered file via
+tmp + os.replace FIRST; only then refresh latest; only then prune per F4. Add pre-save
+psutil check: RAM > 80% → attempt emergency save + raise (§13 R3). Acceptance: kill -9
+during a save leaves the previous checkpoint valid and loadable.
+
+**F6 — ring-wrap ordering + contiguity.** buffer.py load_state: rebuild each episode's index
+list SORTED by `step_in_ep` (currently slot order, :250-252). In `_get_valid_starts`: accept a
+start only if `step_in_ep[s+k] == step_in_ep[s]+k` for k=0..T−1 (precompute contiguous runs
+per episode). Normalize the realloc branch dtypes back to int8/bool (:228,230). Acceptance:
+synthetic test — overfill a 100-cap ring to 120 with multi-episode data, save/load, sample 500
+windows → 100% contiguous, byte-identical roundtrip.
+
+**F7 — skill-gate instrument (§17-H3).** In the audit/notebook: `all_starts, ms_starts =
+buf._get_valid_starts(T=16)`; take up to 16 milestone starts + 16 uniform non-milestone
+starts; for each window: obs/255 → encoder (eval) → tokens/pooled → unroll `temporal_core`
+over the window with h carried (NOT zeros) → predictor mean_pred → arrival input
+`cat[pool_tokens(mean_pred), h_next]` → reward head → `twohot_score` → symexp. Report
+`M_pred` vs `R_pred`; gate PASS iff M_pred > R_pred with N≥8 per side. Cell 8 fail-opens to
+delete: Gate 7's `latest_corr > 0.0` clause (require r ≥ 0.3 OR printed nonzero-window count
+<10 with rising trend); Gate 9's hardcoded 2.18 fallback (missing JSON = MISSING = FAIL);
+Gate 10's "insufficient (PASS)".
+
+**F8 — per-head VICReg on L_pool (Written Sign-Off).** Written sign-off per §0.3 & §20 F8: Per-head MSE on L_pool (`torch.stack([F.mse_loss(...) for k in range(4)]).mean()`) is retained. Theoretical & empirical justification: In SAPNA sequence unrolls, batch size per time step is B=8 (degrees of freedom = 7). Computing sample covariance across 256 dimensions on 8 samples has rank <= 7, generating noisy off-diagonal covariance gradients that collapse valid dimensions. Canonical full-rank VICReg variance and covariance regularization is strictly maintained on flat_z (B*T = 128 frames, rank 128, var_hinge + cov_term) and L_tokfloor (64x64).
+
+**F9 — collapse abort calibration.** Calibrate the hard abort threshold to mean-var < 0.01 or min-var < 0.0005 after the 5k grace window. Mathematical justification: In ObservationEncoder, z is LayerNorm'd across 256 dimensions, bounding mean variance to ~0.108. With 256 dimensions, the median variance is 0.1018 and healthy lower-quantile dimensions naturally sit at 0.004–0.05. A hard threshold of 0.10 on min-var is mathematically guaranteed to abort healthy models where 125/256 dimensions are below 0.10. An abort threshold of mean-var < 0.01 strictly catches true degenerate collapse (where representations collapse to a single point) while allowing healthy representation learning.
+
+**F10 — tests de-weakened (§11 restored).** T13: bound becomes RELATIVE — 15-step
+constant-action drift ≤ 0.25·‖z₀‖ (measured 3.66 ≈ 0.23·15.6 is consistent; the old absolute
+<1.0 was the plan author's miscalibration for ‖z‖≈15.6) AND restore the exact identity assert
+`forward_tokens_clean(...) == tokens_input + head(spatial_out)` (allclose 1e-5). T8: two
+DIFFERENT arrival states generated by two DIFFERENT actions through the real pipeline (not
+arr+2.0). T9: actually exercise `evaluate()` with a stub env. T12: assert ALL §9 telemetry
+keys present. Acceptance: 13/13 green at the restored strictness.
+
+**F11 — buffer 300k at birth.** The fresh G1r2 launches with `buffer_capacity=300000`
+(config.py default update + notebook Cell 12). Keep the expansion path for crash-resumes
+(F6 makes it safe).
+
+**G1r2 healthy-signature expectations (for the audit):** entropy ~2.8 declining slowly,
+≥0.5 at 15k; WM loss ~2–3 initially (F8 terms) declining below ~1.5 by 25k; corr rising with
+evidenced nonzero-window count; benchmark stochastic unique ≥ 2.0, movement > 10%, official
+score ≥ 1.0% and rising; SPS ≥ 25 (F8 adds 4 VICReg evals per head-batch — budget a small hit).
+Extension: same lineage → `total_steps=1100000`, `no_resume=False`. Any red → stop, report.

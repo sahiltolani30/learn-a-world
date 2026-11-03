@@ -132,8 +132,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--warmup_steps",
         type=int,
-        default=100,
-        help="Initial exploration steps before performing model updates",
+        default=125,
+        help="Initial exploration steps before performing model updates (125 vector steps = 1,000 transitions)",
     )
     parser.add_argument(
         "--save_interval",
@@ -191,8 +191,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--update_every",
         type=int,
-        default=2,
-        help="Gradient update interval in env steps (default 2)",
+        default=1,
+        help="Gradient update interval in vector steps (default 1)",
     )
     parser.add_argument(
         "--action_repeat",
@@ -252,8 +252,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--si_weight",
         type=float,
-        default=0.1,
-        help="Self-imitation loss weight on milestone transitions (U3)",
+        default=0.02,
+        help="Self-imitation loss weight on milestone transitions (Fix F-06: 0.02 prevents statue trap)",
     )
     parser.add_argument(
         "--symlog_values",
@@ -345,7 +345,7 @@ class TrainingPipeline:
         self.eval_episodes: int = int(self.cfg.get("eval_episodes", 3))
         self.lr: float = float(self.cfg.get("lr", 1e-4))
         self.critic_lr: float = float(self.cfg.get("critic_lr", 3e-4))
-        self.warmup_steps: int = int(self.cfg.get("warmup_steps", 100))
+        self.warmup_steps: int = int(self.cfg.get("warmup_steps", 125))
         self.save_interval: int = int(self.cfg.get("save_interval", 1_000))
         self.resume: bool = not bool(self.cfg.get("no_resume", False))
         self.tier2_ratio: float = float(self.cfg.get("tier2_ratio", 0.30))
@@ -355,7 +355,7 @@ class TrainingPipeline:
         self.gamma: float = float(self.cfg.get("gamma", 0.99))
         self.tau: float = float(self.cfg.get("tau", 0.99))
         self.log_interval: int = int(self.cfg.get("log_interval", 100))
-        self.update_every: int = int(self.cfg.get("update_every", 2))
+        self.update_every: int = int(self.cfg.get("update_every", 1))
         self.action_repeat: int = int(self.cfg.get("action_repeat", 1))
         self.actor_intrinsic_weight: float = float(self.cfg.get("actor_intrinsic_weight", 0.1))
         self.eps_base: float = float(self.cfg.get("eps_base", 0.10))
@@ -367,7 +367,7 @@ class TrainingPipeline:
         self.token_dim: int = int(self.cfg.get("token_dim", 64))
         self.mask_ratio: float = float(self.cfg.get("mask_ratio", 0.35))
         self.mem_hidden: int = int(self.cfg.get("mem_hidden", 256))
-        self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
+        self.si_weight: float = float(self.cfg.get("si_weight", 0.02))
         self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
         self.allow_fresh_buffer: bool = bool(self.cfg.get("allow_fresh_buffer", False))
         self.token_var_floor: float = float(self.cfg.get("token_var_floor", 0.10))
@@ -502,22 +502,21 @@ class TrainingPipeline:
                 arch = metadata.get("arch", "v2-legacy")
                 step = metadata.get("step", 0)
 
-                # Check architecture compatibility (Pitfall 5)
-                if arch != "v3.2-film":
-                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights restart fresh for v3.2-film; carrying over replay buffer only.")
-                    comp_states = raw_ckpt.get("components", {})
-                    buf_dict = comp_states.get("buffer") or raw_ckpt.get("buffer_arrays")
-                    if buf_dict is not None and "t1_size" in buf_dict and buf_dict["t1_size"] > 0:
-                        self.buffer.load_state_dict(buf_dict)
-                        print(f"[+] Buffer carry-over OK: {self.buffer.size} transitions restored from {latest_ckpt}")
-                        print(f"    Replay Buffer Tier 1: {self.buffer.t1_size} | Tier 2: {self.buffer.t2_size}")
-                    else:
-                        if not self.allow_fresh_buffer:
-                            raise RuntimeError(
-                                f"Diary carry-over FAILED (no buffer arrays found in {latest_ckpt}). Refusing to start with an empty buffer. "
-                                f"Fix the source checkpoint or pass --allow_fresh_buffer to explicitly accept the loss."
-                            )
-                        print(f"[!] Legacy checkpoint had no buffer arrays — starting FRESH by explicit flag.")
+                # Check architecture compatibility (Phase A: v3.3-phaseA)
+                if arch != "v3.3-phaseA":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights and buffer restart fresh for v3.3-phaseA.")
+                    self.current_step = 0
+                    self.vector_step = 0
+                    self.checkpoint_count = 0
+                    self.current_episode = 0
+                    self.env_episode_ids = [self.current_episode + i for i in range(self.num_envs)]
+                    self.best_eval_return = -float("inf")
+                    self.achievement_history = {}
+                    self.all_unlocked_achievements = set()
+                    self.success_counts = {}
+                    self.success_actions = {}
+                    self.loss_history = []
+                    return True
                     self.current_step = 0
                     self.vector_step = 0
                     self.checkpoint_count = 0
@@ -1058,9 +1057,9 @@ class TrainingPipeline:
         recon = self.agent.encoder.decode_tokens(curr_tokens)          # (B, 3, 64, 64)
         l_recon = F.mse_loss(recon, batch["obs"])                       # batch["obs"] is float [0,1]
 
-        # 2. Spatial Transformer Prediction (conditioned on actions and stored h, Hotfix 6)
+        # 2. Spatial Transformer Prediction with detached tokens (Fix F-03: eliminates -0.92 gradient civil war)
         mean_pred_tokens, all_pred_tokens = self.agent.predictor.forward_tokens(
-            curr_tokens, batch["actions"], h=batch.get("h")
+            curr_tokens.detach(), batch["actions"], h=batch.get("h")
         )
 
         # W1a-2: Dynamic-tile loss weighting (the missing scene-information gradient)
@@ -1102,12 +1101,37 @@ class TrainingPipeline:
         l_reward = F.mse_loss(pred_r, batch["rewards"])
         l_done = F.binary_cross_entropy_with_logits(pred_d_logits, batch["dones"].float())
 
-        # I3: GRU auxiliary memory loss (MATH_AUDIT §1)
-        # Trains GRU so h is predictive of the next state's pooled latent
-        h_next = self.agent.gru(curr_pooled.detach(), batch["h"].float())
-        pred_next_pooled = self.agent.mem_to_pooled(h_next)
-        valid = (~batch["dones"]).float().unsqueeze(-1)
-        l_mem = (F.mse_loss(pred_next_pooled, target_pooled.detach(), reduction="none") * valid).mean()
+        # L-C: GRU sequence training (BPTT-lite) through sampled chains (W1b)
+        # Subsumes stepwise l_mem to train GRU recurrently through time
+        chains = self.buffer.sample_sequence_chains(num_chains=8, chain_len=8, device=self.device)
+        if chains is not None:
+            c_obs = chains["obs"]           # (B_c, T, 3, 64, 64)
+            c_next_obs = chains["next_obs"] # (B_c, T, 3, 64, 64)
+            c_mask = chains["mask"]         # (B_c, T)
+            c_h = chains["h"]               # (B_c, 256)
+            B_c, T_c = c_obs.size(0), c_obs.size(1)
+
+            with torch.no_grad():
+                c_z = self.agent.encoder(c_obs.view(B_c * T_c, 3, 64, 64)).view(B_c, T_c, -1)
+                c_target = self.agent.target_encoder(c_next_obs.view(B_c * T_c, 3, 64, 64)).view(B_c, T_c, -1)
+
+            h_seq = c_h
+            total_seq_loss = torch.zeros(B_c, device=self.device)
+            steps_per_chain = c_mask.sum(dim=1).clamp(min=1.0)
+
+            for t in range(T_c):
+                h_seq = self.agent.gru(c_z[:, t], h_seq)
+                pred_next_pooled = self.agent.mem_to_pooled(h_seq)
+                step_loss = F.mse_loss(pred_next_pooled, c_target[:, t].detach(), reduction="none").mean(dim=-1)
+                total_seq_loss = total_seq_loss + (step_loss * c_mask[:, t])
+
+            l_seq = (total_seq_loss / steps_per_chain).mean()
+        else:
+            # Fallback to 1-step differentiable memory loss on batch if buffer has no chains yet
+            h_next = self.agent.gru(curr_pooled.detach(), batch["h"].float())
+            pred_next_pooled = self.agent.mem_to_pooled(h_next)
+            valid = (~batch["dones"]).float().unsqueeze(-1)
+            l_seq = (F.mse_loss(pred_next_pooled, target_pooled.detach(), reduction="none") * valid).mean()
 
         # I8: Lifelong Latent RND distillation loss (weight 0.2)
         l_rnd = self.rnd.compute_loss(curr_pooled.detach())
@@ -1119,7 +1143,7 @@ class TrainingPipeline:
             + 1.0 * l_pool            # VICReg on pooled (unchanged)
             + self.l_recon_weight * l_recon  # W1a-0 reconstruction anchor (I1: 1.0)
             + 1.0 * l_tokfloor        # W1a-4 per-token variance floor
-            + self.mem_loss_weight * l_mem # I3: GRU memory loss
+            + self.mem_loss_weight * l_seq # L-C: GRU sequence training (BPTT-lite)
             + 0.2 * l_rnd             # I8: Latent RND lifelong novelty
             + 1.0 * l_reward          # U3 (bumped from 0.5 to 1.0)
             + 1.0 * l_done            # U3 (bumped from 0.5 to 1.0)
@@ -1151,7 +1175,8 @@ class TrainingPipeline:
             "l_pool": float(l_pool.item()),
             "l_recon": float(l_recon.item()),
             "l_tokfloor": float(l_tokfloor.item()),
-            "l_mem": float(l_mem.item()),
+            "l_mem": float(l_seq.item()),
+            "l_seq": float(l_seq.item()),
             "l_rnd": float(l_rnd.item()),
             "l_reward": float(l_reward.item()),
             "l_done": float(l_done.item()),
@@ -1183,9 +1208,9 @@ class TrainingPipeline:
             readout_curr = self.agent.get_readout(z_curr, batch["h"])
             readout_boot = self.agent.get_readout(z_boot, batch["boot_h"])
 
-            # Discrete Double-Q Target with n-step discounted return & bootstrapped future value
-            q1b, q2b = self.agent.critic.target_forward(readout_boot)
-            best_boot_actions = torch.argmax(torch.min(q1b, q2b), dim=-1)
+            # Discrete Double-Q Target with true Double-DQN: online critic selects action, target evaluates (Fix F-08)
+            q1_on, q2_on = self.agent.critic.forward(readout_boot)
+            best_boot_actions = torch.argmax(torch.min(q1_on, q2_on), dim=-1)
             boot_q_raw = self.agent.critic.target_q_min(readout_boot, best_boot_actions)
             boot_q = symexp(boot_q_raw) if self.symlog_values else boot_q_raw
             r_total = batch["nstep_return"] + self.critic_intrinsic_weight * batch["int_rewards"]
@@ -1203,8 +1228,7 @@ class TrainingPipeline:
         torch.nn.utils.clip_grad_norm_(self.agent.critic.parameters(), max_norm=1.0)
         self.critic_optimizer.step()
 
-        # Update Target Critic EMA
-        self.agent.critic.update_target(tau=self.tau)
+        # Fix F-13: Redundant critic target update removed (single canonical update in agent.update_target_networks)
 
         # C4.1 & I2: Compute per-action ensemble disagreement with dynamic-position weighting
         with torch.no_grad():
@@ -1444,7 +1468,7 @@ class TrainingPipeline:
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
-            "arch": "v3.2-film",
+            "arch": "v3.3-phaseA",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,

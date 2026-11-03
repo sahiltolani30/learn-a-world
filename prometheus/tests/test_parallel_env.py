@@ -102,7 +102,9 @@ class TestParallelCrafterEnvironment(unittest.TestCase):
 
             # Simulate done in env 0
             pipeline.episode_achievements[0].add("collect_wood")
-            pipeline.episodic_novelties[0].novelty_and_insert(np.zeros(256))
+            pipeline.episodic_novelties[0].novelty_and_insert(
+                np.concatenate([np.zeros(256), np.eye(17, dtype=np.float32)[5]])
+            )  # I5 key: readout(256) + one-hot(action=do)
             
             # Reset env 0 only
             pipeline.episode_achievements[0].clear()

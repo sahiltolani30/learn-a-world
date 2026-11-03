@@ -694,15 +694,51 @@ class TwoTierReplayBuffer:
             else:
                 boot_h[batch_i] = self.t1_h[last_valid_slot]
 
-        # Process Tier 2 items (1-step fallback)
+        # Process Tier 2 items (Multi-step n-step walk, Fix F-09)
+        cap2 = self.tier2_capacity
         for t2_i in range(actual_n2):
             batch_i = actual_n1 + t2_i
             idx = int(t2_indices[t2_i])
-            nstep_returns[batch_i] = self.t2_rewards[idx]
-            boot_obs[batch_i] = self.t2_next_obs[idx]
-            boot_gamma[batch_i] = gamma
-            boot_valid[batch_i] = not self.t2_dones[idx]
-            boot_h[batch_i] = self.t2_h[idx]
+            base_ep = int(self.t2_episode_id[idx])
+            base_step = int(self.t2_step_in_ep[idx])
+            R = float(self.t2_rewards[idx])
+            last_valid_slot = idx
+            num_terms = 1
+            is_terminal = bool(self.t2_dones[idx])
+
+            if not is_terminal and n > 1 and base_ep >= 0:
+                for k in range(1, n):
+                    cand_slot = (idx + k) % cap2
+                    if cand_slot >= self.t2_size:
+                        break
+                    if (
+                        self.t2_episode_id[cand_slot] != base_ep
+                        or self.t2_step_in_ep[cand_slot] != base_step + k
+                    ):
+                        break
+                    R += (gamma ** k) * float(self.t2_rewards[cand_slot])
+                    last_valid_slot = cand_slot
+                    num_terms += 1
+                    if self.t2_dones[cand_slot]:
+                        is_terminal = True
+                        break
+
+            nstep_returns[batch_i] = R
+            boot_obs[batch_i] = self.t2_next_obs[last_valid_slot]
+            boot_gamma[batch_i] = float(gamma ** num_terms)
+            boot_valid[batch_i] = not is_terminal
+
+            # Look up stored h from next slot along episode if valid
+            next_cand = (last_valid_slot + 1) % cap2
+            if (
+                not is_terminal
+                and next_cand < self.t2_size
+                and self.t2_episode_id[next_cand] == base_ep
+                and self.t2_step_in_ep[next_cand] == self.t2_step_in_ep[last_valid_slot] + 1
+            ):
+                boot_h[batch_i] = self.t2_h[next_cand]
+            else:
+                boot_h[batch_i] = self.t2_h[last_valid_slot]
 
         dev = torch.device(device)
         return {
@@ -721,6 +757,86 @@ class TwoTierReplayBuffer:
             "boot_valid": torch.from_numpy(boot_valid).to(device=dev, dtype=torch.bool),
             "h": torch.from_numpy(b_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
             "boot_h": torch.from_numpy(boot_h.astype(np.float32)).to(device=dev, dtype=torch.float32),
+        }
+
+    def sample_sequence_chains(
+        self,
+        num_chains: int = 8,
+        chain_len: int = 8,
+        device: Union[str, torch.device] = "cpu",
+    ) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        L-C: Sample consecutive transition chains for GRU BPTT-lite training.
+        Uses episode_id and step_in_ep metadata to find consecutive, done-terminated sequences.
+        Batch: num_chains chains × chain_len steps per update.
+        """
+        if self.t1_size == 0 or not self._t1_allocated or self.t1_episode_id is None:
+            return None
+
+        cap = self.tier1_capacity
+        chains_obs = []
+        chains_next_obs = []
+        chains_h = []
+        chains_mask = []
+
+        start_indices = self.rng.randint(0, self.t1_size, size=num_chains)
+
+        for idx in start_indices:
+            idx = int(idx)
+            base_ep = int(self.t1_episode_id[idx])
+            base_step = int(self.t1_step_in_ep[idx])
+
+            slot_indices = []
+            if base_ep >= 0 and base_step >= 0:
+                for k in range(chain_len):
+                    cand_slot = (idx + k) % cap
+                    if cand_slot >= self.t1_size:
+                        break
+                    if (
+                        self.t1_episode_id[cand_slot] != base_ep
+                        or self.t1_step_in_ep[cand_slot] != base_step + k
+                    ):
+                        break
+                    slot_indices.append(cand_slot)
+                    if self.t1_dones[cand_slot]:
+                        break
+
+            if len(slot_indices) == 0:
+                slot_indices = [idx]
+
+            actual_len = len(slot_indices)
+            h_init = self.t1_h[idx].astype(np.float32) if self.t1_h is not None else np.zeros(self.mem_hidden, dtype=np.float32)
+
+            c_obs = self.t1_obs[slot_indices]       # (actual_len, *obs_shape)
+            c_next = self.t1_next_obs[slot_indices] # (actual_len, *obs_shape)
+
+            if actual_len < chain_len:
+                pad_len = chain_len - actual_len
+                pad_shape = (pad_len, *self._obs_shape)
+                pad_obs = np.zeros(pad_shape, dtype=np.uint8)
+                pad_next = np.zeros(pad_shape, dtype=np.uint8)
+                c_obs = np.concatenate([c_obs, pad_obs], axis=0)
+                c_next = np.concatenate([c_next, pad_next], axis=0)
+                mask = [1.0] * actual_len + [0.0] * pad_len
+            else:
+                mask = [1.0] * chain_len
+
+            chains_obs.append(c_obs)
+            chains_next_obs.append(c_next)
+            chains_h.append(h_init)
+            chains_mask.append(mask)
+
+        b_obs = np.stack(chains_obs, axis=0)
+        b_next = np.stack(chains_next_obs, axis=0)
+        b_h = np.stack(chains_h, axis=0)
+        b_mask = np.array(chains_mask, dtype=np.float32)
+
+        dev = torch.device(device)
+        return {
+            "obs": torch.from_numpy(b_obs).to(device=dev, dtype=torch.float32) / 255.0,
+            "next_obs": torch.from_numpy(b_next).to(device=dev, dtype=torch.float32) / 255.0,
+            "h": torch.from_numpy(b_h).to(device=dev, dtype=torch.float32),
+            "mask": torch.from_numpy(b_mask).to(device=dev, dtype=torch.float32),
         }
 
     def state_dict(self) -> Dict[str, Any]:

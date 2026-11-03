@@ -14,6 +14,7 @@ Upgrade 1 (MAP - Spatial Tokens + Masked Prediction):
 """
 
 from typing import Tuple, Union
+import math
 import torch
 import torch.nn as nn
 
@@ -99,21 +100,37 @@ class ObservationEncoder(nn.Module):
         # U1: token_proj Conv2d(64, token_dim, 1) mapping feature map to token channels
         self.token_proj = nn.Conv2d(c3, token_dim, kernel_size=1)
 
-        # W1a-3: Mean pooling projection to 256-d latent dimension + LayerNorm
+        # W1b (L-A): Content-addressed pooling projection to 256-d latent dimension + LayerNorm
         self.pooled_proj = nn.Linear(token_dim, latent_dim)
         self.ln = nn.LayerNorm(latent_dim)
 
-        # W1a-0: Reconstruction auxiliary head (each token decodes its own 8x8 patch)
-        self.recon_head = nn.Linear(token_dim, 3 * 8 * 8)
+        # W1b (L-B): Conv reconstruction decoder (Option 3: token-grid Conv2d with 192 channels)
+        self.recon_decoder = nn.Sequential(
+            nn.Conv2d(token_dim, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(32, 192, kernel_size=3, padding=1),
+        )
 
     def decode_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         """
-        W1a-0: tokens (B, 64, token_dim) -> reconstructed frame (B, 3, 64, 64) in [0,1]-scale.
+        W1b (L-B): Conv reconstruction decoder (Option 3 token-grid Conv2d with 192 channels).
+        tokens: (B, 64, token_dim) or (64, token_dim) -> (B, 3, 64, 64) in [0,1]-scale.
         """
+        unbatched = False
+        if tokens.dim() == 2:
+            unbatched = True
+            tokens = tokens.unsqueeze(0)
+
         B = tokens.size(0)
-        patches = self.recon_head(tokens).view(B, 8, 8, 3, 8, 8)
-        frame = patches.permute(0, 3, 1, 4, 2, 5).reshape(B, 3, 64, 64)
-        return frame
+        token_grid = tokens.transpose(1, 2).view(B, self.token_dim, 8, 8)
+        out = self.recon_decoder(token_grid)  # (B, 192, 8, 8)
+        recon = out.view(B, 3, 8, 8, 8, 8).permute(0, 1, 4, 2, 5, 3).reshape(B, 3, 64, 64)
+
+        if unbatched:
+            recon = recon.squeeze(0)
+        return recon
 
     def _preprocess_obs(self, x: torch.Tensor) -> Tuple[torch.Tensor, bool]:
         """Convert input observation to standard (B, C, H, W) float32 tensor."""
@@ -145,7 +162,9 @@ class ObservationEncoder(nn.Module):
 
     def pool_tokens(self, tokens: torch.Tensor) -> torch.Tensor:
         """
-        Pool a sequence of spatial tokens into a single 256-d latent vector via mean pooling (W1a-3).
+        Pool a sequence of spatial tokens into a single 256-d latent vector via
+        content-addressed pooling (W1b L-A).
+        Token norm serves as a data-driven attention weight: dynamic tiles have higher norms.
         
         Args:
             tokens: Tensor of shape (B, num_tokens, token_dim) or (num_tokens, token_dim).
@@ -157,9 +176,12 @@ class ObservationEncoder(nn.Module):
             unbatched = True
             tokens = tokens.unsqueeze(0)
 
-        # W1a-3: Mean pooling preserves every spatial region equally
-        pooled_token = tokens.mean(dim=1)  # (B, token_dim)
-        z = self.ln(self.pooled_proj(pooled_token))  # (B, latent_dim)
+        # W1b L-A: Content-addressed pooling (the query = the data itself)
+        token_dim = tokens.size(-1)
+        attn_scores = tokens.norm(dim=-1) / math.sqrt(token_dim)        # (B, 64)
+        attn_w = torch.softmax(attn_scores, dim=-1)                     # (B, 64)
+        pooled_token = (attn_w.unsqueeze(-1) * tokens).sum(dim=1)       # (B, token_dim) content-weighted
+        z = self.ln(self.pooled_proj(pooled_token))                     # (B, latent_dim)
 
         if unbatched:
             z = z.squeeze(0)
