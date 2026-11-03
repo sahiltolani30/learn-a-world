@@ -252,8 +252,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--si_weight",
         type=float,
-        default=0.1,
-        help="Self-imitation loss weight on milestone transitions (U3)",
+        default=0.02,
+        help="Self-imitation loss weight on milestone transitions (Fix F-06: 0.02 prevents statue trap)",
     )
     parser.add_argument(
         "--symlog_values",
@@ -367,7 +367,7 @@ class TrainingPipeline:
         self.token_dim: int = int(self.cfg.get("token_dim", 64))
         self.mask_ratio: float = float(self.cfg.get("mask_ratio", 0.35))
         self.mem_hidden: int = int(self.cfg.get("mem_hidden", 256))
-        self.si_weight: float = float(self.cfg.get("si_weight", 0.1))
+        self.si_weight: float = float(self.cfg.get("si_weight", 0.02))
         self.symlog_values: bool = bool(self.cfg.get("symlog_values", True))
         self.allow_fresh_buffer: bool = bool(self.cfg.get("allow_fresh_buffer", False))
         self.token_var_floor: float = float(self.cfg.get("token_var_floor", 0.10))
@@ -502,9 +502,9 @@ class TrainingPipeline:
                 arch = metadata.get("arch", "v2-legacy")
                 step = metadata.get("step", 0)
 
-                # Check architecture compatibility (Pitfall 5)
-                if arch != "v3.2-w1b":
-                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights and buffer restart fresh for v3.2-w1b per W1B plan.")
+                # Check architecture compatibility (Phase A: v3.3-phaseA)
+                if arch != "v3.3-phaseA":
+                    print(f"[*] Detected legacy checkpoint arch '{arch}'. Weights and buffer restart fresh for v3.3-phaseA.")
                     self.current_step = 0
                     self.vector_step = 0
                     self.checkpoint_count = 0
@@ -1057,9 +1057,9 @@ class TrainingPipeline:
         recon = self.agent.encoder.decode_tokens(curr_tokens)          # (B, 3, 64, 64)
         l_recon = F.mse_loss(recon, batch["obs"])                       # batch["obs"] is float [0,1]
 
-        # 2. Spatial Transformer Prediction (conditioned on actions and stored h, Hotfix 6)
+        # 2. Spatial Transformer Prediction with detached tokens (Fix F-03: eliminates -0.92 gradient civil war)
         mean_pred_tokens, all_pred_tokens = self.agent.predictor.forward_tokens(
-            curr_tokens, batch["actions"], h=batch.get("h")
+            curr_tokens.detach(), batch["actions"], h=batch.get("h")
         )
 
         # W1a-2: Dynamic-tile loss weighting (the missing scene-information gradient)
@@ -1208,9 +1208,9 @@ class TrainingPipeline:
             readout_curr = self.agent.get_readout(z_curr, batch["h"])
             readout_boot = self.agent.get_readout(z_boot, batch["boot_h"])
 
-            # Discrete Double-Q Target with n-step discounted return & bootstrapped future value
-            q1b, q2b = self.agent.critic.target_forward(readout_boot)
-            best_boot_actions = torch.argmax(torch.min(q1b, q2b), dim=-1)
+            # Discrete Double-Q Target with true Double-DQN: online critic selects action, target evaluates (Fix F-08)
+            q1_on, q2_on = self.agent.critic.forward(readout_boot)
+            best_boot_actions = torch.argmax(torch.min(q1_on, q2_on), dim=-1)
             boot_q_raw = self.agent.critic.target_q_min(readout_boot, best_boot_actions)
             boot_q = symexp(boot_q_raw) if self.symlog_values else boot_q_raw
             r_total = batch["nstep_return"] + self.critic_intrinsic_weight * batch["int_rewards"]
@@ -1228,8 +1228,7 @@ class TrainingPipeline:
         torch.nn.utils.clip_grad_norm_(self.agent.critic.parameters(), max_norm=1.0)
         self.critic_optimizer.step()
 
-        # Update Target Critic EMA
-        self.agent.critic.update_target(tau=self.tau)
+        # Fix F-13: Redundant critic target update removed (single canonical update in agent.update_target_networks)
 
         # C4.1 & I2: Compute per-action ensemble disagreement with dynamic-position weighting
         with torch.no_grad():
@@ -1469,7 +1468,7 @@ class TrainingPipeline:
 
         filename = f"checkpoint_step_{self.current_step}.pt"
         metadata = {
-            "arch": "v3.2-w1b",
+            "arch": "v3.3-phaseA",
             "step": self.current_step,
             "vector_step": self.vector_step,
             "checkpoint_count": self.checkpoint_count,

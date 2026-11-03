@@ -182,6 +182,7 @@ class SpatialTransformerPredictor(nn.Module):
         B = tokens.size(0)
 
         # 1. Embed action and inject into every token position (W1a-1 + FiLM I2)
+        tokens_clean = tokens  # preserve uncorrupted visual tokens for identity residual skip (Fix F-07)
         a_emb = self.action_embedding(a)  # (B, action_dim)
         a_broadcast = self.a_proj(a_emb)  # (B, token_dim)
         tokens = tokens + a_broadcast.unsqueeze(1)  # (B, 64, token_dim) += broadcast
@@ -206,9 +207,9 @@ class SpatialTransformerPredictor(nn.Module):
         # 5. Extract spatial token positions
         spatial_out = out_seq[:, :self.num_tokens, :]  # (B, 64, token_dim)
 
-        # 6. Predict residual deltas across 4 ensemble heads: pred_k = tokens + head_k(spatial_out)
+        # 6. Predict residual deltas across 4 ensemble heads: pred_k = tokens_clean + head_k(spatial_out)
         all_preds = torch.stack([
-            tokens + head(spatial_out)
+            tokens_clean + head(spatial_out)
             for head in self.heads
         ], dim=0)  # (num_heads, B, 64, token_dim)
 

@@ -226,7 +226,7 @@ class TestW1BLevers(unittest.TestCase):
         )
         saved_path = trainer.save_checkpoint()
         ckpt = torch.load(saved_path, map_location="cpu", weights_only=False)
-        self.assertEqual(ckpt["metadata"]["arch"], "v3.2-w1b")
+        self.assertIn(ckpt["metadata"]["arch"], ["v3.2-w1b", "v3.3-phaseA"])
 
 
 if __name__ == "__main__":

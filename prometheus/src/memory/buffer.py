@@ -694,15 +694,51 @@ class TwoTierReplayBuffer:
             else:
                 boot_h[batch_i] = self.t1_h[last_valid_slot]
 
-        # Process Tier 2 items (1-step fallback)
+        # Process Tier 2 items (Multi-step n-step walk, Fix F-09)
+        cap2 = self.tier2_capacity
         for t2_i in range(actual_n2):
             batch_i = actual_n1 + t2_i
             idx = int(t2_indices[t2_i])
-            nstep_returns[batch_i] = self.t2_rewards[idx]
-            boot_obs[batch_i] = self.t2_next_obs[idx]
-            boot_gamma[batch_i] = gamma
-            boot_valid[batch_i] = not self.t2_dones[idx]
-            boot_h[batch_i] = self.t2_h[idx]
+            base_ep = int(self.t2_episode_id[idx])
+            base_step = int(self.t2_step_in_ep[idx])
+            R = float(self.t2_rewards[idx])
+            last_valid_slot = idx
+            num_terms = 1
+            is_terminal = bool(self.t2_dones[idx])
+
+            if not is_terminal and n > 1 and base_ep >= 0:
+                for k in range(1, n):
+                    cand_slot = (idx + k) % cap2
+                    if cand_slot >= self.t2_size:
+                        break
+                    if (
+                        self.t2_episode_id[cand_slot] != base_ep
+                        or self.t2_step_in_ep[cand_slot] != base_step + k
+                    ):
+                        break
+                    R += (gamma ** k) * float(self.t2_rewards[cand_slot])
+                    last_valid_slot = cand_slot
+                    num_terms += 1
+                    if self.t2_dones[cand_slot]:
+                        is_terminal = True
+                        break
+
+            nstep_returns[batch_i] = R
+            boot_obs[batch_i] = self.t2_next_obs[last_valid_slot]
+            boot_gamma[batch_i] = float(gamma ** num_terms)
+            boot_valid[batch_i] = not is_terminal
+
+            # Look up stored h from next slot along episode if valid
+            next_cand = (last_valid_slot + 1) % cap2
+            if (
+                not is_terminal
+                and next_cand < self.t2_size
+                and self.t2_episode_id[next_cand] == base_ep
+                and self.t2_step_in_ep[next_cand] == self.t2_step_in_ep[last_valid_slot] + 1
+            ):
+                boot_h[batch_i] = self.t2_h[next_cand]
+            else:
+                boot_h[batch_i] = self.t2_h[last_valid_slot]
 
         dev = torch.device(device)
         return {
