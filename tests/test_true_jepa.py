@@ -14,6 +14,7 @@ from true_jepa.objectives import train_world_model_step
 from true_jepa.relations import AnonymousRelationMemory, TransitionEvidence
 from true_jepa.replay import PixelEpisode, PixelReplay
 from true_jepa.self_play import SelfPlayCoordinator
+from true_jepa.validate import validate_replay
 
 
 def tiny_model() -> TrueJEPA:
@@ -146,3 +147,22 @@ def test_self_play_load_accepts_parallel_environment_count():
 def test_random_collection_mode_is_explicit():
     signature = inspect.signature(SelfPlayCoordinator.__init__)
     assert signature.parameters["collection_policy"].default == "mixed"
+
+
+def test_validation_reports_action_reward_and_representation_gates():
+    model = tiny_model()
+    replay = PixelReplay()
+    replay.add(make_episode())
+    report = validate_replay(
+        model,
+        replay,
+        torch.device("cpu"),
+        batches=1,
+        batch_size=2,
+        sequence_length=2,
+        seed=8,
+    )
+    assert report["valid_transitions"] > 0
+    assert "action_conditioning" in report
+    assert "reward_prediction" in report
+    assert "representation" in report
