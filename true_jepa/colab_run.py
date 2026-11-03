@@ -11,7 +11,7 @@ import torch
 from true_jepa.config import JEPAConfig, TrainConfig, as_dict
 from true_jepa.env import PixelCrafter
 from true_jepa.model import TrueJEPA
-from true_jepa.self_play import SelfPlayCoordinator
+from true_jepa.self_play import CollectionStats, SelfPlayCoordinator
 from true_jepa.drive import TrueJEPADrive
 
 
@@ -25,6 +25,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=7000)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--collection-policy",
+        choices=("mixed", "random"),
+        default="mixed",
+        help="data collection policy; random is used for a clean Phase 1 dataset",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--collect-only",
+        action="store_true",
+        help="collect and save replay without optimizer updates",
+    )
+    mode.add_argument(
+        "--train-only",
+        action="store_true",
+        help="train the already-saved replay without collecting new episodes",
+    )
     return parser
 
 
@@ -56,6 +73,7 @@ def main() -> None:
             device=args.device,
             seed=args.seed,
             num_envs=args.num_envs,
+            collection_policy=args.collection_policy,
             replay_path=str(replay_path) if replay_path.exists() else None,
         )
         print(f"Resuming true_jepa at update {runner.update}, frames {runner.env_frames}")
@@ -69,9 +87,10 @@ def main() -> None:
             device=args.device,
             seed=args.seed,
             num_envs=args.num_envs,
+            collection_policy=args.collection_policy,
         )
-    collection = runner.collect(args.episodes)
-    metrics = runner.train(args.updates)
+    collection = CollectionStats() if args.train_only else runner.collect(args.episodes)
+    metrics = [] if args.collect_only else runner.train(args.updates)
     storage.save_checkpoint({
         "format": "true_jepa_run_v1",
         "config": dict(runner.model.cfg.__dict__),
