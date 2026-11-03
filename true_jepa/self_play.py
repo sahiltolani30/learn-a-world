@@ -312,6 +312,7 @@ class SelfPlayCoordinator:
         train_cfg: TrainConfig | None = None,
         device: str = "cpu",
         seed: int = 0,
+        num_envs: int = 1,
         replay_path: str | None = None,
     ) -> "SelfPlayCoordinator":
         """Restore model, optimizers, relation hypotheses, and counters."""
@@ -319,7 +320,14 @@ class SelfPlayCoordinator:
         payload = torch.load(path, map_location="cpu", weights_only=False)
         if payload.get("format") != "true_jepa_run_v1":
             raise ValueError("unexpected true-JEPA run format")
-        runner = cls(env_factory, model, train_cfg, device=device, seed=seed, num_envs=num_envs)
+        runner = cls(
+            env_factory,
+            model,
+            train_cfg,
+            device=device,
+            seed=seed,
+            num_envs=num_envs,
+        )
         runner.model.load_state_dict(payload["model"])
         runner.model.target_encoder.load_state_dict(payload["target_encoder"])
         runner.world_optimizer.load_state_dict(payload["world_optimizer"])
