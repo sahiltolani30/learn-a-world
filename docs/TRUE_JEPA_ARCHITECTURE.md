@@ -117,6 +117,38 @@ Historical snapshots are data diversity, not privileged opponents.  This is
 self-play for a single-agent world: the policy generates its own curriculum,
 and the world model learns from the resulting consequences.
 
+## Eight-agent batched collection
+
+The default Colab runner now uses eight independent environments:
+
+```text
+env_0 ─┐
+env_1 ─┤
+env_2 ─┤
+...    ├─ uint8 observation batch ─ one encoder/policy forward pass
+env_7 ─┘
+```
+
+These are eight independent game instances, not eight copies of the neural
+network.  They share the current model weights but each has its own:
+
+- Crafter world and seed
+- recurrent belief state
+- previous action and reward
+- episode counter
+- replay episode buffer
+
+The environments step in lockstep inside `true_jepa/vector_env.py`.  When one
+episode ends, its terminal frame is stored first, then that slot is reset to a
+new environment.  Other seven slots continue without waiting for a completed
+episode.  This preserves terminal transitions while keeping GPU inference
+batched, which is the main throughput advantage of the eight-agent mode.
+
+The collector still exposes no environment `info` object to the model.  Random
+actions are mixed into a small fraction of slots for exploration; all other
+slots use the current shared policy.  The same replay and JEPA objective are
+used after collection.
+
 ## Google Colab free T4 profile
 
 Start with the following budget in `TrainConfig` and `JEPAConfig`:
@@ -128,6 +160,7 @@ Start with the following budget in `TrainConfig` and `JEPAConfig`:
 | token dimension | 192 |
 | belief dimension | 256 |
 | predictor layers | 2 |
+| parallel environments | 8 |
 | replay resident frames | 120,000 |
 | batch size | 8 |
 | sequence length | 16 |

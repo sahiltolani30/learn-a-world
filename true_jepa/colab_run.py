@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-dir", default=None, help="local override for the model root")
     parser.add_argument("--episodes", type=int, default=128)
     parser.add_argument("--updates", type=int, default=256)
+    parser.add_argument("--num-envs", type=int, default=8)
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=7000)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -54,6 +55,7 @@ def main() -> None:
             train_cfg=train_cfg,
             device=args.device,
             seed=args.seed,
+            num_envs=args.num_envs,
             replay_path=str(replay_path) if replay_path.exists() else None,
         )
         print(f"Resuming true_jepa at update {runner.update}, frames {runner.env_frames}")
@@ -66,6 +68,7 @@ def main() -> None:
             train_cfg=train_cfg,
             device=args.device,
             seed=args.seed,
+            num_envs=args.num_envs,
         )
     collection = runner.collect(args.episodes)
     metrics = runner.train(args.updates)
