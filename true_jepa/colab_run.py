@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="train the already-saved replay without collecting new episodes",
     )
+    parser.add_argument(
+        "--world-only",
+        action="store_true",
+        help="train JEPA/reward dynamics while leaving actor/value policy unchanged",
+    )
     return parser
 
 
@@ -90,7 +95,11 @@ def main() -> None:
             collection_policy=args.collection_policy,
         )
     collection = CollectionStats() if args.train_only else runner.collect(args.episodes)
-    metrics = [] if args.collect_only else runner.train(args.updates)
+    metrics = (
+        []
+        if args.collect_only
+        else runner.train(args.updates, train_policy=not args.world_only)
+    )
     storage.save_checkpoint({
         "format": "true_jepa_run_v1",
         "config": dict(runner.model.cfg.__dict__),
