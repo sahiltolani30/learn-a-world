@@ -87,6 +87,16 @@ def main() -> None:
         "relations": runner.relations.state_dict(),
     })
     storage.save_replay(runner.replay)
+    log_path = storage.logs / "train_metrics.jsonl"
+    with log_path.open("a") as log_file:
+        for metric in metrics:
+            log_file.write(
+                json.dumps(
+                    {"update": runner.update, "env_frames": runner.env_frames, **metric},
+                    sort_keys=True,
+                )
+                + "\n"
+            )
     storage.save_json(
         {
             "jepa": as_dict(model.cfg),
