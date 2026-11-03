@@ -8,12 +8,13 @@ from typing import Callable, Dict, List, Protocol
 import numpy as np
 import torch
 
-from true_jepa.agent import VisualJEPAAgent
+from true_jepa.agent import BatchedVisualJEPAAgent, VisualJEPAAgent
 from true_jepa.config import TrainConfig
 from true_jepa.model import TrueJEPA
 from true_jepa.objectives import imagination_policy_step, train_world_model_step
 from true_jepa.relations import AnonymousRelationMemory, TransitionEvidence
 from true_jepa.replay import PixelEpisode, PixelReplay
+from true_jepa.vector_env import PixelBatch
 
 
 class PixelEnvironment(Protocol):
@@ -61,11 +62,15 @@ class SelfPlayCoordinator:
         train_cfg: TrainConfig | None = None,
         device: str = "cpu",
         seed: int = 0,
+        num_envs: int = 1,
     ) -> None:
         self.env_factory = env_factory
         self.model = model.to(device)
         self.train_cfg = train_cfg or TrainConfig()
         self.device = torch.device(device)
+        self.num_envs = int(num_envs)
+        if self.num_envs < 1:
+            raise ValueError("num_envs must be positive")
         self.rng = np.random.default_rng(seed)
         self.replay = PixelReplay(self.train_cfg.replay_capacity_frames)
         self.relations = AnonymousRelationMemory()
@@ -122,6 +127,9 @@ class SelfPlayCoordinator:
     def collect(self, episodes: int) -> CollectionStats:
         """Collect fresh episodes with current, historical, and random policies."""
 
+        if self.num_envs > 1:
+            return self._collect_parallel(episodes)
+
         stats = CollectionStats()
         for episode_id in range(int(episodes)):
             env = self.env_factory()
@@ -163,6 +171,68 @@ class SelfPlayCoordinator:
             )
             self.replay.add(episode)
             stats.episodes += 1
+        self.env_frames += stats.frames
+        return stats
+
+    def _collect_parallel(self, episodes: int) -> CollectionStats:
+        """Collect completed episodes from N lockstep environments."""
+
+        envs = PixelBatch(self.env_factory, self.num_envs)
+        policy = BatchedVisualJEPAAgent(self.model, self.num_envs, device=str(self.device))
+        observations = [[envs.obs[index].copy()] for index in range(self.num_envs)]
+        actions: List[List[int]] = [[] for _ in range(self.num_envs)]
+        rewards: List[List[float]] = [[] for _ in range(self.num_envs)]
+        terminated: List[List[bool]] = [[] for _ in range(self.num_envs)]
+        truncated: List[List[bool]] = [[] for _ in range(self.num_envs)]
+        previous_rewards = np.zeros(self.num_envs, dtype=np.float32)
+        steps = np.zeros(self.num_envs, dtype=np.int64)
+        completed = 0
+        stats = CollectionStats()
+        try:
+            while completed < int(episodes):
+                proposed = policy.act(envs.obs, previous_rewards, steps)
+                random_mask = self.rng.random(self.num_envs) < 0.10
+                if bool(random_mask.any()):
+                    proposed[random_mask] = self.rng.integers(
+                        0, envs.num_actions, size=int(random_mask.sum())
+                    )
+                policy.record_actions(proposed)
+                transitions = envs.step(proposed)
+                for index, (terminal_obs, reward, is_terminated, is_truncated) in enumerate(transitions):
+                    observations[index].append(terminal_obs)
+                    actions[index].append(int(proposed[index]))
+                    rewards[index].append(float(reward))
+                    terminated[index].append(bool(is_terminated))
+                    truncated[index].append(bool(is_truncated))
+                    previous_rewards[index] = float(reward)
+                    steps[index] += 1
+                    stats.frames += 1
+                    stats.extrinsic_reward += float(reward)
+                    if is_terminated or is_truncated:
+                        episode = PixelEpisode(
+                            obs=np.stack(observations[index]),
+                            actions=np.asarray(actions[index], dtype=np.int64),
+                            rewards=np.asarray(rewards[index], dtype=np.float32),
+                            terminated=np.asarray(terminated[index], dtype=bool),
+                            truncated=np.asarray(truncated[index], dtype=bool),
+                            seed=int(envs.episode_ids[index]),
+                            source="batched_self_play",
+                        )
+                        self.replay.add(episode)
+                        completed += 1
+                        stats.episodes += 1
+                        observations[index] = [envs.obs[index].copy()]
+                        actions[index] = []
+                        rewards[index] = []
+                        terminated[index] = []
+                        truncated[index] = []
+                        previous_rewards[index] = 0.0
+                        steps[index] = 0
+                        policy.reset(np.asarray([index]))
+                        if completed >= int(episodes):
+                            break
+        finally:
+            envs.close()
         self.env_frames += stats.frames
         return stats
 
@@ -249,7 +319,7 @@ class SelfPlayCoordinator:
         payload = torch.load(path, map_location="cpu", weights_only=False)
         if payload.get("format") != "true_jepa_run_v1":
             raise ValueError("unexpected true-JEPA run format")
-        runner = cls(env_factory, model, train_cfg, device=device, seed=seed)
+        runner = cls(env_factory, model, train_cfg, device=device, seed=seed, num_envs=num_envs)
         runner.model.load_state_dict(payload["model"])
         runner.model.target_encoder.load_state_dict(payload["target_encoder"])
         runner.world_optimizer.load_state_dict(payload["world_optimizer"])
