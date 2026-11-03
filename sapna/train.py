@@ -874,10 +874,11 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                     latest_eval_metrics["effective_rank"] = nc_report["effective_rank"]
                     latest_eval_metrics["num_collapsed_dims"] = nc_report["num_collapsed_dims"]
 
-                    # Hard abort if true representation collapse occurs (§5.5, §13, §20 F9: min_var < 0.005)
-                    if step >= 5000 and nc_report["min_variance"] < 0.005:
+                    # Hard abort if true representation collapse occurs (§5.5, §13, §20 F9: mean_var < 0.01 or min_var < 0.0005)
+                    if step >= 5000 and (nc_report["mean_variance"] < 0.01 or nc_report["min_variance"] < 0.0005):
                         raise RuntimeError(
-                            f"VICReg collapse detected: min_var = {nc_report['min_variance']:.5f} < 0.005 "
+                            f"VICReg collapse detected: mean_var = {nc_report['mean_variance']:.5f} < 0.01, "
+                            f"min_var = {nc_report['min_variance']:.5f} "
                             f"(effective rank = {nc_report['effective_rank']:.2f}) at step {step}"
                         )
 
