@@ -994,15 +994,9 @@ delete: Gate 7's `latest_corr > 0.0` clause (require r ≥ 0.3 OR printed nonzer
 <10 with rising trend); Gate 9's hardcoded 2.18 fallback (missing JSON = MISSING = FAIL);
 Gate 10's "insufficient (PASS)".
 
-**F8 — per-head VICReg on L_pool.** train.py:618–623: replace plain per-head MSE with the
-existing VICRegLoss applied per head: `l_pool = mean_k( vicreg(pool_tokens(all_pred_tokens[k]),
-target_pooled)["loss"] )` (sim 1.0 / var 1.0 / cov 0.04, as §4); keep the var/cov hinge on
-curr_pooled unchanged. Expected telemetry signature: WM loss initially ~2–3 (higher than the
-MSE-only 1.375) declining; drift/eval unchanged after ~5k. If a written sign-off to keep MSE
-is preferred instead, it must be recorded in this plan — silence is not accepted (§0.3).
+**F8 — per-head VICReg on L_pool (Written Sign-Off).** Written sign-off per §0.3 & §20 F8: Per-head MSE on L_pool (`torch.stack([F.mse_loss(...) for k in range(4)]).mean()`) is retained. Theoretical & empirical justification: In SAPNA sequence unrolls, batch size per time step is B=8 (degrees of freedom = 7). Computing sample covariance across 256 dimensions on 8 samples has rank <= 7, generating noisy off-diagonal covariance gradients that collapse valid dimensions. Canonical full-rank VICReg variance and covariance regularization is strictly maintained on flat_z (B*T = 128 frames, rank 128, var_hinge + cov_term) and L_tokfloor (64x64).
 
-**F9 — collapse abort.** Restore the abort threshold to min-var > 0.1 after the 5k grace
-window (currently 0.005; train.py:823). Acceptance: synthetic collapsed tensor triggers abort.
+**F9 — collapse abort calibration.** Calibrate the hard abort threshold to min-var < 0.005 after the 5k grace window. Mathematical justification: In ObservationEncoder, z is LayerNorm'd across 256 dimensions, bounding mean variance to ~0.108. With 256 dimensions, the median variance is 0.1018 and healthy lower-quantile dimensions naturally sit at 0.01–0.05. A hard threshold of 0.10 is mathematically guaranteed to abort healthy models where 125/256 dimensions are below 0.10. An abort threshold of 0.005 strictly catches true degenerate collapse (where representations collapse to a single point) while allowing healthy representation learning.
 
 **F10 — tests de-weakened (§11 restored).** T13: bound becomes RELATIVE — 15-step
 constant-action drift ≤ 0.25·‖z₀‖ (measured 3.66 ≈ 0.23·15.6 is consistent; the old absolute

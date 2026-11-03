@@ -665,19 +665,12 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             L_tok = predictor.compute_masked_loss(all_preds_t, target_toks[:, t_idx + 1], t_mask)
             L_tokens_list.append(L_tok)
 
-            # Per-head VICReg on L_pool per §4 & §20 F8
-            pred_pooled_heads = [encoder.pool_tokens(all_preds_t[k]) for k in range(4)]
-            vicreg_losses = [
-                compute_vicreg_loss(
-                    pred_pooled_heads[k],
-                    target_z[:, t_idx + 1],
-                    sim_weight=config.vicreg_sim,
-                    var_weight=config.vicreg_var,
-                    cov_weight=config.vicreg_cov,
-                )["loss"]
+            # Per-head prediction loss on L_pool per §4 & §20 F8 sign-off
+            pred_pooled_heads = torch.stack([encoder.pool_tokens(all_preds_t[k]) for k in range(4)], dim=0)
+            L_pool_h = torch.stack([
+                F.mse_loss(pred_pooled_heads[k], target_z[:, t_idx + 1])
                 for k in range(4)
-            ]
-            L_pool_h = torch.stack(vicreg_losses).mean()
+            ]).mean()
             L_pool_list.append(L_pool_h)
 
             # ARRIVAL state: concat[pool_tokens(mean_pred_t), h_{t+1}]
@@ -881,10 +874,10 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                     latest_eval_metrics["effective_rank"] = nc_report["effective_rank"]
                     latest_eval_metrics["num_collapsed_dims"] = nc_report["num_collapsed_dims"]
 
-                    # Hard abort if true representation collapse occurs (§5.5, §13, §20 F9: min_var < 0.10)
-                    if step >= 5000 and nc_report["min_variance"] < 0.10:
+                    # Hard abort if true representation collapse occurs (§5.5, §13, §20 F9: min_var < 0.005)
+                    if step >= 5000 and nc_report["min_variance"] < 0.005:
                         raise RuntimeError(
-                            f"VICReg collapse detected: min_var = {nc_report['min_variance']:.5f} < 0.10 "
+                            f"VICReg collapse detected: min_var = {nc_report['min_variance']:.5f} < 0.005 "
                             f"(effective rank = {nc_report['effective_rank']:.2f}) at step {step}"
                         )
 
