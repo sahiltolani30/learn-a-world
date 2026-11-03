@@ -13,6 +13,7 @@ from true_jepa.model import TrueJEPA
 from true_jepa.objectives import train_world_model_step
 from true_jepa.relations import AnonymousRelationMemory, TransitionEvidence
 from true_jepa.replay import PixelEpisode, PixelReplay
+from true_jepa.self_play import SelfPlayCoordinator
 
 
 def tiny_model() -> TrueJEPA:
@@ -134,3 +135,9 @@ def test_strict_agent_signature_and_source_isolation():
     source = "\n".join(path.read_text() for path in source_root.glob("*.py"))
     for banned in ("CRAFT_REQUIRED_MATERIALS", "INVENTORY_KEYS", "ACHIEVEMENTS"):
         assert banned not in source
+
+
+def test_self_play_load_accepts_parallel_environment_count():
+    signature = inspect.signature(SelfPlayCoordinator.load)
+    assert "num_envs" in signature.parameters
+    assert signature.parameters["num_envs"].default == 1
