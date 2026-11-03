@@ -111,24 +111,28 @@ class SAPNAReplayBuffer:
             self.size += 1
 
     def count_valid_windows(self, T: int = 16) -> int:
-        """Counts valid sequence windows of length T across all active episodes."""
-        return sum(max(0, len(idxs) - T + 1) for idxs in self.episode_indices.values())
+        """Counts valid sequence windows of length T across all active episodes with contiguity check per §20 F6."""
+        all_starts, _ = self._get_valid_starts(T=T)
+        return len(all_starts)
 
     def _get_valid_starts(self, T: int = 16) -> Tuple[List[int], List[int]]:
         """
         Returns (all_valid_starts, milestone_valid_starts).
-        For acceptance test T6 compatibility.
+        Accepts a start only if step_in_ep is strictly contiguous: step_in_ep[s+k] == step_in_ep[s]+k per §20 F6.
         """
         all_starts = []
         ms_starts = []
         for ep, idxs in self.episode_indices.items():
             if len(idxs) >= T:
                 for k in range(len(idxs) - T + 1):
-                    start_idx = idxs[k]
-                    all_starts.append(start_idx)
-                    window_idxs = idxs[k : k + T]
-                    if any(self.milestone[i] for i in window_idxs):
-                        ms_starts.append(start_idx)
+                    window = idxs[k : k + T]
+                    s0 = int(self.step_in_ep[window[0]])
+                    is_contig = all(int(self.step_in_ep[window[j]]) == s0 + j for j in range(T))
+                    if is_contig:
+                        start_idx = window[0]
+                        all_starts.append(start_idx)
+                        if any(bool(self.milestone[i]) for i in window):
+                            ms_starts.append(start_idx)
         return all_starts, ms_starts
 
     @property
@@ -140,35 +144,36 @@ class SAPNAReplayBuffer:
         """
         Sample B sequences of length T with 70% uniform / 30% milestone priority.
         If fewer than 64 valid windows of length T exist, falls back to T=8 per §6.
+        All sampled sequences are verified 100% contiguous per §20 F6.
         """
         actual_T = T
         if self.count_valid_windows(actual_T) < 64 and actual_T > 8:
             actual_T = 8
 
-        eligible_eps = [ep for ep, idxs in self.episode_indices.items() if len(idxs) >= actual_T]
-        if not eligible_eps:
-            raise RuntimeError(f"Cannot sample sequences: 0 valid windows of length {actual_T} in buffer.")
+        all_windows = []
+        ms_windows = []
+        for ep, idxs in self.episode_indices.items():
+            if len(idxs) >= actual_T:
+                for k in range(len(idxs) - actual_T + 1):
+                    window = idxs[k : k + actual_T]
+                    s0 = int(self.step_in_ep[window[0]])
+                    if all(int(self.step_in_ep[window[j]]) == s0 + j for j in range(actual_T)):
+                        all_windows.append(window)
+                        if any(bool(self.milestone[i]) for i in window):
+                            ms_windows.append(window)
 
-        # Find eligible milestone episodes
-        ms_eps = [ep for ep in eligible_eps if any(self.milestone[i] for i in self.episode_indices[ep])]
+        if not all_windows:
+            raise RuntimeError(f"Cannot sample sequences: 0 valid contiguous windows of length {actual_T} in buffer.")
 
         sampled_windows = []
         for _ in range(B):
-            use_ms = (np.random.rand() < 0.3) and (len(ms_eps) > 0)
+            use_ms = (np.random.rand() < 0.3) and (len(ms_windows) > 0)
             if use_ms:
-                ep = int(np.random.choice(ms_eps))
-                idxs = self.episode_indices[ep]
-                ms_pos = [k for k, buf_idx in enumerate(idxs) if self.milestone[buf_idx]]
-                chosen_ms = int(np.random.choice(ms_pos))
-                min_start = max(0, chosen_ms - actual_T + 1)
-                max_start = min(len(idxs) - actual_T, chosen_ms)
-                start_k = int(np.random.randint(min_start, max_start + 1))
+                chosen_idx = int(np.random.randint(0, len(ms_windows)))
+                sampled_windows.append(ms_windows[chosen_idx])
             else:
-                ep = int(np.random.choice(eligible_eps))
-                idxs = self.episode_indices[ep]
-                start_k = int(np.random.randint(0, len(idxs) - actual_T + 1))
-
-            sampled_windows.append(idxs[start_k : start_k + actual_T])
+                chosen_idx = int(np.random.randint(0, len(all_windows)))
+                sampled_windows.append(all_windows[chosen_idx])
 
         # Extract sequence slices (B, actual_T, ...)
         batch_obs = np.empty((B, actual_T, 3, 64, 64), dtype=np.float32)
@@ -223,11 +228,11 @@ class SAPNAReplayBuffer:
         expected_size = int(state["size"])
         target_capacity = max(self.capacity, int(state.get("capacity", expected_size)))
         if target_capacity > len(self.obs):
-            # Grow arrays safely to target_capacity when expanding at resume
+            # Grow arrays safely to target_capacity when expanding at resume per §20 F6
             self.obs = np.zeros((target_capacity, 3, 64, 64), dtype=np.uint8)
-            self.action = np.zeros(target_capacity, dtype=np.int64)
+            self.action = np.zeros(target_capacity, dtype=np.int8)
             self.reward = np.zeros(target_capacity, dtype=np.float32)
-            self.done = np.zeros(target_capacity, dtype=np.float32)
+            self.done = np.zeros(target_capacity, dtype=bool)
             self.episode_id = np.zeros(target_capacity, dtype=np.int64)
             self.step_in_ep = np.zeros(target_capacity, dtype=np.int64)
             self.milestone = np.zeros(target_capacity, dtype=bool)
@@ -246,10 +251,12 @@ class SAPNAReplayBuffer:
         self.milestone[:expected_size] = state["milestone"]
         self.r_int_norm[:expected_size] = state["r_int_norm"]
 
-        # Rebuild per-episode index
+        # Rebuild per-episode index SORTED by step_in_ep per §20 F6
         self.episode_indices = defaultdict(list)
         for idx in range(expected_size):
             self.episode_indices[int(self.episode_id[idx])].append(idx)
+        for ep in self.episode_indices:
+            self.episode_indices[ep].sort(key=lambda slot: int(self.step_in_ep[slot]))
 
         # Assert len(buffer) == expected
         if len(self) != expected_size:

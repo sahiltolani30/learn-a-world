@@ -61,7 +61,7 @@ class SAPNAConfig:
     update_every: int = 1  # 1 vec-step = 16 raw env steps
 
     # Replay Buffer
-    buffer_capacity: int = 100_000
+    buffer_capacity: int = 300_000  # Plan §3 v1.4 / §20 F11: 300k at birth
     milestone_frac: float = 0.30  # 70% uniform / 30% milestone
     warmup_steps: int = 200  # vec-steps uniform-random
 

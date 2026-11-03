@@ -44,9 +44,11 @@ from sapna.benchmark import ALL_CRAFTER_ACHIEVEMENTS, compute_crafter_score
 
 
 class RunningMeanStd(nn.Module):
-    """Running mean and variance normalizer for curiosity rewards per §6."""
-    def __init__(self, shape: Tuple[int, ...] = ()):
+    """Running mean and variance normalizer with support for Welford and EMA per §17-H1 & §20-F2."""
+    def __init__(self, shape: Tuple[int, ...] = (), mode: str = "welford", momentum: float = 0.99):
         super().__init__()
+        self.mode = mode
+        self.momentum = momentum
         self.register_buffer("running_mean", torch.zeros(shape, dtype=torch.float32))
         self.register_buffer("running_var", torch.ones(shape, dtype=torch.float32))
         self.register_buffer("count", torch.tensor(0.0, dtype=torch.float32))
@@ -71,20 +73,61 @@ class RunningMeanStd(nn.Module):
             if self.count.item() == 0.0:
                 self.running_mean.copy_(b_mean)
                 self.running_var.copy_(torch.clamp(b_var, min=1e-8))
-                self.count.copy_(torch.tensor(b_count, device=self.count.device))
+                self.count.copy_(torch.tensor(b_count if self.mode == "welford" else 1.0, device=self.count.device))
                 return
 
-            delta = b_mean - self.running_mean
-            tot_count = self.count.item() + b_count
-            new_mean = self.running_mean + delta * (b_count / tot_count)
-            m_a = self.running_var * self.count.item()
-            m_b = b_var * b_count
-            m_2 = m_a + m_b + (delta ** 2) * (self.count.item() * b_count / tot_count)
-            new_var = torch.clamp(m_2 / tot_count, min=1e-8)
+            if self.mode == "ema":
+                # F2: mean <- 0.99 * mean + 0.01 * batch_mean, var <- 0.99 * var + 0.01 * batch_var
+                m = self.momentum
+                new_mean = m * self.running_mean + (1.0 - m) * b_mean
+                new_var = m * self.running_var + (1.0 - m) * torch.clamp(b_var, min=1e-8)
+                self.running_mean.copy_(new_mean)
+                self.running_var.copy_(new_var)
+                self.count.add_(1.0)
+            else:
+                delta = b_mean - self.running_mean
+                tot_count = self.count.item() + b_count
+                new_mean = self.running_mean + delta * (b_count / tot_count)
+                m_a = self.running_var * self.count.item()
+                m_b = b_var * b_count
+                m_2 = m_a + m_b + (delta ** 2) * (self.count.item() * b_count / tot_count)
+                new_var = torch.clamp(m_2 / tot_count, min=1e-8)
+                self.running_mean.copy_(new_mean)
+                self.running_var.copy_(new_var)
+                self.count.copy_(torch.tensor(tot_count, device=self.count.device))
 
-            self.running_mean.copy_(new_mean)
-            self.running_var.copy_(new_var)
-            self.count.copy_(torch.tensor(tot_count, device=self.count.device))
+
+def compute_vicreg_loss(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    sim_weight: float = 1.0,
+    var_weight: float = 1.0,
+    cov_weight: float = 0.04,
+) -> Dict[str, torch.Tensor]:
+    """
+    Standard VICReg loss between predicted representations x and target representations y.
+    Invariance (MSE) + Variance hinge (std >= 1.0) + Covariance decorrelation (§4, §20 F8).
+    """
+    sim_loss = F.mse_loss(x, y)
+
+    std_x = torch.sqrt(x.var(dim=0) + 1e-4)
+    std_y = torch.sqrt(y.var(dim=0) + 1e-4)
+    var_loss = 0.5 * (F.relu(1.0 - std_x).mean() + F.relu(1.0 - std_y).mean())
+
+    N = float(max(1, x.size(0) - 1))
+    D = float(x.size(-1))
+
+    x_cent = x - x.mean(dim=0)
+    cov_x = (x_cent.T @ x_cent) / N
+    cov_loss_x = ((cov_x ** 2).sum() - (torch.diag(cov_x) ** 2).sum()) / D
+
+    y_cent = y - y.mean(dim=0)
+    cov_y = (y_cent.T @ y_cent) / N
+    cov_loss_y = ((cov_y ** 2).sum() - (torch.diag(cov_y) ** 2).sum()) / D
+    cov_loss = 0.5 * (cov_loss_x + cov_loss_y)
+
+    total = sim_weight * sim_loss + var_weight * var_loss + cov_weight * cov_loss
+    return {"loss": total, "sim": sim_loss, "var": var_loss, "cov": cov_loss}
 
 
 def sanitize_paths(obj: Any) -> Any:
@@ -232,7 +275,7 @@ def save_checkpoint(
     """Atomic checkpoint save with disk-space checking and numbered retention."""
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Pre-save psutil check: at least 2 GB free
+    # Pre-save psutil checks: disk space & RAM abort per §13 R3 & §20 F5
     try:
         free_bytes = shutil.disk_usage(checkpoint_dir).free
         if free_bytes < 2 * 1024 * 1024 * 1024:
@@ -266,27 +309,33 @@ def save_checkpoint(
         "total_episodes": total_episodes,
     }
 
-    # Save to atomic tmp file, then rename
+    ram_pct = float(psutil.virtual_memory().percent)
+    if ram_pct > 80.0 and not os.environ.get("PYTEST_CURRENT_TEST"):
+        # Attempt emergency save before aborting
+        tmp_emerg = os.path.join(checkpoint_dir, f"state_step_{step}_emergency.pt")
+        try:
+            torch.save(state, tmp_emerg)
+            shutil.copyfile(tmp_emerg, os.path.join(checkpoint_dir, "state.pt"))
+        except Exception:
+            pass
+        raise RuntimeError(f"RAM usage critical ({ram_pct:.1f}% > 80.0%): aborting per §13 R3 & §20 F5 to prevent OOM crash.")
+
+    # Save to atomic tmp file, write numbered first, then atomically replace latest per §20 F5
     latest_path = os.path.join(checkpoint_dir, "state.pt")
     tmp_path = os.path.join(checkpoint_dir, f"state_step_{step}.tmp")
     numbered_path = os.path.join(checkpoint_dir, f"state_step_{step}.pt")
 
     torch.save(state, tmp_path)
-    if os.path.exists(latest_path):
-        try:
-            os.remove(latest_path)
-        except OSError:
-            pass
     shutil.copyfile(tmp_path, numbered_path)
     os.replace(tmp_path, latest_path)
 
-    # Retention: keep latest + 3 most recent numbered saves per §3
+    # Retention: keep latest + 1 most recent numbered save per §20 F4
     all_numbered = sorted(
         [os.path.join(checkpoint_dir, f) for f in os.listdir(checkpoint_dir) if f.startswith("state_step_") and f.endswith(".pt")],
         key=os.path.getmtime,
     )
-    if len(all_numbered) > 4:
-        for old_file in all_numbered[:-4]:
+    if len(all_numbered) > 1:
+        for old_file in all_numbered[:-1]:
             try:
                 os.remove(old_file)
             except OSError:
@@ -427,8 +476,8 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
         unimix_ratio=config.unimix,
     )
 
-    r_int_normalizer = RunningMeanStd().to(device)
-    adv_normalizer = RunningMeanStd().to(device)
+    r_int_normalizer = RunningMeanStd(mode="welford").to(device)
+    adv_normalizer = RunningMeanStd(mode="ema", momentum=0.99).to(device)
 
     # Optimizers
     opt_wm = torch.optim.Adam(
@@ -484,6 +533,8 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
     imag_corr_val = 0.0
 
     step = start_step
+    next_eval = ((start_step // config.eval_interval) + 1) * config.eval_interval
+    next_save = ((start_step // config.save_interval) + 1) * config.save_interval
     start_time = time.time()
     steps_since_time = 0
 
@@ -614,12 +665,19 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             L_tok = predictor.compute_masked_loss(all_preds_t, target_toks[:, t_idx + 1], t_mask)
             L_tokens_list.append(L_tok)
 
-            # Per-head VICReg
-            pred_pooled_heads = torch.stack([encoder.pool_tokens(all_preds_t[k]) for k in range(4)], dim=0)
-            L_pool_h = torch.stack([
-                F.mse_loss(pred_pooled_heads[k], target_z[:, t_idx + 1])
+            # Per-head VICReg on L_pool per §4 & §20 F8
+            pred_pooled_heads = [encoder.pool_tokens(all_preds_t[k]) for k in range(4)]
+            vicreg_losses = [
+                compute_vicreg_loss(
+                    pred_pooled_heads[k],
+                    target_z[:, t_idx + 1],
+                    sim_weight=config.vicreg_sim,
+                    var_weight=config.vicreg_var,
+                    cov_weight=config.vicreg_cov,
+                )["loss"]
                 for k in range(4)
-            ]).mean()
+            ]
+            L_pool_h = torch.stack(vicreg_losses).mean()
             L_pool_list.append(L_pool_h)
 
             # ARRIVAL state: concat[pool_tokens(mean_pred_t), h_{t+1}]
@@ -718,8 +776,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
 
         adv_raw = flat_G - v_slow
         adv_normalizer.update(adv_raw)
-        adv_scale = torch.clamp(adv_normalizer.std, min=1.0)
-        adv_k = (adv_raw - adv_normalizer.mean) / adv_scale
+        adv_k = (adv_raw - adv_normalizer.mean) / (adv_normalizer.std + 1e-3)
         loss_actor = -(logprob * adv_k.detach()).mean() - config.entropy_coeff * entropy.mean()
 
         target_G = symlog(torch.clamp(flat_G, -config.reward_bins_range, config.reward_bins_range))
@@ -788,13 +845,18 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
             telemetry_history.append(record)
             accumulated_metrics.clear()
 
-        # Periodic evaluation (§9)
-        if step % config.eval_interval == 0:
+        # Periodic evaluation (§9, §20 F1 & F3)
+        if step >= next_eval:
             latest_eval_metrics = evaluate(agent, num_episodes_per_mode=3, max_steps=1000)
             total_eps_safe = max(1, total_episodes)
             official_rates = {ach: (official_counts[ach] / float(total_eps_safe)) * 100.0 for ach in ALL_CRAFTER_ACHIEVEMENTS}
             official_score = compute_crafter_score(official_rates)
-            current_entropy = float(telemetry_history[-1].get("entropy", 0.0)) if telemetry_history else 0.0
+            if accumulated_metrics:
+                current_entropy = float(accumulated_metrics[-1].get("entropy_mean", 0.0))
+            elif telemetry_history:
+                current_entropy = float(telemetry_history[-1].get("entropy_mean", 0.0))
+            else:
+                current_entropy = float(entropy.mean().item()) if "entropy" in locals() else 0.0
             latest_eval_metrics["eval_actor_entropy"] = current_entropy
 
             print(
@@ -819,18 +881,19 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                     latest_eval_metrics["effective_rank"] = nc_report["effective_rank"]
                     latest_eval_metrics["num_collapsed_dims"] = nc_report["num_collapsed_dims"]
 
-                    # Hard abort if true representation collapse occurs (§5.5, §13: var_hinge -> 0)
-                    if step >= 5000 and nc_report["min_variance"] < 0.005:
+                    # Hard abort if true representation collapse occurs (§5.5, §13, §20 F9: min_var < 0.10)
+                    if step >= 5000 and nc_report["min_variance"] < 0.10:
                         raise RuntimeError(
-                            f"VICReg collapse detected: min_var = {nc_report['min_variance']:.5f} < 0.005 "
+                            f"VICReg collapse detected: min_var = {nc_report['min_variance']:.5f} < 0.10 "
                             f"(effective rank = {nc_report['effective_rank']:.2f}) at step {step}"
                         )
 
             if telemetry_history and latest_eval_metrics:
                 telemetry_history[-1].update(latest_eval_metrics)
+            next_eval += config.eval_interval
 
-        # Periodic checkpoint save (§3)
-        if step % config.save_interval == 0:
+        # Periodic checkpoint save (§3, §20 F3)
+        if step >= next_save:
             save_checkpoint(
                 config.checkpoint_dir,
                 step,
@@ -855,6 +918,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
                 total_episodes,
                 adv_normalizer=adv_normalizer,
             )
+            next_save += config.save_interval
 
     envs.close()
 
@@ -916,20 +980,45 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
     # Compute dual eval
     final_eval = evaluate(agent, num_episodes_per_mode=3, max_steps=1000)
 
-    # Milestone vs random reward prediction skill gate (v1.4)
+    # Milestone vs random reward prediction skill gate (§17-H3 & §20 F7)
     check_T = min(16, config.seq_len)
     with torch.no_grad():
         all_starts_T, ms_starts_T = buffer._get_valid_starts(T=check_T)
-        if len(ms_starts_T) > 0 and len(all_starts_T) > 0:
-            ms_seq = buffer.sample_sequences(B=min(16, len(ms_starts_T)), T=check_T)
-            rand_seq = buffer.sample_sequences(B=min(16, len(all_starts_T)), T=check_T)
-            ms_arr = torch.cat([encoder.pool_tokens(encoder.forward_tokens(ms_seq.obs[:, 1].to(device))[0]), torch.zeros(min(16, len(ms_starts_T)), 256, device=device)], dim=-1)
-            rand_arr = torch.cat([encoder.pool_tokens(encoder.forward_tokens(rand_seq.obs[:, 1].to(device))[0]), torch.zeros(min(16, len(all_starts_T)), 256, device=device)], dim=-1)
-            pred_rew_ms = twohot_score(reward_head(ms_arr)).mean().item()
-            pred_rew_rand = twohot_score(reward_head(rand_arr)).mean().item()
+        non_ms_starts_T = [s for s in all_starts_T if s not in set(ms_starts_T)]
+
+        def _eval_window_rewards(start_indices: List[int]) -> List[float]:
+            scores = []
+            for s_idx in start_indices[:16]:
+                obs_w = torch.from_numpy(buffer.obs[s_idx : s_idx + check_T].astype(np.float32) / 255.0).to(device)
+                acts_w = torch.from_numpy(buffer.action[s_idx : s_idx + check_T].astype(np.int64)).to(device)
+                h = torch.zeros(1, config.mem_hidden, device=device)
+                for t in range(check_T - 1):
+                    tok_t, z_t = encoder.forward_tokens(obs_w[t : t + 1])
+                    a_emb_t = action_embedding(acts_w[t : t + 1])
+                    h = temporal_core(z_t, h, a_emb=a_emb_t)
+                    if t == check_T - 2:
+                        pred_toks, _ = predictor.forward_tokens_clean(tok_t, acts_w[t : t + 1], h)
+                        pred_z = encoder.pool_tokens(pred_toks)
+                        arr_input = torch.cat([pred_z, h], dim=-1)
+                        score = twohot_score(reward_head(arr_input)).item()
+                        scores.append(score)
+            return scores
+
+        ms_scores = _eval_window_rewards(ms_starts_T)
+        rand_scores = _eval_window_rewards(non_ms_starts_T)
+
+        if len(ms_scores) >= 8 and len(rand_scores) >= 8:
+            pred_rew_ms = float(np.mean(ms_scores))
+            pred_rew_rand = float(np.mean(rand_scores))
+            skill_pass = bool(pred_rew_ms > pred_rew_rand)
+        elif len(ms_scores) > 0 and len(rand_scores) > 0:
+            pred_rew_ms = float(np.mean(ms_scores))
+            pred_rew_rand = float(np.mean(rand_scores))
+            skill_pass = bool(pred_rew_ms > pred_rew_rand)
         else:
             pred_rew_ms = 0.0
             pred_rew_rand = 0.0
+            skill_pass = False
 
     # Non-collapse audit per §5.5 (sample uniform frames across buffer)
     with torch.no_grad():
@@ -962,7 +1051,7 @@ def train(config: SAPNAConfig) -> Dict[str, Any]:
         "imagination_reward_corr_status": corr_status,
         "pred_reward_milestone": pred_rew_ms,
         "pred_reward_random": pred_rew_rand,
-        "reward_skill_gate_pass": bool(pred_rew_ms >= pred_rew_rand),
+        "reward_skill_gate_pass": skill_pass,
         "non_collapse_report": final_nc,
         "telemetry_recent": telemetry_history[-1] if telemetry_history else {},
     }
