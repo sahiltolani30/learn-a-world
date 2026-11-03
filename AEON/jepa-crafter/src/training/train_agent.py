@@ -34,6 +34,7 @@ from src.evaluation.achievement_recorder import AchievementRecorder
 from src.evaluation.heldout_prediction import HeldoutPredictorEvaluator
 from src.evaluation.action_conditioning_tests import ActionConditioningTester
 from src.evaluation.report import ReportGenerator
+from src.observability.tracer import TraceManager
 
 
 def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, Any]:
@@ -46,9 +47,17 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
 
     target_env_steps = max_steps if max_steps is not None else config.environment.max_environment_steps
 
-    # 2. Logging and checkpointing
+    # 2. Logging, checkpointing, and observability tracing
     metric_logger = MetricLogger(run_dir, prefix="metrics")
     checkpoint_store = CheckpointStore(os.path.join(run_dir, "checkpoints"))
+    tracer = TraceManager(
+        run_id=config.project.name,
+        output_dir=run_dir,
+        code_sha="8829fe0",
+        config_hash=str(config.project.seed),
+        enabled=True,
+    )
+    tracer.log_run_started(config.to_dict())
     report_gen = ReportGenerator(run_dir)
     report_gen.write_environment_manifest()
 
@@ -252,9 +261,29 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
             )
             plan_latency = time.time() - t0_plan
 
+            dec_id = tracer.log_action_decision(
+                episode_id=current_role_idx + 1,
+                timestep=episode_step,
+                obs_ref=f"f-{env_step}",
+                candidate_scores=None,
+                selected_token=action_token,
+                mapping_version="v1.0",
+                role=current_role,
+                mode=mode,
+            )
+            tracer.log_action_executed(dec_id)
+
             next_obs, reward, terminated, truncated = adapter.step(action_token)
             done = (terminated or truncated)
             episode_step += 1
+
+            tracer.log_action_outcome(
+                decision_id=dec_id,
+                reward=reward,
+                terminated=terminated,
+                truncated=truncated,
+                next_obs_ref=f"f-{env_step+1}",
+            )
 
             if mode == "mpc" and planner.last_plan_info:
                 planner_diag.record_decision(
@@ -301,6 +330,13 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
             for _ in range(num_updates):
                 batch = sampler.sample_batch(batch_size=config.optimization.batch_size, device=device)
                 train_metrics = learner.train_step(batch)
+                tracer.log_training_update_finished(
+                    update_id=learner.update_count,
+                    step=env_step,
+                    losses=train_metrics,
+                    grad_norm=train_metrics.get("grad_norm", 0.0),
+                    lr=train_metrics.get("lr", 0.0),
+                )
 
                 # Periodic feature diagnostics (every 500 updates)
                 if learner.update_count % 500 == 0:
@@ -329,6 +365,11 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
 
             validation_status = {"test_b": test_b_pass, "test_c": test_c_pass, "test_d": test_d_pass}
             print(f"Validation Status: Test B (Held-out beat persistence): {test_b_pass}, Test C (Action-conditioned): {test_c_pass}, Test D (No collapse): {test_d_pass}")
+            tracer.log_gate_result(
+                gate_id="P5_VALIDATION_GATES",
+                status="PASS" if (test_b_pass and test_c_pass and test_d_pass) else "FAIL",
+                metrics=validation_status,
+            )
 
             if test_b_pass and test_c_pass and test_d_pass:
                 mpc_unlocked = True
@@ -345,7 +386,8 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
                 "rng_states": get_rng_states(),
                 "validation_status": validation_status,
             }
-            checkpoint_store.save(step=env_step, checkpoint_data=checkpoint_data)
+            checkpoint_path = checkpoint_store.save(step=env_step, checkpoint_data=checkpoint_data)
+            tracer.log_checkpoint_saved(checkpoint_path, step=env_step)
 
     # 9. Final Benchmark Outputs & Artifact Generation
     print("Generating final research artifacts and reports...")
@@ -375,6 +417,9 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
         diagnostics=latest_diagnostics,
     )
     print(f"Final report generated at: {final_report_path}")
+
+    trace_checksum = tracer.shutdown()
+    print(f"Observability trace committed with SHA-256: {trace_checksum}")
 
     return {
         "final_report_path": final_report_path,

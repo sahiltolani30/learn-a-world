@@ -1,0 +1,18 @@
+{
+  "phase_id": 1,
+  "phase_name": "Minimal observability foundation",
+  "gate_id": "P1_TRACE_PASS",
+  "status": "PASS",
+  "timestamp": "2026-11-03T20:50:00Z",
+  "criteria": {
+    "event_completeness_pct": 100.0,
+    "decision_outcome_linkage_pct": 100.0,
+    "leak_prevention_enforced": true,
+    "deterministic_debug_match": true,
+    "checksum_roundtrip_verified": true,
+    "crash_resilience_verified": true
+  },
+  "unit_tests_passed": 5,
+  "unit_tests_failed": 0,
+  "unlocked_phase": "phase-02-baseline-integrity"
+}

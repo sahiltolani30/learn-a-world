@@ -1,0 +1,39 @@
+{
+  "run_id": "preflight-audit-001",
+  "phase": "phase-00-audit",
+  "git_commit": "8829fe08285513d803621dfd813739bf872b842d",
+  "branch": "main",
+  "clean_worktree": true,
+  "system": {
+    "os": "Darwin 23.6.0 (macOS)",
+    "python": "3.9.6",
+    "torch": "2.8.0",
+    "crafter": "1.8.3",
+    "cuda_available": false,
+    "device_default": "cpu"
+  },
+  "modules_audited": 46,
+  "modules_import_status": "PASS",
+  "configs_audited": [
+    "configs/crafter_t4.yaml",
+    "configs/crafter_t4_reward_free.yaml",
+    "configs/evaluation.yaml"
+  ],
+  "configs_parse_status": "PASS",
+  "crafter_contract": {
+    "observation_shape": [64, 64, 3],
+    "observation_dtype": "uint8",
+    "action_count": 17,
+    "step_return_len": 4,
+    "info_leak_protection": "VERIFIED"
+  },
+  "tests": {
+    "total_collected": 19,
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 3.29
+  },
+  "gate_status": "P0_AUDIT_PASS",
+  "unlocked_next_phase": "phase-01-observability"
+}

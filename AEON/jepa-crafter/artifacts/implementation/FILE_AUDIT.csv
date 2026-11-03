@@ -1,0 +1,57 @@
+path,category,primary_symbol,state,existing_test,test_status,next_action
+src/env/opaque_actions.py,environment,OpaqueActionMapping,implemented,test_opaque_actions.py,PASS,maintain
+src/env/learner_observation_filter.py,environment,LearnerObservationFilter,implemented,test_no_info_leak.py,PASS,maintain
+src/env/evaluator_tap.py,environment,EvaluatorTap,implemented,test_evaluator_isolation.py,PASS,maintain
+src/env/crafter_adapter.py,environment,CrafterAdapter,implemented,test_env_contract.py,PASS,maintain
+src/env/vector_adapter.py,environment,VectorCrafterAdapter,implemented,test_vector_collection.py,PASS,maintain
+src/data/replay_buffer.py,data,ReplayBuffer,implemented,test_replay_sequences.py,PASS,maintain
+src/data/sequence_sampler.py,data,SequenceSampler,implemented,test_replay_sequences.py,PASS,maintain
+src/data/episode_store.py,data,EpisodeStore,implemented,test_checkpoint_resume.py,PASS,maintain
+src/data/checkpoint_store.py,data,CheckpointStore,implemented,test_checkpoint_resume.py,PASS,maintain
+src/models/visual_encoder.py,model,VisualEncoder,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/ema_encoder.py,model,EmaEncoder,implemented,test_ema_update.py,PASS,maintain
+src/models/action_embedding.py,model,ActionEmbedding,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/temporal_context.py,model,TemporalContext,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/latent_predictor.py,model,LatentPredictor,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/predictor_ensemble.py,model,PredictorEnsemble,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/auxiliary_heads.py,model,AuxiliaryHeads,implemented,test_jepa_shapes.py,PASS,maintain
+src/models/jepa_world_model.py,model,JepaWorldModel,implemented,test_jepa_shapes.py,PASS,maintain
+src/learning/jepa_losses.py,learning,SpatialMaskedCosineLoss,implemented,test_jepa_shapes.py,PASS,maintain
+src/learning/optimizer.py,learning,build_optimizer,implemented,test_jepa_shapes.py,PASS,maintain
+src/learning/feature_diagnostics.py,learning,FeatureDiagnostics,implemented,test_jepa_shapes.py,PASS,maintain
+src/learning/learner.py,learning,JepaLearner,implemented,test_jepa_shapes.py,PASS,maintain
+src/learning/update_scheduler.py,learning,UpdateScheduler,implemented,test_vector_collection.py,PASS,maintain
+src/exploration/latent_memory.py,exploration,LatentMemory,implemented,test_planner_replans.py,PASS,maintain
+src/exploration/novelty.py,exploration,NoveltyEstimator,implemented,test_planner_replans.py,PASS,maintain
+src/exploration/disagreement.py,exploration,DisagreementEstimator,implemented,test_planner_replans.py,PASS,maintain
+src/exploration/role_definitions.py,exploration,RoleDefinition,implemented,test_planner_replans.py,PASS,maintain
+src/exploration/action_selector.py,exploration,ActionSelector,implemented,test_planner_replans.py,PASS,maintain
+src/planning/latent_rollout.py,planning,LatentRolloutEngine,implemented,test_planner_replans.py,PASS,maintain
+src/planning/candidate_scorer.py,planning,CandidateSequenceScorer,implemented,test_planner_replans.py,PASS,maintain
+src/planning/cem_planner.py,planning,CemPlanner,implemented,test_planner_replans.py,PASS,maintain
+src/planning/planner_diagnostics.py,planning,PlannerDiagnostics,implemented,test_planner_replans.py,PASS,maintain
+src/evaluation/crafter_score.py,evaluation,compute_crafter_score,implemented,test_evaluator_isolation.py,PASS,maintain
+src/evaluation/achievement_recorder.py,evaluation,AchievementRecorder,implemented,test_evaluator_isolation.py,PASS,maintain
+src/evaluation/heldout_prediction.py,evaluation,HeldoutPredictorEvaluator,implemented,test_jepa_shapes.py,PASS,maintain
+src/evaluation/action_conditioning_tests.py,evaluation,ActionConditioningTester,implemented,test_jepa_shapes.py,PASS,maintain
+src/evaluation/relation_diagnostics.py,evaluation,RelationDiagnostics,implemented,test_jepa_shapes.py,PASS,maintain
+src/evaluation/report.py,evaluation,generate_markdown_report,implemented,test_jepa_shapes.py,PASS,maintain
+src/training/collect.py,training,BatchedExperienceCollector,implemented,test_vector_collection.py,PASS,maintain
+src/training/train_world_model.py,training,train_world_model,implemented,test_jepa_shapes.py,PASS,maintain
+src/training/train_agent.py,training,train_agent,implemented,test_checkpoint_resume.py,PASS,maintain
+src/training/resume.py,training,resume_training,implemented,test_checkpoint_resume.py,PASS,maintain
+src/utils/config.py,utils,load_config,implemented,test_env_contract.py,PASS,maintain
+src/utils/device.py,utils,resolve_device,implemented,test_jepa_shapes.py,PASS,maintain
+src/utils/logging.py,utils,setup_logging,implemented,test_checkpoint_resume.py,PASS,maintain
+src/utils/safety_checks.py,utils,run_preflight_checks,implemented,test_env_contract.py,PASS,maintain
+src/utils/seeding.py,utils,set_global_seed,implemented,test_opaque_actions.py,PASS,maintain
+src/observability/events.py,observability,Event,implemented,test_observability.py,PASS,maintain
+src/observability/trace_writer.py,observability,TraceWriter,implemented,test_observability.py,PASS,maintain
+src/observability/tracer.py,observability,TraceManager,implemented,test_observability.py,PASS,maintain
+run.py,runner,main,implemented,test_vector_collection.py,PASS,maintain
+src/perception/visual_state_tracker.py,perception,VisualStateTracker,missing,None,NOT_RUN,implement in Phase 8
+src/relations/candidate_generator.py,relations,RelationCandidateGenerator,missing,None,NOT_RUN,implement in Phase 9
+src/relations/evidence_ledger.py,relations,EvidenceLedger,missing,None,NOT_RUN,implement in Phase 9
+src/relations/controlled_tester.py,relations,ControlledTester,missing,None,NOT_RUN,implement in Phase 10
+src/relations/relation_memory.py,relations,RelationMemoryStore,missing,None,NOT_RUN,implement in Phase 11
+src/planning/compositional_planner.py,planning,CompositionalPlanner,missing,None,NOT_RUN,implement in Phase 12

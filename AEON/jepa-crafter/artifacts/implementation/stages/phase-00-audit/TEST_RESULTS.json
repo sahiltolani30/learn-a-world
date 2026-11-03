@@ -1,0 +1,29 @@
+{
+  "test_suite": "AEON/jepa-crafter/tests",
+  "total": 19,
+  "passed": 19,
+  "failed": 0,
+  "warnings": 6,
+  "execution_duration_sec": 3.29,
+  "test_cases": [
+    {"name": "test_checkpoint_atomic_save_and_resume", "file": "test_checkpoint_resume.py", "status": "PASSED"},
+    {"name": "test_ema_target_update", "file": "test_ema_update.py", "status": "PASSED"},
+    {"name": "test_target_encoder_stop_gradient", "file": "test_ema_update.py", "status": "PASSED"},
+    {"name": "test_observation_and_action_contract", "file": "test_env_contract.py", "status": "PASSED"},
+    {"name": "test_reward_free_mode", "file": "test_env_contract.py", "status": "PASSED"},
+    {"name": "test_evaluator_isolation", "file": "test_evaluator_isolation.py", "status": "PASSED"},
+    {"name": "test_jepa_shapes_and_rollout", "file": "test_jepa_shapes.py", "status": "PASSED"},
+    {"name": "test_jepa_backward_gradient_flow", "file": "test_jepa_shapes.py", "status": "PASSED"},
+    {"name": "test_no_episode_crossing", "file": "test_no_episode_crossing.py", "status": "PASSED"},
+    {"name": "test_no_info_leak_in_step_return", "file": "test_no_info_leak.py", "status": "PASSED"},
+    {"name": "test_leak_filter_catches_forbidden_keys", "file": "test_no_info_leak.py", "status": "PASSED"},
+    {"name": "test_permutation_properties", "file": "test_opaque_actions.py", "status": "PASSED"},
+    {"name": "test_serialization_roundtrip", "file": "test_opaque_actions.py", "status": "PASSED"},
+    {"name": "test_planner_replans_first_action_only", "file": "test_planner_replans.py", "status": "PASSED"},
+    {"name": "test_random_shooting_fallback", "file": "test_planner_replans.py", "status": "PASSED"},
+    {"name": "test_replay_sequence_sampling", "file": "test_replay_sequences.py", "status": "PASSED"},
+    {"name": "test_context_left_padding", "file": "test_replay_sequences.py", "status": "PASSED"},
+    {"name": "test_vector_adapter_lockstep", "file": "test_vector_collection.py", "status": "PASSED"},
+    {"name": "test_batched_collector_contiguous_episodes", "file": "test_vector_collection.py", "status": "PASSED"}
+  ]
+}
