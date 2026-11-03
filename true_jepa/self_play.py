@@ -259,8 +259,10 @@ class SelfPlayCoordinator:
         for episode_id, episode in enumerate(self.replay.records):
             self._learn_relations(episode, episode_id)
 
-    def train(self, updates: int) -> List[Dict[str, float]]:
-        """Train JEPA and then improve its policy in imagined latent rollouts."""
+    def train(
+        self, updates: int, train_policy: bool = True
+    ) -> List[Dict[str, float]]:
+        """Train JEPA and optionally improve policy in imagined rollouts."""
 
         if self.replay.episodes == 0:
             raise RuntimeError("collect episodes before training")
@@ -280,21 +282,22 @@ class SelfPlayCoordinator:
                 self.update,
                 self.scaler,
             )
-            start_obs = batch["obs"][:, 0].to(self.device)
-            with torch.no_grad():
-                start = self.model.encode(start_obs)
-                hidden = self.model.initial_belief(start_obs.shape[0], self.device)
-            policy_result = imagination_policy_step(
-                self.model,
-                start,
-                hidden,
-                self.actor_optimizer,
-                self.value_optimizer,
-                self.model.cfg.rollout_horizon,
-                self.train_cfg.gamma,
-                self.train_cfg.actor_entropy_weight,
-            )
-            result.update(policy_result)
+            if train_policy:
+                start_obs = batch["obs"][:, 0].to(self.device)
+                with torch.no_grad():
+                    start = self.model.encode(start_obs)
+                    hidden = self.model.initial_belief(start_obs.shape[0], self.device)
+                policy_result = imagination_policy_step(
+                    self.model,
+                    start,
+                    hidden,
+                    self.actor_optimizer,
+                    self.value_optimizer,
+                    self.model.cfg.rollout_horizon,
+                    self.train_cfg.gamma,
+                    self.train_cfg.actor_entropy_weight,
+                )
+                result.update(policy_result)
             metrics.append(result)
             self.update += 1
         self.snapshots.append(copy.deepcopy(self.model.state_dict()))

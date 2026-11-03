@@ -166,3 +166,8 @@ def test_validation_reports_action_reward_and_representation_gates():
     assert "action_conditioning" in report
     assert "reward_prediction" in report
     assert "representation" in report
+
+
+def test_world_only_training_switch_is_available():
+    signature = inspect.signature(SelfPlayCoordinator.train)
+    assert signature.parameters["train_policy"].default is True
