@@ -141,3 +141,8 @@ def test_self_play_load_accepts_parallel_environment_count():
     signature = inspect.signature(SelfPlayCoordinator.load)
     assert "num_envs" in signature.parameters
     assert signature.parameters["num_envs"].default == 1
+
+
+def test_random_collection_mode_is_explicit():
+    signature = inspect.signature(SelfPlayCoordinator.__init__)
+    assert signature.parameters["collection_policy"].default == "mixed"

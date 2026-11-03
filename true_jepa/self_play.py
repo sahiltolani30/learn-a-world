@@ -63,6 +63,7 @@ class SelfPlayCoordinator:
         device: str = "cpu",
         seed: int = 0,
         num_envs: int = 1,
+        collection_policy: str = "mixed",
     ) -> None:
         self.env_factory = env_factory
         self.model = model.to(device)
@@ -71,6 +72,9 @@ class SelfPlayCoordinator:
         self.num_envs = int(num_envs)
         if self.num_envs < 1:
             raise ValueError("num_envs must be positive")
+        if collection_policy not in {"mixed", "random"}:
+            raise ValueError("collection_policy must be 'mixed' or 'random'")
+        self.collection_policy = collection_policy
         self.rng = np.random.default_rng(seed)
         self.replay = PixelReplay(self.train_cfg.replay_capacity_frames)
         self.relations = AnonymousRelationMemory()
@@ -133,8 +137,8 @@ class SelfPlayCoordinator:
         stats = CollectionStats()
         for episode_id in range(int(episodes)):
             env = self.env_factory()
-            source = self._source()
-            policy = self._policy(source)
+            source = "random" if self.collection_policy == "random" else self._source()
+            policy = RandomPolicy(self.model.num_actions, self.rng) if source == "random" else self._policy(source)
             obs = env.reset()
             observations = [np.asarray(obs, dtype=np.uint8)]
             actions: List[int] = []
@@ -178,7 +182,11 @@ class SelfPlayCoordinator:
         """Collect completed episodes from N lockstep environments."""
 
         envs = PixelBatch(self.env_factory, self.num_envs)
-        policy = BatchedVisualJEPAAgent(self.model, self.num_envs, device=str(self.device))
+        policy = (
+            None
+            if self.collection_policy == "random"
+            else BatchedVisualJEPAAgent(self.model, self.num_envs, device=str(self.device))
+        )
         observations = [[envs.obs[index].copy()] for index in range(self.num_envs)]
         actions: List[List[int]] = [[] for _ in range(self.num_envs)]
         rewards: List[List[float]] = [[] for _ in range(self.num_envs)]
@@ -190,13 +198,16 @@ class SelfPlayCoordinator:
         stats = CollectionStats()
         try:
             while completed < int(episodes):
-                proposed = policy.act(envs.obs, previous_rewards, steps)
-                random_mask = self.rng.random(self.num_envs) < 0.10
-                if bool(random_mask.any()):
-                    proposed[random_mask] = self.rng.integers(
-                        0, envs.num_actions, size=int(random_mask.sum())
-                    )
-                policy.record_actions(proposed)
+                if policy is None:
+                    proposed = self.rng.integers(0, envs.num_actions, size=self.num_envs)
+                else:
+                    proposed = policy.act(envs.obs, previous_rewards, steps)
+                    random_mask = self.rng.random(self.num_envs) < 0.10
+                    if bool(random_mask.any()):
+                        proposed[random_mask] = self.rng.integers(
+                            0, envs.num_actions, size=int(random_mask.sum())
+                        )
+                    policy.record_actions(proposed)
                 transitions = envs.step(proposed)
                 for index, (terminal_obs, reward, is_terminated, is_truncated) in enumerate(transitions):
                     observations[index].append(terminal_obs)
@@ -216,7 +227,11 @@ class SelfPlayCoordinator:
                             terminated=np.asarray(terminated[index], dtype=bool),
                             truncated=np.asarray(truncated[index], dtype=bool),
                             seed=int(envs.episode_ids[index]),
-                            source="batched_self_play",
+                            source=(
+                                "random"
+                                if self.collection_policy == "random"
+                                else "batched_self_play"
+                            ),
                         )
                         self.replay.add(episode)
                         completed += 1
@@ -228,7 +243,8 @@ class SelfPlayCoordinator:
                         truncated[index] = []
                         previous_rewards[index] = 0.0
                         steps[index] = 0
-                        policy.reset(np.asarray([index]))
+                        if policy is not None:
+                            policy.reset(np.asarray([index]))
                         if completed >= int(episodes):
                             break
         finally:
@@ -313,6 +329,7 @@ class SelfPlayCoordinator:
         device: str = "cpu",
         seed: int = 0,
         num_envs: int = 1,
+        collection_policy: str = "mixed",
         replay_path: str | None = None,
     ) -> "SelfPlayCoordinator":
         """Restore model, optimizers, relation hypotheses, and counters."""
@@ -327,6 +344,7 @@ class SelfPlayCoordinator:
             device=device,
             seed=seed,
             num_envs=num_envs,
+            collection_policy=collection_policy,
         )
         runner.model.load_state_dict(payload["model"])
         runner.model.target_encoder.load_state_dict(payload["target_encoder"])
