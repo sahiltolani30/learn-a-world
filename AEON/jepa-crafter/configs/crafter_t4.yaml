@@ -1,0 +1,95 @@
+project:
+  name: jepa_crafter
+  seed: 12345
+  device: auto
+  output_dir: runs/
+  checkpoint_every_env_steps: 10000
+
+environment:
+  package: crafter
+  env_id: CrafterReward-v1
+  observation_shape: [64, 64, 3]
+  action_count: 17
+  opaque_action_permutation: random_per_run
+  reward_mode: scalar
+  max_environment_steps: 1000000
+
+collection:
+  initial_random_steps: 10000
+  num_env_workers: 8
+  train_seed_start: 1000
+  heldout_seed_start: 900000
+  heldout_episode_count: 50
+
+replay:
+  capacity: 50000
+  observation_dtype: uint8
+  recent_sequence_fraction: 0.30
+  uniform_sequence_fraction: 0.70
+  context_length: 4
+  prediction_horizon: 8
+  min_sequences_before_training: 2000
+
+model:
+  encoder_channels: [64, 96, 128]
+  latent_tokens: 64
+  latent_dim: 128
+  action_embedding_dim: 64
+  context_hidden_dim: 256
+  context_length: 4
+  predictor_members: 3
+  predictor_transformer_blocks: 2
+  transformer_heads: 4
+  transformer_mlp_dim: 512
+  prediction_horizons: [1, 2, 4, 8]
+  target_mask_fraction: 0.50
+  ema_momentum_start: 0.996
+  ema_momentum_end: 0.999
+  ema_momentum_ramp_updates: 50000
+
+optimization:
+  optimizer: AdamW
+  encoder_lr: 0.0001
+  predictor_lr: 0.0003
+  auxiliary_lr: 0.0003
+  weight_decay: 0.0001
+  batch_size: 32
+  gradient_clip_norm: 1.0
+  warmup_updates: 1000
+  precision: fp16
+  updates_per_env_step: 0.25
+  reward_loss_weight: 0.10
+  termination_loss_weight: 0.05
+
+exploration:
+  novelty_weight: 1.0
+  disagreement_weight: 0.25
+  learning_progress_weight: 0.25
+  random_action_floor: 0.10
+  intrinsic_clip: 5.0
+
+planner:
+  enabled_after_validation: true
+  algorithm: cem
+  horizon: 8
+  population: 64
+  iterations: 2
+  elite_count: 8
+  discount: 0.99
+  replan_every_real_step: true
+  execute_first_action_only: true
+  max_intrinsic_bonus_per_step: 2.0
+
+population:
+  enabled_after_single_role_validation: true
+  roles: [explorer, scientist, experimenter, balanced_planner]
+  shared_world_model: true
+  shared_replay: true
+
+evaluation:
+  num_development_seeds: 3
+  num_final_seeds: 5
+  report_all_22_achievements: true
+  heldout_prediction_horizons: [1, 2, 4, 8]
+  evaluate_mpc_ablation: true
+  save_videos: true
