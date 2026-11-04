@@ -386,6 +386,9 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
                 mpc_unlocked = True
                 print(">>> VALIDATION GATES PASSED: MPC UNLOCKED <<<")
 
+        # Periodic Checkpointing (governed by config.project.checkpoint_every_env_steps)
+        ckpt_interval = getattr(config.project, "checkpoint_every_env_steps", 10000)
+        if env_step % ckpt_interval == 0 and env_step > 0:
             checkpoint_data = {
                 "step": env_step,
                 "learner_update_count": learner.update_count,

@@ -9,6 +9,7 @@ src/data/sequence_sampler.py,data,SequenceSampler,implemented,test_replay_sequen
 src/data/episode_store.py,data,EpisodeStore,implemented,test_checkpoint_resume.py,PASS,maintain
 src/data/checkpoint_store.py,data,CheckpointStore,implemented,test_checkpoint_resume.py,PASS,maintain
 src/data/heldout_store.py,data,HeldoutEpisodeStore,implemented,test_baseline_integrity.py,PASS,maintain
+tests/test_pipeline_pilot.py,test,test_pipeline_pilot,implemented,test_pipeline_pilot.py,PASS,maintain
 src/models/visual_encoder.py,model,VisualEncoder,implemented,test_jepa_shapes.py,PASS,maintain
 src/models/ema_encoder.py,model,EmaEncoder,implemented,test_ema_update.py,PASS,maintain
 src/models/action_embedding.py,model,ActionEmbedding,implemented,test_jepa_shapes.py,PASS,maintain

@@ -24,6 +24,7 @@ class ReplayBuffer:
         self.truncated = np.zeros(capacity, dtype=bool)
         self.episode_ids = np.zeros(capacity, dtype=np.int32)
         self.timesteps = np.zeros(capacity, dtype=np.int32)
+        self.transition_ids = np.zeros(capacity, dtype=np.int64)
         
         # Pointers and size
         self.write_idx = 0
@@ -78,6 +79,7 @@ class ReplayBuffer:
         self.truncated[t_idx] = truncated
         self.episode_ids[t_idx] = self.current_episode_id
         self.timesteps[t_idx] = self.current_timestep
+        self.transition_ids[t_idx] = self.total_added
         
         self.write_idx = (self.write_idx + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
@@ -127,6 +129,7 @@ class ReplayBuffer:
             "truncated": self.truncated[:self.size].copy() if self.total_added < self.capacity else self.truncated.copy(),
             "episode_ids": self.episode_ids[:self.size].copy() if self.total_added < self.capacity else self.episode_ids.copy(),
             "timesteps": self.timesteps[:self.size].copy() if self.total_added < self.capacity else self.timesteps.copy(),
+            "transition_ids": self.transition_ids[:self.size].copy() if self.total_added < self.capacity else self.transition_ids.copy(),
             "transition_obs_idx": self.transition_obs_idx[:self.size].copy() if self.total_added < self.capacity else self.transition_obs_idx.copy(),
             "transition_next_obs_idx": self.transition_next_obs_idx[:self.size].copy() if self.total_added < self.capacity else self.transition_next_obs_idx.copy(),
             "write_idx": self.write_idx,
@@ -164,6 +167,9 @@ class ReplayBuffer:
         self.episode_ids[:len(s_ep)] = s_ep
         s_time = state["timesteps"]
         self.timesteps[:len(s_time)] = s_time
+        if "transition_ids" in state:
+            s_tid = state["transition_ids"]
+            self.transition_ids[:len(s_tid)] = s_tid
         s_to = state["transition_obs_idx"]
         self.transition_obs_idx[:len(s_to)] = s_to
         s_tno = state["transition_next_obs_idx"]

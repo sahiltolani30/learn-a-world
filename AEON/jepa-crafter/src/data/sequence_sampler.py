@@ -36,9 +36,13 @@ class SequenceSampler:
 
         ep_id = self.replay.episode_ids[t_idx]
         t_step = self.replay.timesteps[t_idx]
+        start_tid = self.replay.transition_ids[t_idx]
 
         for k in range(self.prediction_horizon):
             idx = (t_idx + k) % self.replay.capacity
+            # Absolute write generation check
+            if self.replay.transition_ids[idx] != start_tid + k:
+                return False
             # Episode continuity check
             if self.replay.episode_ids[idx] != ep_id:
                 return False

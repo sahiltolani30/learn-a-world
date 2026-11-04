@@ -1,0 +1,39 @@
+{
+  "test_suite": "AEON/jepa-crafter/tests/test_pipeline_pilot.py",
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "execution_duration_sec": 2.14,
+  "test_cases": [
+    {
+      "name": "test_ring_wraparound_generation",
+      "status": "PASSED",
+      "verifies": "Monotonic transition IDs prevent sampling across circular buffer wraparound generations"
+    },
+    {
+      "name": "test_10k_sample_stress_test",
+      "status": "PASSED",
+      "verifies": "10,000 sequence samples over multiple wraparounds with zero invalid boundaries and 100% valid masks"
+    },
+    {
+      "name": "test_replay_sample_provenance",
+      "status": "PASSED",
+      "verifies": "Sampled sequences retain explicit episode ID and timestep provenance"
+    },
+    {
+      "name": "test_corrupt_checkpoint_preserves_previous_latest",
+      "status": "PASSED",
+      "verifies": "Mid-save serialization crash preserves previous valid checkpoint_latest.pt"
+    },
+    {
+      "name": "test_uninterrupted_vs_resumed_equivalence",
+      "status": "PASSED",
+      "verifies": "Uninterrupted collection vs save/resume/continue collection produces identical buffer state"
+    },
+    {
+      "name": "test_pilot_500_steps_single_worker",
+      "status": "PASSED",
+      "verifies": "500-step smoke collection run with 1 worker, 100% decision-outcome linkage, and verified SHA-256"
+    }
+  ]
+}
