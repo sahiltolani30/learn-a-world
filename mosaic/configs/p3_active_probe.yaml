@@ -1,0 +1,18 @@
+# MOSAIC Phase P3 Active Probe & Uncertainty Calibration Configuration
+num_actions: 17
+latent_dim: 128
+action_dim: 64
+reward_dim: 16
+hidden_dim: 256
+stochastic_dim: 32
+num_ensemble_members: 3
+beta_epistemic: 1.0
+rho_risk: 5.0
+step_cost: 0.01
+eval_episodes_per_arm: 3
+max_episode_steps: 250
+seed: 12345
+eval_seed_start: 900000
+permutation_seed: 12345
+device: auto
+world_model_path: null

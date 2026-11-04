@@ -1,8 +1,8 @@
 # MOSAIC Implementation Status
 
-- **Current tranche:** P0/P1/P2 verified; P3 ready for implementation
+- **Current tranche:** P0/P1/P2 verified; P3 implemented & ready for Colab execution
 - **Last local verification:** 2026-11-04
-- **Training authority:** P0 passed; P1 profile verified in Colab; P2 world model passed all empirical gates in Colab; P3–P8 are locked
+- **Training authority:** P0 passed; P1 profile verified in Colab; P2 world model passed all empirical gates in Colab; P3 implemented & tested locally; P4–P8 are locked
 
 ## Passed locally
 
@@ -25,7 +25,12 @@
 - P2 Target encoder EMA updates
 - P2 Representation collapse diagnostic metrics (effective rank and variance check)
 - P2 Atomic world model checkpoint saving and loading
-- `PYTHONPATH=. .venv/bin/pytest mosaic/tests -v`: 16 passed
+- **P3 Uncertainty calibration curve binned quantile computation & Spearman rank correlation**
+- **P3 Dual value streams ($V_{\text{task}}$ and $V_{\text{info}}$) parameter isolation and gradient independence**
+- **P3 Active probe scorer survival risk penalty verification ($\rho \widehat{\text{Risk}}$)**
+- **P3 Active probe policy adherence to strict `act(obs, reward, step)` visual contract**
+- **P3 Atomic active probe runtime checkpoint saving and loading**
+- `PYTHONPATH=. .venv/bin/pytest mosaic/tests -v`: 21 passed
 
 ## Passed in Colab
 
@@ -37,9 +42,18 @@
   - **Beats persistence**: `model_error` ($0.000129$) is less than half of `persistence_error` ($0.000299$) with positive $\Delta = +0.000171$
   - **Collapse avoided**: `effective_rank = 5.001`, covariance off-diagonal energy = $1.75 \times 10^{-7}$, `is_collapsed = False`
 
-## Next Phase: P3
+## Ready to run in Colab
 
-- P3: Calibrated uncertainty and active probing ($J_{\text{probe}}$, epistemic disagreement calibration against held-out error, survival/risk penalty, and separate $V_{\text{task}}$ / $V_{\text{info}}$ heads).
+Run the notebook:
+
+```text
+mosaic/notebooks/MOSAIC_P0_P1_Colab.ipynb
+```
+
+Execute **Cell 14** (`p3_active_probe_001`) to run Phase P3:
+1. Loads the trained P2 world model checkpoint automatically from Drive.
+2. Evaluates the 3 exploration arms (`random`, `disagreement_only`, `active_probe`).
+3. Computes the calibration curve and rank correlation between predicted uncertainty and true transition error.
 
 ## Still locked
 

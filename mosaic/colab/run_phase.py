@@ -19,6 +19,7 @@ import yaml
 
 from mosaic.src.baseline import BaselineConfig, run_baseline
 from mosaic.src.world_model_runner import WorldModelConfig, run_world_model_training
+from mosaic.src.exploration import Phase3Config, run_phase_3
 
 
 def _run(command: Sequence[str]) -> None:
@@ -33,13 +34,14 @@ def _prepare_drive(root: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a MOSAIC phase")
-    parser.add_argument("--phase", choices=("p0_contract", "p1_baseline", "p2_world_model"), required=True)
+    parser.add_argument("--phase", choices=("p0_contract", "p1_baseline", "p2_world_model", "p3_active_probe"), required=True)
     parser.add_argument(
         "--drive-root",
         default="/content/drive/MyDrive/learn-a-world/mosaic",
     )
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--config", default=None)
+    parser.add_argument("--world-model-path", default=None)
     parser.add_argument("--algorithm", choices=("random", "ppo", "recurrent_ppo"), default=None)
     parser.add_argument("--train-steps", type=int, default=None)
     parser.add_argument("--eval-episodes", type=int, default=None)
@@ -123,6 +125,57 @@ def main() -> None:
         )
         result = run_world_model_training(wm_config)
         manifest["status"] = "PASS" if result["gates"]["action_conditioning_passed"] and result["gates"]["collapse_avoided"] else "FAIL"
+        manifest["result"] = result
+    elif args.phase == "p3_active_probe":
+        values = {
+            "num_actions": 17,
+            "latent_dim": 128,
+            "action_dim": 64,
+            "reward_dim": 16,
+            "hidden_dim": 256,
+            "stochastic_dim": 32,
+            "num_ensemble_members": 3,
+            "beta_epistemic": 1.0,
+            "rho_risk": 5.0,
+            "step_cost": 0.01,
+            "eval_episodes_per_arm": 3,
+            "max_episode_steps": 250,
+            "seed": 12345,
+            "eval_seed_start": 900_000,
+            "permutation_seed": 12345,
+            "device": "auto",
+            "world_model_path": None,
+        }
+        if args.config is not None:
+            config_path = Path(args.config)
+            loaded = yaml.safe_load(config_path.read_text()) or {}
+            if not isinstance(loaded, dict):
+                raise ValueError("phase config must contain a mapping")
+            values.update(loaded)
+        if args.train_seed is not None:
+            values["seed"] = args.train_seed
+        if args.eval_seed_start is not None:
+            values["eval_seed_start"] = args.eval_seed_start
+        if args.permutation_seed is not None:
+            values["permutation_seed"] = args.permutation_seed
+        if args.device is not None:
+            values["device"] = args.device
+        if args.world_model_path is not None:
+            values["world_model_path"] = args.world_model_path
+        elif values.get("world_model_path") is None:
+            # Auto-discover latest p2 world model checkpoint in drive_root
+            candidate_checkpoints = sorted((drive_root / "results").glob("*world_model*/world_model.pt"))
+            if candidate_checkpoints:
+                values["world_model_path"] = str(candidate_checkpoints[-1])
+                print(f"Auto-selected P2 checkpoint: {values['world_model_path']}")
+
+        values.pop("output_dir", None)
+        p3_config = Phase3Config(
+            **values,
+            output_dir=str(result_dir),
+        )
+        result = run_phase_3(p3_config)
+        manifest["status"] = "PASS" if result["gates"]["uncertainty_predicts_error"] and result["gates"]["risk_constraint_active"] else "FAIL"
         manifest["result"] = result
     else:
         values = {
