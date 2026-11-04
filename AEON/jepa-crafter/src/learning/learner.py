@@ -38,7 +38,11 @@ class JepaLearner:
         self.ema_momentum_ramp = ema_momentum_ramp
 
         self.use_amp = (precision == "fp16" and device.type == "cuda")
-        self.scaler = GradScaler(enabled=self.use_amp)
+        dev_str = "cuda" if device.type == "cuda" else "cpu"
+        if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+            self.scaler = torch.amp.GradScaler(dev_str, enabled=self.use_amp)
+        else:
+            self.scaler = GradScaler(enabled=self.use_amp)
         self.update_count = 0
 
     def get_current_ema_momentum(self) -> float:
@@ -63,8 +67,14 @@ class JepaLearner:
         done_first = batch["done_first"].to(self.device)           # [B, 1]
 
         B = obs_context.size(0)
+        dev_str = "cuda" if self.device.type == "cuda" else "cpu"
+        autocast_ctx = (
+            torch.amp.autocast(dev_str, enabled=self.use_amp)
+            if hasattr(torch, "amp") and hasattr(torch.amp, "autocast")
+            else autocast(enabled=self.use_amp)
+        )
 
-        with autocast(enabled=self.use_amp):
+        with autocast_ctx:
             # 1. Online context encoding
             z_t, h_t = self.model.encode_actual_history(obs_context, previous_actions, context_mask)
 

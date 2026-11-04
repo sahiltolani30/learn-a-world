@@ -113,7 +113,10 @@ class JepaLoss(nn.Module):
         if auxiliary_outputs is not None and rewards_first is not None and done_first is not None:
             for aux in auxiliary_outputs:
                 rew_loss = F.smooth_l1_loss(aux.reward, rewards_first)
-                term_loss = F.binary_cross_entropy(aux.done_probability.clamp(1e-6, 1.0 - 1e-6), done_first)
+                if hasattr(aux, "done_logits") and aux.done_logits is not None:
+                    term_loss = F.binary_cross_entropy_with_logits(aux.done_logits, done_first)
+                else:
+                    term_loss = F.binary_cross_entropy(aux.done_probability.clamp(1e-6, 1.0 - 1e-6), done_first)
                 total_rew_loss = total_rew_loss + rew_loss / len(auxiliary_outputs)
                 total_term_loss = total_term_loss + term_loss / len(auxiliary_outputs)
 
