@@ -1,0 +1,29 @@
+{
+  "analysis_name": "Action Conditioning & Forward Path Trace",
+  "num_actions_tested": 17,
+  "pairwise_comparisons_count": 136,
+  "pairwise_cosine_distance": {
+    "mean": 9.918715530896888e-06,
+    "std": 2.992574560111681e-06,
+    "min": 4.345551133155823e-06,
+    "max": 1.8868595361709595e-05
+  },
+  "pairwise_l2_distance": {
+    "mean": 0.3986404625808491,
+    "max": 0.5558748841285706
+  },
+  "pairwise_max_abs_diff": {
+    "mean": 0.020950802410130993,
+    "max": 0.030764997005462646
+  },
+  "distance_to_zero_action_embedding": {
+    "mean": 4.97019466231851e-06,
+    "max": 9.251758456230164e-06
+  },
+  "gradient_sensitivity": {
+    "action_embedding_table_grad_norm": 0.0016679479740560055,
+    "cond_mlp_grad_norm": 0.0670093703083694,
+    "gradient_flowing_to_action": true
+  },
+  "architectural_finding": "Gradients do physically flow through cond_mlp to action embeddings. However, because cond_mlp produces a single global FiLM scale (gamma) and shift (beta) broadcast identically across all 64 spatial tokens, and the 64 tokens are processed by self-attention without any dedicated action token in the sequence, the transformer self-attention is free to attend purely to the spatial tokens, causing action divergence to remain vanishingly small (10^-5 to 10^-6)."
+}

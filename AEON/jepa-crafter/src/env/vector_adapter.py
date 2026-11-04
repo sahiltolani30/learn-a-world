@@ -43,7 +43,7 @@ class VectorCrafterAdapter:
 
         # Create N individual adapters
         self.adapters: List[CrafterAdapter] = []
-        for _ in range(self.num_envs):
+        for i in range(self.num_envs):
             ad = CrafterAdapter(
                 env_id=self.env_id,
                 reward_mode=self.reward_mode,
@@ -51,6 +51,7 @@ class VectorCrafterAdapter:
                 opaque_mapping=self.action_mapping,
                 evaluator_tap=self.evaluator_tap,
                 max_episode_steps=self.max_episode_steps,
+                worker_id=i,
             )
             self.adapters.append(ad)
             self.seed_counter += 1

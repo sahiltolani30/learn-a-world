@@ -1,0 +1,29 @@
+{
+  "analysis_name": "Executive Summary vs Benchmark Table Reconciliation",
+  "root_cause_identified": true,
+  "mechanism": "AchievementRecorder is an in-memory accumulator initialized in train_agent.py. When a run is resumed from a checkpoint where env_step >= target_env_steps (or at the boundary), the collection while-loop does not execute any steps. The freshly instantiated AchievementRecorder has 0 recorded episodes. Consequently, achievement_recorder.get_summary() reports 0 episodes, which report_gen writes into final_report.md Section 1. Meanwhile, achievement_rates.csv retains prior rows from the initial run before disconnect (e.g., 296 and 280 episodes at ~2.1-2.2% Crafter score).",
+  "pre_disconnect_runs": [
+    {
+      "run_name": "jepa_crafter",
+      "seed": 12345,
+      "episodes": 296,
+      "crafter_score_pct": 2.0867,
+      "place_table_pct": 14.53
+    },
+    {
+      "run_name": "jepa_crafter",
+      "seed": 12345,
+      "episodes": 280,
+      "crafter_score_pct": 2.2007,
+      "place_table_pct": 14.29
+    }
+  ],
+  "post_resume_run": {
+    "run_name": "jepa_crafter",
+    "seed": 12345,
+    "episodes": 0,
+    "crafter_score_pct": 0.0,
+    "reason": "Resumed directly at step 50,000 / 50,000 without restoring prior AchievementRecorder episode buffer."
+  },
+  "recommendation": "Persist AchievementRecorder episode history and running totals in CheckpointStore dictionary."
+}

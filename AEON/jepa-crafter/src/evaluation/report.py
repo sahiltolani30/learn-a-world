@@ -54,14 +54,29 @@ class ReportGenerator:
         """Generate markdown final report adhering to Section 18 specifications."""
         filepath = os.path.join(self.run_dir, output_filename)
 
+        num_episodes = achievement_summary.get("num_episodes", 0)
+        is_valid = achievement_summary.get("is_valid", num_episodes > 0)
+        crafter_score = achievement_summary.get("crafter_score")
+        mean_rew = achievement_summary.get("mean_reward")
+        mean_len = achievement_summary.get("mean_length")
+
+        if not is_valid or num_episodes == 0 or crafter_score is None:
+            bench_line = "- **Official Crafter Benchmark Score:** **NOT_RUN / INVALID** (0 evaluated episodes)"
+            rew_line = "- **Mean Reward:** N/A"
+            len_line = "- **Mean Episode Length:** N/A"
+        else:
+            bench_line = f"- **Official Crafter Benchmark Score:** **{crafter_score:.2f}%** across {num_episodes} evaluated episodes."
+            rew_line = f"- **Mean Reward:** {mean_rew:.3f}"
+            len_line = f"- **Mean Episode Length:** {mean_len:.1f} steps"
+
         report = f"""# JEPA-Crafter World Model & Agent — Final Research Report
 
 ## 1. Executive Summary
 - **Primary Objective:** Build a from-scratch, action-conditioned JEPA world model that learns from raw visual interaction (64×64 RGB), retains experience across episodes, and utilizes its learned model for latent planning.
 - **Architectural Grounding:** 100% learned parameters initialized randomly, anonymous opaque action tokens (0..16), stop-gradient EMA target visual encoder, multi-horizon cosine prediction loss, and Cross-Entropy Method (CEM) latent planning.
-- **Official Crafter Benchmark Score:** **{achievement_summary.get('crafter_score', 0.0):.2f}%** across {achievement_summary.get('num_episodes', 0)} evaluated episodes.
-- **Mean Reward:** {achievement_summary.get('mean_reward', 0.0):.3f}
-- **Mean Episode Length:** {achievement_summary.get('mean_length', 0.0):.1f} steps
+{bench_line}
+{rew_line}
+{len_line}
 
 ---
 

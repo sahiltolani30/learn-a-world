@@ -57,7 +57,9 @@ class MetricLogger:
 
 def save_json(data: Any, path: str) -> None:
     """Save an object to JSON with indentation."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 

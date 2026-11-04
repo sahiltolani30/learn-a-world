@@ -233,6 +233,9 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
             update_scheduler=update_scheduler,
         )
         env_step = ckpt.get("step", 0)
+        if "achievement_recorder_state" in ckpt:
+            achievement_recorder.load_state(ckpt["achievement_recorder_state"])
+            print(f"[Auto-Resume] Restored achievement recorder history: {achievement_recorder.num_episodes} episodes.")
         print(f"[Auto-Resume] Successfully restored run to step {env_step:,} / {target_env_steps:,} (learner updates: {learner.update_count})!")
     else:
         print(f"[Auto-Resume] No previous checkpoint found in candidate directories: {candidate_ckpt_dirs}. Starting fresh run from step 0.")
@@ -255,8 +258,11 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
             if batch_info["dones"] > 0:
                 current_role_idx += batch_info["dones"]
                 summary = evaluator_tap.get_summary()
-                for ach in summary["achievement_histories"][-batch_info["dones"]:]:
-                    achievement_recorder.record_episode(ach)
+                recent_achs = summary["achievement_histories"][-batch_info["dones"]:]
+                recent_rews = summary.get("episode_rewards", [0.0] * len(recent_achs))[-batch_info["dones"]:]
+                recent_lens = summary.get("episode_lengths", [0] * len(recent_achs))[-batch_info["dones"]:]
+                for ach, r, l in zip(recent_achs, recent_rews, recent_lens):
+                    achievement_recorder.record_episode(ach, total_reward=r, length=l)
 
             num_updates = update_scheduler.step(step_inc)
         else:
@@ -430,6 +436,7 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
                 "scheduler_state": update_scheduler.get_state(),
                 "rng_states": get_rng_states(),
                 "validation_status": validation_status,
+                "achievement_recorder_state": achievement_recorder.get_state(),
             }
             checkpoint_path = checkpoint_store.save(step=env_step, checkpoint_data=checkpoint_data)
             tracer.log_checkpoint_saved(checkpoint_path, step=env_step)
@@ -450,6 +457,7 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
         os.path.join(run_dir, "achievement_rates.csv"),
         seed=config.project.seed,
         run_name=config.project.name,
+        checkpoint_id=f"step_{env_step}",
     )
     save_json(latest_heldout_metrics, os.path.join(run_dir, "heldout_prediction.json"))
     save_json(latest_action_metrics, os.path.join(run_dir, "action_conditioning.json"))

@@ -1,0 +1,46 @@
+{
+  "investigation_title": "AEON Phase 4 Diagnostic & Root Cause Audit",
+  "date": "2026-11-04",
+  "codebase_revision": "3463009229cbaadb559cdf550d6203df211567c3",
+  "evaluated_checkpoint": {
+    "checkpoint_id": "checkpoint_step_50000",
+    "path": "/content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_latest.pt",
+    "step": 50000,
+    "learner_updates": 11770,
+    "parameter_count": 3327874
+  },
+  "experiments": [
+    {
+      "experiment_id": "EXP-01-EVAL-RECONCILIATION",
+      "purpose": "Reconcile discrepancy between 0 evaluated episodes in summary and 296/280 in CSV",
+      "status": "COMPLETED",
+      "outcome": "ROOT_CAUSE_CONFIRMED_AND_FIXED",
+      "artifact": "evaluation_consistency.json",
+      "regression_test": "tests/test_investigation_a_evaluation_integrity.py"
+    },
+    {
+      "experiment_id": "EXP-02-ACTION-TRACE",
+      "purpose": "Trace forward path and gradient flow across all 17 discrete action tokens",
+      "status": "COMPLETED",
+      "outcome": "DIVERGENCE_MEASURED_AT_9.92E-6_FILM_BOTTLENECK_IDENTIFIED",
+      "artifact": "action_conditioning_diagnostics.json",
+      "regression_test": "tests/test_investigation_b_action_conditioning.py"
+    },
+    {
+      "experiment_id": "EXP-03-HELDOUT-ALIGNMENT",
+      "purpose": "Verify timestep indexing and evaluate multi-horizon error against baselines",
+      "status": "COMPLETED",
+      "outcome": "TIMESTEPS_EXACT_PERSISTENCE_LEADS_DUE_TO_TERRAIN_INVARIANCE",
+      "artifact": "heldout_baseline_comparison.json",
+      "regression_test": "tests/test_phase4_jepa_contract.py"
+    },
+    {
+      "experiment_id": "EXP-04-MANIFOLD-GEOMETRY",
+      "purpose": "Spectral eigenvalue analysis and pairwise cosine distribution across 1024 tokens",
+      "status": "COMPLETED",
+      "outcome": "DIRECTIONAL_CONE_SATURATION_CONFIRMED_PAIRWISE_COSINE_0.9923",
+      "artifact": "representation_health.json",
+      "regression_test": "tests/test_phase4_failure_diagnostics.py"
+    }
+  ]
+}

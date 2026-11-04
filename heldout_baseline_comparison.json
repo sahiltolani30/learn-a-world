@@ -1,0 +1,32 @@
+{
+  "analysis_name": "Held-Out Baseline Comparison and Alignment",
+  "timestep_alignment_verified": true,
+  "seed_independence": {
+    "training_seeds_range": "1000 - 1008",
+    "heldout_seeds_range": "900000 - 900005",
+    "disjoint": true
+  },
+  "multi_horizon_errors": {
+    "h1": {
+      "model_cosine_distance": 0.40183499455451965,
+      "persistence_baseline": 0.026405220851302147,
+      "no_action_control": 0.40173521637916565,
+      "shuffled_action_control": 0.40183499455451965,
+      "pct_improvement_over_persistence": -1421.8013014070418,
+      "beats_persistence": false
+    },
+    "h2": {
+      "model_cosine_distance": 0.6221116185188293,
+      "persistence_baseline": 0.05576743558049202
+    },
+    "h4": {
+      "model_cosine_distance": 0.9050750136375427,
+      "persistence_baseline": 0.09049718081951141
+    },
+    "h8": {
+      "model_cosine_distance": 1.0214868783950806,
+      "persistence_baseline": 0.11254177242517471
+    }
+  },
+  "conclusion": "Timestep alignment is verified mathematically: targets at offsets 1, 2, 4, 8 correctly point to O_{t+1}, O_{t+2}, O_{t+4}, O_{t+8}. The failure of Test B is not an off-by-one bug; it is caused by the model predicting representations that do not outperform the static persistence baseline."
+}

@@ -120,15 +120,17 @@ class JepaWorldModel(nn.Module):
         self,
         initial_tokens: torch.Tensor,
         initial_context: torch.Tensor,
-        future_action_tokens: torch.Tensor,
+        future_action_tokens: Optional[torch.Tensor] = None,
+        future_action_embeddings: Optional[torch.Tensor] = None,
         member_idx: int = 0,
     ) -> Dict[str, Any]:
-        """Autoregressively roll out predictions over future action tokens for a single member.
+        """Autoregressively roll out predictions over future action tokens or embeddings for a single member.
         
         Args:
             initial_tokens: [B, 64, 128]
             initial_context: [B, 256]
-            future_action_tokens: [B, H]
+            future_action_tokens: [B, H] int tokens
+            future_action_embeddings: [B, H, 64] float embeddings (for true zero/ablation controls)
             member_idx: which ensemble member to use
         Returns:
             dict with:
@@ -136,7 +138,13 @@ class JepaWorldModel(nn.Module):
                 'pooled_by_horizon': dict mapping horizon k -> u_hat [B, 128]
                 'auxiliary_first': AuxiliaryOutputs for step 1
         """
-        B, H = future_action_tokens.shape
+        if future_action_embeddings is not None:
+            B, H, _ = future_action_embeddings.shape
+        elif future_action_tokens is not None:
+            B, H = future_action_tokens.shape
+        else:
+            raise ValueError("Must provide either future_action_tokens or future_action_embeddings")
+
         z_hat = initial_tokens
         h = initial_context
         
@@ -145,8 +153,12 @@ class JepaWorldModel(nn.Module):
         aux_first = None
 
         for k in range(1, H + 1):
-            a_idx = future_action_tokens[:, k - 1]
-            a_emb = self.action_embedding(a_idx)
+            if future_action_embeddings is not None:
+                a_emb = future_action_embeddings[:, k - 1]
+            else:
+                a_idx = future_action_tokens[:, k - 1]
+                a_emb = self.action_embedding(a_idx)
+
             z_hat = self.predictor_ensemble.forward_member(member_idx, z_hat, h, a_emb)
             u_hat = self.online_encoder.pool(z_hat)
             h = self.temporal_context.step(u_hat, a_emb, h)

@@ -26,6 +26,7 @@ class CrafterAdapter:
         opaque_mapping: Optional[OpaqueActionMapping] = None,
         evaluator_tap: Optional[EvaluatorTap] = None,
         max_episode_steps: int = 10000,
+        worker_id: int = 0,
     ):
         self.env_id = env_id
         self.reward_mode = reward_mode
@@ -46,6 +47,7 @@ class CrafterAdapter:
             self.action_mapping = opaque_mapping
 
         self.evaluator_tap = evaluator_tap
+        self.worker_id = worker_id
         self._step_count = 0
         self._current_obs: Optional[np.ndarray] = None
 
@@ -72,7 +74,7 @@ class CrafterAdapter:
         self._current_obs = obs
         
         if self.evaluator_tap is not None:
-            self.evaluator_tap.reset_episode()
+            self.evaluator_tap.reset_episode(env_id=self.worker_id)
             
         return obs
 
@@ -113,7 +115,7 @@ class CrafterAdapter:
 
         # Send info to evaluator tap ONLY
         if self.evaluator_tap is not None:
-            self.evaluator_tap.record_step(info, reward=float(reward_raw), done=(terminated or truncated))
+            self.evaluator_tap.record_step(info, reward=float(reward_raw), done=(terminated or truncated), env_id=self.worker_id)
 
         # Sanitize and strip all info before returning to learner
         next_obs, reward, terminated, truncated = LearnerObservationFilter.sanitize_step(

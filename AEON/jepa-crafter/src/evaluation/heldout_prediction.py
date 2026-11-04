@@ -58,9 +58,9 @@ class HeldoutPredictorEvaluator:
             model_cos_sims[h] = float(cos_sim.mean().item())
             model_mses[h] = float(mse.item())
 
-        # Baseline 3: No-action baseline (actions replaced with 0 / zero embeddings)
-        no_action_tokens = torch.zeros_like(actions_future)
-        no_act_rollout = self.model.autoregressive_rollout(z_t, h_t, no_action_tokens, member_idx=0)
+        # Baseline 3: No-action baseline (true zero embeddings ablation)
+        zero_action_embs = torch.zeros(B, actions_future.size(1), self.model.action_dim, device=device)
+        no_act_rollout = self.model.autoregressive_rollout(z_t, h_t, future_action_embeddings=zero_action_embs, member_idx=0)
         no_action_errors = {}
         for h in self.horizons:
             z_hat_na = no_act_rollout["predictions_by_horizon"][h]

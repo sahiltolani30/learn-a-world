@@ -1,0 +1,34 @@
+{
+  "analysis_name": "Representation Health and Manifold Geometry",
+  "sample_size": {
+    "frames": 16,
+    "tokens": 1024,
+    "feature_dim": 128
+  },
+  "effective_rank": 13.537725448608398,
+  "spectral_variance_explained": {
+    "top_1_component_pct": 20.441825687885284,
+    "top_5_components_pct": 49.72400367259979,
+    "top_10_components_pct": 64.35792446136475,
+    "total_variance": 101.56993103027344
+  },
+  "feature_statistics": {
+    "feature_mean": 0.6540790796279907,
+    "feature_std": 1.045898675918579,
+    "mean_channel_std": 0.8023181557655334,
+    "min_channel_std": 0.11980132013559341,
+    "collapsed_channel_fraction": 0.0
+  },
+  "pairwise_cosine_similarity": {
+    "mean": 0.9922908544540405,
+    "std": 0.00837862677872181,
+    "min": 0.9728224873542786,
+    "median": 0.99360591173172,
+    "max": 0.9999995231628418,
+    "saturates_near_1": true
+  },
+  "collapse_status": {
+    "collapse_warning": true,
+    "reasons": "Pairwise cosine sim > 0.98"
+  }
+}
