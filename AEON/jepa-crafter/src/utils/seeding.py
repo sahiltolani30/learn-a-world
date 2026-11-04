@@ -44,6 +44,15 @@ def set_rng_states(states: Dict[str, Any]) -> None:
     if "numpy_rng_state" in states:
         np.random.set_state(states["numpy_rng_state"])
     if "torch_rng_state" in states:
-        torch.set_rng_state(states["torch_rng_state"])
+        try:
+            t_rng = states["torch_rng_state"]
+            if torch.is_tensor(t_rng):
+                t_rng = t_rng.cpu().byte()
+            torch.set_rng_state(t_rng)
+        except Exception:
+            pass
     if torch.cuda.is_available() and "torch_cuda_rng_state" in states:
-        torch.cuda.set_rng_state_all(states["torch_cuda_rng_state"])
+        try:
+            torch.cuda.set_rng_state_all(states["torch_cuda_rng_state"])
+        except Exception:
+            pass

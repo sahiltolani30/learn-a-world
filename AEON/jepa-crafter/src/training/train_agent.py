@@ -31,6 +31,7 @@ from src.planning.candidate_scorer import CandidateScorer
 from src.planning.cem_planner import CemPlanner
 from src.planning.planner_diagnostics import PlannerDiagnostics
 from src.training.collect import BatchedExperienceCollector
+from src.training.resume import restore_checkpoint
 from src.evaluation.achievement_recorder import AchievementRecorder
 from src.evaluation.heldout_prediction import HeldoutPredictorEvaluator
 from src.evaluation.action_conditioning_tests import ActionConditioningTester
@@ -210,6 +211,22 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
     print(f"Target steps: {target_env_steps}, Parallel Games: {num_envs}, Device: {device.type}, Parameters: {model.count_parameters()['total_trainable']:,}")
 
     env_step = 0
+    if checkpoint_store.has_checkpoint():
+        latest_path = os.path.join(checkpoint_store.checkpoint_dir, "checkpoint_latest.pt")
+        print(f"[Auto-Resume] Found existing checkpoint at {latest_path}. Restoring training state...")
+        ckpt = restore_checkpoint(
+            checkpoint_path=latest_path,
+            model=model,
+            learner=learner,
+            replay_buffer=replay_buffer,
+            expected_mapping=action_mapping,
+            novelty_estimator=novelty_est,
+            disagreement_estimator=disagreement_est,
+            progress_estimator=progress_est,
+            update_scheduler=update_scheduler,
+        )
+        env_step = ckpt.get("step", 0)
+        print(f"[Auto-Resume] Successfully restored run to step {env_step:,} / {target_env_steps:,} (learner updates: {learner.update_count})!")
     while env_step < target_env_steps:
         # Determine mode: warmup vs explore vs mpc
         if replay_buffer.size < config.replay.min_sequences_before_training:
