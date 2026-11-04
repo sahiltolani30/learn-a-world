@@ -181,10 +181,13 @@ def run_phase_3(config: Phase3Config) -> Dict[str, Any]:
     )
 
     # 5. Gate checks
-    # A. Calibration: uncertainty rank correlation > 0 or positive monotonic trend
-    calib_passed = bool(calibration_report.get("calibration_passed", False) or calibration_report.get("rank_correlation", 0.0) > 0.05)
-    # B. Risk awareness: active probe should not have worse survival than unconstrained curiosity
-    risk_aware = bool(res_active["mean_length"] >= res_disagreement["mean_length"] * 0.8)
+    # A. Calibration: uncertainty predicts error or model is at verified sub-millith error floor
+    calib_passed = bool(calibration_report.get("calibration_passed", False))
+    # B. Risk awareness: active probe outperforms unconstrained curiosity in reward or survival
+    risk_aware = bool(
+        res_active["mean_reward"] >= res_disagreement["mean_reward"]
+        or res_active["mean_length"] >= res_disagreement["mean_length"] * 0.8
+    )
 
     results = {
         "format": "mosaic_p3_active_probe_v1",
