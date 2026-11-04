@@ -3,7 +3,7 @@
 **Plan Version:** 2.0  
 **Current Phase:** Phase 4 (GPU Training Pilot) $\to$ Phase 5 (JEPA Learning & Action-Conditioning Benchmark)  
 **Active Gate:** `P4_JEPA_IMPLEMENTATION_PASS` (Achieved) $\to$ `P5_JEPA_LEARNING_PASS` (Unlocked)  
-**Last Verified Commit:** `pending`  
+**Last Verified Commit:** `e8c999d07c0827ad40cb25fba040db381a179374`  
 
 ---
 
