@@ -1,9 +1,9 @@
 # Project AEON: Master Status Dashboard
 
 **Plan Version:** 2.0  
-**Current Phase:** Phase 4 — Verify/build the JEPA baseline (no relation system yet)  
-**Active Gate:** `P3_PIPELINE_PILOT_PASS` (Achieved) $\to$ `P4_JEPA_IMPLEMENTATION_PASS` (Unlocked)  
-**Last Verified Commit:** `40313fd9c922572b834927b8782a0b1cebe6b3e8`  
+**Current Phase:** Phase 4 (GPU Training Pilot) $\to$ Phase 5 (JEPA Learning & Action-Conditioning Benchmark)  
+**Active Gate:** `P4_JEPA_IMPLEMENTATION_PASS` (Achieved) $\to$ `P5_JEPA_LEARNING_PASS` (Unlocked)  
+**Last Verified Commit:** `pending`  
 
 ---
 
@@ -15,8 +15,8 @@
 | **1** | Observability foundation | Structured event tracer, checksum roundtrips, failure log | `P1_TRACE_PASS` | **PASSED** |
 | **2** | Repair baseline integration | Independent held-out store, order invariance | `P2_BASELINE_INTEGRITY_PASS` | **PASSED** |
 | **3** | Environment & replay smoke/pilot | 500-step & 10k pilot data validation, generation tracking | `P3_PIPELINE_PILOT_PASS` | **PASSED** |
-| **4** | JEPA baseline implementation | Verified from-scratch JEPA training loop | `P4_JEPA_IMPLEMENTATION_PASS` | **UNLOCKED** |
-| **5** | JEPA learning & action-conditioning | Multi-seed held-out cosine and action-use proofs | `P5_JEPA_LEARNING_PASS` | BLOCKED |
+| **4** | JEPA baseline implementation | 10 verified contract tests, 50k pilot harness | `P4_JEPA_IMPLEMENTATION_PASS` | **PASSED** |
+| **5** | JEPA learning & action-conditioning | Multi-seed held-out cosine and action-use proofs | `P5_JEPA_LEARNING_PASS` | **UNLOCKED** |
 | **6** | Single-role exploration | Latent coverage gain without multi-agent complexity | `P6_EXPLORATION_PASS` | BLOCKED |
 | **7** | Optional latent MPC (CEM) | Empirically verified rollout utility in real env | `P7_MPC_UTILITY_PASS` | BLOCKED |
 | **8** | Anonymous visual state tracking | Stable before/after slot association on RGB | `P8_VISUAL_TRACKING_PASS` | BLOCKED |

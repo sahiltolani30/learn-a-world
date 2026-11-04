@@ -15,6 +15,7 @@ class EmaTargetEncoder(nn.Module):
         for param in self.encoder.parameters():
             param.requires_grad = False
         self.encoder.eval()
+        self.register_buffer("update_count", torch.tensor(0, dtype=torch.int64))
 
     @torch.no_grad()
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -28,3 +29,4 @@ class EmaTargetEncoder(nn.Module):
         """Update target weights: theta_target = momentum * theta_target + (1 - momentum) * theta_online."""
         for target_p, online_p in zip(self.encoder.parameters(), online_encoder.parameters()):
             target_p.data.mul_(momentum).add_(online_p.data, alpha=(1.0 - momentum))
+        self.update_count += 1
