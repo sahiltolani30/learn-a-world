@@ -155,7 +155,11 @@ def run_phase_j_finetune(
     print("=" * 80)
 
     if device_name:
-        device = torch.device(device_name)
+        if device_name.startswith("cuda") and not torch.cuda.is_available():
+            print("! NOTE: CUDA was requested but torch.cuda.is_available() is False. Falling back to CPU.")
+            device = torch.device("cpu")
+        else:
+            device = torch.device(device_name)
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"• Execution Device: {device.type.upper()}")
@@ -194,7 +198,7 @@ def run_phase_j_finetune(
         return stopped_payload
 
     print(f"• Verified 50k Checkpoint: {ckpt_path} ({os.path.getsize(ckpt_path)/1e6:.1f} MB)")
-    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
     # 2. Model Initialization and Strict Checkpoint Loading
     model = JepaWorldModel().to(device)
@@ -306,7 +310,7 @@ def run_phase_j_finetune(
             "step": ckpt.get("step", 50000) + max_updates,
             "finetune_updates": max_updates,
             "base_checkpoint": ckpt_path,
-            "model_state_dict": model.state_dict(),
+            "model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()},
             "optimizer_state_dict": optimizer.state_dict(),
             "final_heldout_metrics": checkpoint_metrics[str(max_updates)],
         },
