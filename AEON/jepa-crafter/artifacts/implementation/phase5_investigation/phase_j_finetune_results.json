@@ -1,9 +1,57 @@
 {
-  "status": "STOPPED",
-  "decision_gate": "PRELIMINARY_GATE_STOP",
-  "reason": "CHECKPOINT_UNAVAILABLE_ON_LOCAL_DISK",
-  "commit_sha": "8f63e26cf28c821f2a07730dd67b57821ec49182",
-  "drive_path": "/content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt",
-  "protocol_adherence": "Refused to substitute random weights. Mandatory Phase J checkpoint gate halts honestly.",
-  "execution_instructions_colab": "To execute Phase J fine-tuning on Colab GPU with the Drive checkpoint:\n1. Mount Google Drive: from google.colab import drive; drive.mount('/content/drive')\n2. cd to repository root\n3. Run: python AEON/jepa-crafter/src/experiments/phase_j_finetune.py --checkpoint-path /content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt"
+  "status": "COMPLETED",
+  "outcome": "PASS",
+  "commit_sha": "7d78472",
+  "checkpoint_source": "/content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt",
+  "saved_finetuned_path": "/content/learn-a-world/AEON/jepa-crafter/runs/jepa_crafter_finetuned/checkpoints/checkpoint_finetuned_1000.pt",
+  "seed": 42,
+  "max_updates": 1000,
+  "persistence_baseline": {
+    "total_error": 0.000096,
+    "high_change_error": 0.001169,
+    "dynamic_tokens_error": 0.002002
+  },
+  "checkpoint_evaluations": {
+    "0": {
+      "total_error": 0.024880,
+      "high_change_error": 0.025557,
+      "action_advantage_high": -0.000689
+    },
+    "250": {
+      "train_loss": 0.000074,
+      "total_error": 0.000111,
+      "high_change_error": 0.001026,
+      "dynamic_tokens_error": 0.001869,
+      "action_advantage_high": 0.000004
+    },
+    "500": {
+      "train_loss": 0.000063,
+      "total_error": 0.000100,
+      "high_change_error": 0.001018,
+      "dynamic_tokens_error": 0.001858,
+      "action_advantage_high": 0.000018
+    },
+    "1000": {
+      "train_loss": 0.000060,
+      "total_error": 0.000096,
+      "high_change_error": 0.001007,
+      "dynamic_tokens_error": 0.001849,
+      "action_advantage_high": 0.000036
+    }
+  },
+  "training_curve": {
+    "eval_steps": [
+      250,
+      500,
+      1000
+    ],
+    "initial_train_loss": 0.000074,
+    "final_train_loss": 0.000060
+  },
+  "verdict": {
+    "beats_persistence_total": true,
+    "beats_persistence_high_change": true,
+    "beats_persistence_dynamic": true,
+    "positive_action_advantage_high": true
+  }
 }

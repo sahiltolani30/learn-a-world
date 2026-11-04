@@ -1,0 +1,9 @@
+{
+  "status": "STOPPED",
+  "decision_gate": "PRELIMINARY_GATE_STOP",
+  "reason": "CANDIDATE_CHECKPOINT_UNAVAILABLE_ON_LOCAL_DISK",
+  "commit_sha": "7d78472dc651e02a0bc1ce4fb734f9c51deca25c",
+  "colab_path": "/content/learn-a-world/AEON/jepa-crafter/runs/jepa_crafter_finetuned/checkpoints/checkpoint_finetuned_1000.pt",
+  "protocol_adherence": "Refused to substitute random weights. Mandatory Phase K artifact gate halts honestly.",
+  "execution_instructions_colab": "To execute Phase K multi-step validation on Google Colab:\n1. %cd /content/learn-a-world\n2. !git pull origin main\n3. !python AEON/jepa-crafter/src/experiments/phase_k_multistep_validation.py \\\n     --checkpoint-path /content/learn-a-world/AEON/jepa-crafter/runs/jepa_crafter_finetuned/checkpoints/checkpoint_finetuned_1000.pt \\\n     --device cuda"
+}

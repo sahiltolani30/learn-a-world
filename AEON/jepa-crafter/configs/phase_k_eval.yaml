@@ -1,0 +1,28 @@
+# Phase K: Multi-Step World-Dynamics Validation Configuration
+project:
+  name: jepa_crafter_phase_k
+  evaluation_name: multi_step_closed_loop_validation
+
+horizons: [1, 2, 4, 8]
+
+data:
+  eval_seeds: [201, 202, 203, 204]
+  steps_per_seed: 64
+  context_length: 4
+  num_actions: 17
+  high_change_threshold: 0.001
+
+evaluation:
+  ensemble_member: 0
+  compute_spatial_maps: true
+  action_shuffle_method: derangement_roll
+
+checkpoints:
+  candidate_checkpoint: runs/jepa_crafter_finetuned/checkpoints/checkpoint_finetuned_1000.pt
+  base_checkpoint: runs/jepa_crafter/checkpoints/checkpoint_00050000.pt
+  drive_candidate_checkpoint: /content/drive/MyDrive/learn-a-world/aeon/checkpoints/checkpoint_finetuned_1000.pt
+  drive_base_checkpoint: /content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt
+
+output:
+  results_json: artifacts/implementation/phase5_investigation/phase_k_multistep_results.json
+  artifacts_dir: artifacts/implementation/phase5_investigation/phase_k
