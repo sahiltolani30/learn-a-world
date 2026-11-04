@@ -36,4 +36,4 @@ python -m mosaic.colab.run_phase \
   --run-id p1_profile_001
 ```
 
-The runner is a planned P1 deliverable; do not execute this command until it exists and the P0 gate is recorded as passing.
+The runner is implemented in `mosaic/colab/run_phase.py`; execute this command only after the P0 gate is recorded as passing.

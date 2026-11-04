@@ -3,7 +3,9 @@
 - **Model:** MOSAIC — Persistent Visual Skill Atlas
 - **Repository package:** `mosaic/`
 - **Drive package:** `learn-a-world/mosaic/`
-- **Status:** final staged implementation plan; no full model scaffold in this commit
+- **Status:** P0/P1 executable tranche implemented; P2–P8 remain empirically gated
+
+The current implementation status and exact Colab handoff are recorded in [`STATUS.md`](STATUS.md).
 
 ## 1. Why this project structure
 
@@ -40,6 +42,8 @@ mosaic/
 │   ├── README.md
 │   ├── setup_colab.sh       # Phase P0/P1 deliverable
 │   └── run_phase.py         # Phase P1 deliverable
+├── notebooks/
+│   └── MOSAIC_P0_P1_Colab.ipynb
 ├── configs/
 │   ├── p0_contract.yaml     # Phase P0 deliverable
 │   ├── p1_baseline.yaml     # Phase P1 deliverable

@@ -1,0 +1,4 @@
+# Root requirements provide torch, Gymnasium, Crafter, NumPy, SB3, and pytest.
+# This optional dependency enables the recurrent PPO P1 arm.
+sb3-contrib>=2.2.0
+pyyaml>=6.0

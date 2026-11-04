@@ -1,0 +1,4 @@
+phase: p0_contract
+test_path: mosaic/tests
+expected_policy_signature: act(obs_uint8, reward_prev, step)
+max_episode_steps: 2

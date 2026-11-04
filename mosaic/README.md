@@ -4,15 +4,17 @@
 
 ## Status
 
-This directory is the **project bootstrap and implementation plan**. It intentionally contains no full model implementation yet. The research specification is complete; implementation starts with the clean-room interface and baseline phases below.
+This directory contains the **P0/P1 executable boundary and implementation plan**. The research specification is complete; later world-model, memory, skill, and planner phases remain locked behind empirical gates.
 
 Start here:
 
 1. [`PLAN.md`](PLAN.md) — phase-by-phase implementation plan and promotion gates.
-2. [`colab/README.md`](colab/README.md) — when and how to run the first Colab job.
-3. [`../research/MOSAIC_Architecture_Specification.md`](../research/MOSAIC_Architecture_Specification.md) — architecture, equations, evidence, and red-team decisions.
-4. [`../research/MOSAIC_Evidence_Ledger.md`](../research/MOSAIC_Evidence_Ledger.md) — source evidence and repository audit.
-5. [`../research/MOSAIC_Decision_Ledger.md`](../research/MOSAIC_Decision_Ledger.md) — debated alternatives and falsification gates.
+2. [`STATUS.md`](STATUS.md) — current implementation status and exact next run.
+3. [`colab/README.md`](colab/README.md) — when and how to run the first Colab job.
+4. [`notebooks/MOSAIC_P0_P1_Colab.ipynb`](notebooks/MOSAIC_P0_P1_Colab.ipynb) — the project Colab notebook.
+5. [`../research/MOSAIC_Architecture_Specification.md`](../research/MOSAIC_Architecture_Specification.md) — architecture, equations, evidence, and red-team decisions.
+6. [`../research/MOSAIC_Evidence_Ledger.md`](../research/MOSAIC_Evidence_Ledger.md) — source evidence and repository audit.
+7. [`../research/MOSAIC_Decision_Ledger.md`](../research/MOSAIC_Decision_Ledger.md) — debated alternatives and falsification gates.
 
 ## Non-negotiable control boundary
 
@@ -32,6 +34,8 @@ mosaic/
 ├── PLAN.md
 ├── colab/
 │   └── README.md
+├── notebooks/
+│   └── MOSAIC_P0_P1_Colab.ipynb
 ├── configs/             # added with the first executable phase
 ├── src/                 # implementation added phase by phase
 ├── tests/               # contract and phase gates added before code authority
