@@ -3,7 +3,7 @@
 **Plan Version:** 2.0  
 **Current Phase:** Phase 4 — Verify/build the JEPA baseline (no relation system yet)  
 **Active Gate:** `P3_PIPELINE_PILOT_PASS` (Achieved) $\to$ `P4_JEPA_IMPLEMENTATION_PASS` (Unlocked)  
-**Last Verified Commit:** `111efe7b2f6ef512ec780a520bfd497c271eaeb5`  
+**Last Verified Commit:** `40313fd9c922572b834927b8782a0b1cebe6b3e8`  
 
 ---
 
