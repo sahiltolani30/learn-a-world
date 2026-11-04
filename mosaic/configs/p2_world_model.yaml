@@ -1,0 +1,21 @@
+# MOSAIC Phase P2 World Model Configuration
+num_actions: 17
+latent_dim: 128
+action_dim: 64
+reward_dim: 16
+hidden_dim: 256
+stochastic_dim: 32
+num_ensemble_members: 3
+ema_decay: 0.99
+use_anchor_decoder: true
+learning_rate: 0.0003
+lambda_dyn: 1.0
+lambda_anchor: 0.1
+lambda_r: 1.0
+lambda_c: 1.0
+lambda_kl: 0.1
+free_bits: 0.1
+batch_size: 16
+seq_len: 8
+device: auto
+output_dir: runs/mosaic/p2_world_model
