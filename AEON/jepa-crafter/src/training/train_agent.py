@@ -211,8 +211,15 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
     print(f"Target steps: {target_env_steps}, Parallel Games: {num_envs}, Device: {device.type}, Parameters: {model.count_parameters()['total_trainable']:,}")
 
     env_step = 0
-    if checkpoint_store.has_checkpoint():
-        latest_path = os.path.join(checkpoint_store.checkpoint_dir, "checkpoint_latest.pt")
+    candidate_ckpt_dirs = [
+        checkpoint_store.checkpoint_dir,
+        os.path.join(config.project.output_dir, "checkpoints"),
+        os.path.join(os.path.dirname(config.project.output_dir), "checkpoints"),
+        os.path.join("runs", config.project.name, "checkpoints"),
+        "checkpoints",
+    ]
+    latest_path = checkpoint_store.find_latest_checkpoint(candidate_ckpt_dirs)
+    if latest_path is not None:
         print(f"[Auto-Resume] Found existing checkpoint at {latest_path}. Restoring training state...")
         ckpt = restore_checkpoint(
             checkpoint_path=latest_path,
@@ -227,6 +234,8 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
         )
         env_step = ckpt.get("step", 0)
         print(f"[Auto-Resume] Successfully restored run to step {env_step:,} / {target_env_steps:,} (learner updates: {learner.update_count})!")
+    else:
+        print(f"[Auto-Resume] No previous checkpoint found in candidate directories: {candidate_ckpt_dirs}. Starting fresh run from step 0.")
     while env_step < target_env_steps:
         # Determine mode: warmup vs explore vs mpc
         if replay_buffer.size < config.replay.min_sequences_before_training:
@@ -424,6 +433,7 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
             }
             checkpoint_path = checkpoint_store.save(step=env_step, checkpoint_data=checkpoint_data)
             tracer.log_checkpoint_saved(checkpoint_path, step=env_step)
+            print(f"[Checkpoint] Saved checkpoint at step {env_step:,} to {checkpoint_path}")
 
     # 9. Final Benchmark Outputs & Artifact Generation
     print("Generating final research artifacts and reports...")

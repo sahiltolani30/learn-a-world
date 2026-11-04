@@ -71,5 +71,33 @@ class CheckpointStore:
 
     def has_checkpoint(self) -> bool:
         """Check if a latest checkpoint exists."""
-        latest_path = os.path.join(self.checkpoint_dir, "checkpoint_latest.pt")
-        return os.path.exists(latest_path)
+        return self.find_latest_checkpoint() is not None
+
+    def find_latest_checkpoint(self, extra_search_dirs: Optional[list] = None) -> Optional[str]:
+        """Scan primary and extra search directories for checkpoint_latest.pt or latest checkpoint_*.pt."""
+        search_dirs = [self.checkpoint_dir]
+        if extra_search_dirs:
+            search_dirs.extend(extra_search_dirs)
+
+        seen = set()
+        clean_dirs = []
+        for d in search_dirs:
+            if d and d not in seen:
+                seen.add(d)
+                clean_dirs.append(d)
+
+        for d in clean_dirs:
+            if not os.path.exists(d):
+                continue
+            latest_path = os.path.join(d, "checkpoint_latest.pt")
+            if os.path.exists(latest_path):
+                return latest_path
+            pt_files = [
+                os.path.join(d, f)
+                for f in os.listdir(d)
+                if f.startswith("checkpoint_") and f.endswith(".pt") and not f.endswith(".tmp")
+            ]
+            if pt_files:
+                pt_files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                return pt_files[0]
+        return None
