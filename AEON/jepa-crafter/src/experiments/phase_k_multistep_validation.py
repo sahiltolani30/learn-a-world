@@ -141,8 +141,11 @@ def collect_evaluation_trajectories(
                 if seg_len >= window_total:
                     for i in range(context_length - 1, seg_len - max_horizon):
                         ctx_obs = np.stack(seg_obs[i - context_length + 1 : i + 1], axis=0)
-                        ctx_act = np.array(seg_act[i - context_length + 1 : i + 1], dtype=np.int64)
-                        fut_act = np.array(seg_act[i + 1 : i + 1 + max_horizon], dtype=np.int64)
+                        # Previous actions leading up to frame i
+                        raw_prev = seg_act[i - context_length + 1 : i]
+                        ctx_act = np.array([0] * (context_length - len(raw_prev)) + raw_prev, dtype=np.int64)
+                        # Future actions starting from frame i: a_i is transition obs[i] -> obs[i+1]
+                        fut_act = np.array(seg_act[i : i + max_horizon], dtype=np.int64)
 
                         windows_context_obs.append(ctx_obs)
                         windows_prev_actions.append(ctx_act)
@@ -163,8 +166,9 @@ def collect_evaluation_trajectories(
         if seg_len >= window_total:
             for i in range(context_length - 1, seg_len - max_horizon):
                 ctx_obs = np.stack(current_obs_list[i - context_length + 1 : i + 1], axis=0)
-                ctx_act = np.array(current_act_list[i - context_length + 1 : i + 1], dtype=np.int64)
-                fut_act = np.array(current_act_list[i + 1 : i + 1 + max_horizon], dtype=np.int64)
+                raw_prev = current_act_list[i - context_length + 1 : i]
+                ctx_act = np.array([0] * (context_length - len(raw_prev)) + raw_prev, dtype=np.int64)
+                fut_act = np.array(current_act_list[i : i + max_horizon], dtype=np.int64)
 
                 windows_context_obs.append(ctx_obs)
                 windows_prev_actions.append(ctx_act)
