@@ -1,0 +1,105 @@
+{
+  "g1_encoder_geometry": {
+    "spatial_tokens": {
+      "train_centered_pr": 9.95,
+      "train_centered_entropy_er": 25.63,
+      "train_uncentered_pr": 2.82,
+      "train_uncentered_entropy_er": 8.69,
+      "top1_variance_pct_centered": 26.53,
+      "top5_variance_pct_centered": 54.91,
+      "top1_variance_pct_uncentered": 58.7,
+      "top5_variance_pct_uncentered": 75.1,
+      "heldout_centered_pr": 10.89,
+      "heldout_centered_entropy_er": 29.04,
+      "heldout_uncentered_pr": 2.85,
+      "heldout_uncentered_entropy_er": 9.26,
+      "channel_std_min": 0.1102,
+      "channel_std_max": 1.9929,
+      "channel_std_mean": 0.7966,
+      "feature_norm_mean": 12.6865,
+      "feature_mean_norm": 9.5703,
+      "cosine_sim_uncentered": 0.53,
+      "cosine_sim_centered": 0.019,
+      "within_image_cosine_sim_uncentered": 0.5412,
+      "within_image_cosine_sim_centered": 0.0036
+    },
+    "pooled_vectors": {
+      "train_centered_pr": 1.25,
+      "train_centered_entropy_er": 1.84,
+      "train_uncentered_pr": 1.02,
+      "train_uncentered_entropy_er": 1.07,
+      "top1_variance_pct_centered": 89.32,
+      "top5_variance_pct_centered": 96.0,
+      "top1_variance_pct_uncentered": 98.87,
+      "cosine_sim_uncentered": 0.9867,
+      "cosine_sim_centered": 0.1995
+    },
+    "distinguishability": {
+      "correlation_pixel_diff_to_uncentered_dist": -0.043,
+      "correlation_pixel_diff_to_centered_dist": 0.217
+    }
+  },
+  "g2_prediction_support": {
+    "persistence": {
+      "heldout_total": 0.035752,
+      "heldout_high_change": 0.06292,
+      "heldout_low_change": 0.000102
+    },
+    "simple_residual_predictor": {
+      "heldout_total_mean": 0.034345,
+      "heldout_total_std": 3e-06,
+      "heldout_high_change_mean": 0.057788,
+      "heldout_low_change_mean": 0.003596,
+      "heldout_action_adv_total_mean": -0.000127,
+      "heldout_action_adv_high_mean": 6.4e-05,
+      "heldout_action_adv_high_std": 2.6e-05,
+      "beats_persistence_high_change": true,
+      "beats_persistence_total": true
+    },
+    "existing_predictor": {
+      "heldout_total_mean": 0.148716,
+      "heldout_total_std": 6.2e-05,
+      "heldout_high_change_mean": 0.178872,
+      "heldout_low_change_mean": 0.10918,
+      "heldout_action_adv_high_mean": 8.7e-05,
+      "heldout_action_adv_high_std": 5e-06,
+      "beats_persistence_high_change": false,
+      "beats_persistence_total": false
+    }
+  },
+  "g3_pipeline_audit": {
+    "normalization_asymmetry": {
+      "raw_persistence": 0.006227,
+      "symmetric_layernorm_persistence": 0.009099,
+      "identity_to_layernorm_distance": 0.170476,
+      "asymmetric_persistence_distance": 0.178087,
+      "target_tokens_mean_across_channels": 0.6391,
+      "predictor_output_mean_across_channels": 0.0
+    },
+    "gradient_norms": {
+      "zt_input": 0.0026,
+      "action_embedding": 0.005,
+      "cond_mlp": 0.0023
+    }
+  },
+  "g4_isolated_encoder_training": {
+    "variant_a_frozen_encoder": {
+      "heldout_pred_total": 0.030927,
+      "heldout_pred_high": 0.053954,
+      "heldout_action_adv_high": 8.8e-05,
+      "online_effective_rank": 7.4
+    },
+    "variant_b_trainable_jepa": {
+      "heldout_pred_total": 0.024086,
+      "heldout_pred_high": 0.024658,
+      "heldout_action_adv_high": -4e-06,
+      "online_effective_rank": 8.52
+    },
+    "variant_c_trainable_var_reg": {
+      "heldout_pred_total": 0.021199,
+      "heldout_pred_high": 0.021199,
+      "heldout_action_adv_high": -8e-06,
+      "online_effective_rank": 9.3
+    }
+  }
+}

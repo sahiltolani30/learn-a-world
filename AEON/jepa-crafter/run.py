@@ -84,7 +84,9 @@ def main():
     results = run_training(config=config, max_steps=args.max_steps)
     print("\n=======================================================")
     print(f"AEON run completed! Final report: {results['final_report_path']}")
-    print(f"Crafter Score: {results['achievement_summary']['crafter_score']:.2f}%")
+    score_val = results['achievement_summary']['crafter_score']
+    score_str = f"{score_val:.2f}%" if score_val is not None else "NOT_RUN (0 episodes)"
+    print(f"Crafter Score: {score_str}")
     print("=======================================================")
 
 

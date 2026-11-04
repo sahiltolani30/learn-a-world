@@ -1,0 +1,9 @@
+{
+  "status": "STOPPED",
+  "decision_gate": "PRELIMINARY_GATE_STOP",
+  "reason": "CHECKPOINT_UNAVAILABLE_ON_LOCAL_DISK",
+  "commit_sha": "8f63e26cf28c821f2a07730dd67b57821ec49182",
+  "drive_path": "/content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt",
+  "protocol_adherence": "Refused to substitute random weights. Mandatory Phase J checkpoint gate halts honestly.",
+  "execution_instructions_colab": "To execute Phase J fine-tuning on Colab GPU with the Drive checkpoint:\n1. Mount Google Drive: from google.colab import drive; drive.mount('/content/drive')\n2. cd to repository root\n3. Run: python AEON/jepa-crafter/src/experiments/phase_j_finetune.py --checkpoint-path /content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt"
+}

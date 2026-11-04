@@ -35,6 +35,7 @@ checkpoints/
 *.npz
 !data/sequences/*.npz
 *.pt
+!AEON/jepa-crafter/artifacts/implementation/phase5_investigation/*.pt
 *.pth
 *.h5
 wandb/

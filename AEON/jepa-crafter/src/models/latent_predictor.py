@@ -39,6 +39,8 @@ class LatentPredictorMember(nn.Module):
             norm_first=True,
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # Retained for strict state_dict compatibility with historical checkpoints;
+        # not applied in forward() to ensure predictions match unnormalized target representation space.
         self.final_norm = nn.LayerNorm(latent_dim)
 
     def forward(
@@ -65,7 +67,6 @@ class LatentPredictorMember(nn.Module):
         # Feature-wise modulation (FiLM)
         modulated = (1.0 + gamma) * current_tokens + beta            # [B, 64, 128]
 
-        # Transformer processing
-        out = self.transformer(modulated)                            # [B, 64, 128]
-        out = self.final_norm(out)
-        return out
+        # Residual transformer prediction: z_hat = z_t + delta
+        delta = self.transformer(modulated)                          # [B, 64, 128]
+        return current_tokens + delta

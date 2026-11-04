@@ -1,0 +1,77 @@
+{
+  "compatibility": {
+    "checkpoint_path": "/content/drive/MyDrive/learn-a-world/aeon/runs/jepa_crafter/checkpoints/checkpoint_00050000.pt",
+    "step": 50000,
+    "strict_loading_success": true,
+    "missing_keys": [],
+    "unexpected_keys": [],
+    "final_norm_parameters_retained": [
+      "predictor_ensemble.members.0.final_norm.weight",
+      "predictor_ensemble.members.0.final_norm.bias",
+      "predictor_ensemble.members.1.final_norm.weight",
+      "predictor_ensemble.members.1.final_norm.bias",
+      "predictor_ensemble.members.2.final_norm.weight",
+      "predictor_ensemble.members.2.final_norm.bias"
+    ]
+  },
+  "persistence_baseline": {
+    "total_error": 0.038390208035707474,
+    "high_change_error": 0.06064866483211517,
+    "dynamic_tokens_error": 0.06751188635826111
+  },
+  "before_behavior_legacy": {
+    "total_error": 0.4261109530925751,
+    "high_change_error": 0.4464814066886902,
+    "dynamic_tokens_error": 0.44942253828048706,
+    "action_advantage_high": 3.351716077304445e-05,
+    "latent_stats": {
+      "channel_mean": 5.410214498624555e-10,
+      "channel_std": 1.0039236545562744,
+      "feature_norm": 11.313645362854004,
+      "is_finite": true
+    }
+  },
+  "after_behavior_residual": {
+    "total_error": 0.1201687753200531,
+    "high_change_error": 0.14035071432590485,
+    "dynamic_tokens_error": 0.14355114102363586,
+    "action_advantage_high": 1.9594774130382575e-05,
+    "latent_stats": {
+      "channel_mean": 1.2465221881866455,
+      "channel_std": 1.8288288116455078,
+      "feature_norm": 25.086942672729492,
+      "is_finite": true
+    }
+  },
+  "target_representation_stats": {
+    "channel_mean": 0.6041543483734131,
+    "channel_std": 0.862851619720459,
+    "feature_norm": 11.913496017456055,
+    "is_finite": true
+  },
+  "rollout_stability": {
+    "horizons_present": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "all_horizons_finite": true,
+    "horizon_feature_norms": {
+      "1": 25.086654663085938,
+      "2": 52.73301696777344,
+      "3": 108.83808898925781,
+      "4": 222.85540771484375,
+      "5": 457.09173583984375,
+      "6": 941.084716796875,
+      "7": 1947.3416748046875,
+      "8": 4046.12744140625
+    },
+    "auxiliary_reward_finite": true,
+    "auxiliary_done_finite": true
+  }
+}

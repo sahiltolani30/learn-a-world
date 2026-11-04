@@ -88,21 +88,40 @@ class AchievementRecorder:
         seed: Optional[int] = None,
         run_name: str = "run",
         checkpoint_id: str = "none",
+        timestamp: Optional[str] = None,
     ) -> None:
         """Export achievement rates and score as a CSV row with explicit run and checkpoint identification."""
+        import datetime
+        if timestamp is None:
+            timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         summary = self.get_summary()
         rates = summary["achievement_rates"]
 
-        headers = [
-            "run_name",
-            "checkpoint_id",
-            "seed",
-            "num_episodes",
-            "crafter_score",
-            "mean_reward",
-            "mean_length",
-        ] + CRAFTER_ACHIEVEMENTS
+        # Check existing headers if file exists
+        existing_headers = None
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            with open(file_path, "r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                try:
+                    existing_headers = next(reader)
+                except StopIteration:
+                    existing_headers = None
+
+        if existing_headers is not None:
+            headers = existing_headers
+        else:
+            headers = [
+                "run_name",
+                "checkpoint_id",
+                "timestamp",
+                "seed",
+                "num_episodes",
+                "crafter_score",
+                "mean_reward",
+                "mean_length",
+            ] + CRAFTER_ACHIEVEMENTS
 
         score_str = f"{summary['crafter_score']:.4f}" if summary["crafter_score"] is not None else "NOT_RUN"
         rew_str = f"{summary['mean_reward']:.4f}" if summary["mean_reward"] is not None else "NOT_RUN"
@@ -111,6 +130,7 @@ class AchievementRecorder:
         row = {
             "run_name": run_name,
             "checkpoint_id": checkpoint_id,
+            "timestamp": timestamp,
             "seed": seed if seed is not None else 0,
             "num_episodes": self.num_episodes,
             "crafter_score": score_str,
@@ -120,9 +140,11 @@ class AchievementRecorder:
         for ach in CRAFTER_ACHIEVEMENTS:
             row[ach] = f"{rates[ach]:.2f}"
 
-        write_header = not os.path.exists(file_path) or os.path.getsize(file_path) == 0
+        row_filtered = {k: row[k] for k in headers if k in row}
+
+        write_header = existing_headers is None
         with open(file_path, "a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             if write_header:
                 writer.writeheader()
-            writer.writerow(row)
+            writer.writerow(row_filtered)

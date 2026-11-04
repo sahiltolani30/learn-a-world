@@ -1,0 +1,482 @@
+{
+  "dataset_metadata": {
+    "total_transitions": 256,
+    "train_transitions": 128,
+    "heldout_transitions": 128,
+    "train_seeds": [
+      101,
+      102
+    ],
+    "heldout_seeds": [
+      103,
+      104
+    ],
+    "threshold": 0.001,
+    "train_persistence": 0.023195259273052216,
+    "heldout_persistence": 0.03575156629085541,
+    "heldout_high_change_persistence": 0.06291985511779785
+  },
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "summary_stats": {
+    "Variant_A": {
+      "0": {
+        "train": {
+          "error_mean": 0.3979431390762329,
+          "error_std": 0.005924770419557572,
+          "high_change_mean": 0.4296729564666748,
+          "high_change_std": 0.0048356567414106376,
+          "low_change_mean": 0.37760351101557416,
+          "low_change_std": 0.006767092911527597,
+          "action_adv_mean": 1.341104507446289e-06,
+          "action_adv_std": 2.6050480313144753e-06,
+          "action_adv_high_mean": 1.1324882507324219e-06,
+          "action_adv_high_std": 9.865694111478316e-06,
+          "action_div_mean": 1.033781982008733e-05,
+          "action_div_std": 7.483347475879067e-07
+        },
+        "heldout": {
+          "error_mean": 0.409333199262619,
+          "error_std": 0.006642052667542089,
+          "high_change_mean": 0.4304552376270294,
+          "high_change_std": 0.006514224000304908,
+          "low_change_mean": 0.38161759575208026,
+          "low_change_std": 0.0068341661775354,
+          "action_adv_mean": -2.115964889526367e-06,
+          "action_adv_std": 2.3444914544631723e-06,
+          "action_adv_high_mean": -1.6490618387858074e-06,
+          "action_adv_high_std": 1.1101337309439176e-06,
+          "action_div_mean": 1.0269178150623452e-05,
+          "action_div_std": 7.63271797629972e-07
+        }
+      },
+      "10": {
+        "train": {
+          "error_mean": 0.22878467043240866,
+          "error_std": 0.0009722948597383018,
+          "high_change_mean": 0.26375482479731244,
+          "high_change_std": 0.000698252998052679,
+          "low_change_mean": 0.20636790990829468,
+          "low_change_std": 0.001183495265368391,
+          "action_adv_mean": 5.349516868591309e-06,
+          "action_adv_std": 2.1048472598269076e-06,
+          "action_adv_high_mean": 1.189112663269043e-05,
+          "action_adv_high_std": 2.649558874475106e-06,
+          "action_div_mean": 8.491249115881966e-06,
+          "action_div_std": 5.909999502326771e-07
+        },
+        "heldout": {
+          "error_mean": 0.24376186728477478,
+          "error_std": 0.0008851521250959777,
+          "high_change_mean": 0.27088915308316547,
+          "high_change_std": 0.0009018201547009409,
+          "low_change_mean": 0.20816636582215628,
+          "low_change_std": 0.0010121937778373206,
+          "action_adv_mean": -2.4586915969848633e-06,
+          "action_adv_std": 2.0871557414711248e-06,
+          "action_adv_high_mean": -3.5862127939860025e-06,
+          "action_adv_high_std": 4.468383180507349e-06,
+          "action_div_mean": 8.396884225601075e-06,
+          "action_div_std": 5.667513404306491e-07
+        }
+      },
+      "50": {
+        "train": {
+          "error_mean": 0.18805070221424103,
+          "error_std": 0.0003947380078878993,
+          "high_change_mean": 0.227764626344045,
+          "high_change_std": 0.00030588537455493935,
+          "low_change_mean": 0.16259307165940604,
+          "low_change_std": 0.0004648696043182958,
+          "action_adv_mean": 2.49942143758138e-05,
+          "action_adv_std": 4.140491420145361e-06,
+          "action_adv_high_mean": 5.9917569160461426e-05,
+          "action_adv_high_std": 9.41475914617841e-06,
+          "action_div_mean": 7.31387476929847e-06,
+          "action_div_std": 5.692445228472602e-07
+        },
+        "heldout": {
+          "error_mean": 0.20418578883012137,
+          "error_std": 0.00042424693097117366,
+          "high_change_mean": 0.2349648376305898,
+          "high_change_std": 0.0003730904311387851,
+          "low_change_mean": 0.1637986054023107,
+          "low_change_std": 0.0005028550730405367,
+          "action_adv_mean": -2.2302071253458657e-06,
+          "action_adv_std": 2.6528624316907387e-06,
+          "action_adv_high_mean": -1.798073450724284e-06,
+          "action_adv_high_std": 6.156257847935675e-06,
+          "action_div_mean": 7.238512968315798e-06,
+          "action_div_std": 5.364063232071565e-07
+        }
+      },
+      "100": {
+        "train": {
+          "error_mean": 0.1736416518688202,
+          "error_std": 0.00011325524480823214,
+          "high_change_mean": 0.21383400758107504,
+          "high_change_std": 5.297388629303423e-05,
+          "low_change_mean": 0.14787732064723969,
+          "low_change_std": 0.00015373280997063845,
+          "action_adv_mean": 6.675223509470622e-05,
+          "action_adv_std": 1.161036883384731e-05,
+          "action_adv_high_mean": 0.0001631230115890503,
+          "action_adv_high_std": 2.8034379519492462e-05,
+          "action_div_mean": 1.999533817391185e-05,
+          "action_div_std": 3.9897873065544904e-06
+        },
+        "heldout": {
+          "error_mean": 0.18965841829776764,
+          "error_std": 0.0001529690129244943,
+          "high_change_mean": 0.22091829776763916,
+          "high_change_std": 0.00011141844515240009,
+          "low_change_mean": 0.14864028990268707,
+          "low_change_std": 0.0002108881386126,
+          "action_adv_mean": -1.2516975402832031e-06,
+          "action_adv_std": 4.064567716912685e-06,
+          "action_adv_high_mean": 4.996856053670247e-06,
+          "action_adv_high_std": 9.969462127036839e-06,
+          "action_div_mean": 1.979936325155637e-05,
+          "action_div_std": 3.862634202720327e-06
+        }
+      },
+      "300": {
+        "train": {
+          "error_mean": 0.13263241946697235,
+          "error_std": 5.990448057578074e-05,
+          "high_change_mean": 0.17024118701616922,
+          "high_change_std": 6.0547799040296055e-05,
+          "low_change_mean": 0.10852423806985219,
+          "low_change_std": 6.089572434561425e-05,
+          "action_adv_mean": 0.0004711747169494629,
+          "action_adv_std": 1.8093548471271876e-05,
+          "action_adv_high_mean": 0.0011562307675679524,
+          "action_adv_high_std": 5.407658337983258e-05,
+          "action_div_mean": 0.0003971354510890795,
+          "action_div_std": 1.4394198921696511e-05
+        },
+        "heldout": {
+          "error_mean": 0.14865518112977347,
+          "error_std": 3.2381221774545926e-05,
+          "high_change_mean": 0.17876413464546204,
+          "high_change_std": 3.422705795715792e-05,
+          "low_change_mean": 0.10914726306994756,
+          "low_change_std": 3.0050427336302163e-05,
+          "action_adv_mean": 1.2119611104329428e-05,
+          "action_adv_std": 2.773280068601467e-06,
+          "action_adv_high_mean": 9.182095527648926e-05,
+          "action_adv_high_std": 2.2352072925234075e-06,
+          "action_div_mean": 0.00039606469035075574,
+          "action_div_std": 1.6077851185093392e-05
+        }
+      }
+    },
+    "Variant_B": {
+      "0": {
+        "train": {
+          "error_mean": 0.39638350407282513,
+          "error_std": 0.005838540039605848,
+          "high_change_mean": 0.428162803252538,
+          "high_change_std": 0.004717142715316886,
+          "low_change_mean": 0.3760121564070384,
+          "low_change_std": 0.006695315065909032,
+          "action_adv_mean": 1.3311703999837239e-06,
+          "action_adv_std": 2.836948729420083e-06,
+          "action_adv_high_mean": 7.261832555135091e-06,
+          "action_adv_high_std": 1.4575851123004258e-05,
+          "action_div_mean": 1.2507609676058386e-05,
+          "action_div_std": 1.40087384860953e-06
+        },
+        "heldout": {
+          "error_mean": 0.4078164796034495,
+          "error_std": 0.006505298792106423,
+          "high_change_mean": 0.429018755753835,
+          "high_change_std": 0.006355663798010972,
+          "low_change_mean": 0.37999554475148517,
+          "low_change_std": 0.006725717163203161,
+          "action_adv_mean": -2.870957056681315e-06,
+          "action_adv_std": 3.0938325977042087e-06,
+          "action_adv_high_mean": -7.092952728271484e-06,
+          "action_adv_high_std": 6.8013749031918825e-06,
+          "action_div_mean": 1.2393732664777951e-05,
+          "action_div_std": 1.417500353625225e-06
+        }
+      },
+      "10": {
+        "train": {
+          "error_mean": 0.2286020964384079,
+          "error_std": 0.0009215917563574692,
+          "high_change_mean": 0.263587087392807,
+          "high_change_std": 0.0006511621182489067,
+          "low_change_mean": 0.20617579917112985,
+          "low_change_std": 0.0011361973354438108,
+          "action_adv_mean": 6.079673767089844e-06,
+          "action_adv_std": 1.4615803532872963e-06,
+          "action_adv_high_mean": 1.5129645665486654e-05,
+          "action_adv_high_std": 5.0497326466430625e-06,
+          "action_div_mean": 1.3960728549635878e-05,
+          "action_div_std": 1.9361426141098883e-06
+        },
+        "heldout": {
+          "error_mean": 0.24357324341932932,
+          "error_std": 0.0008305208870811177,
+          "high_change_mean": 0.2707200050354004,
+          "high_change_std": 0.0008692905127490075,
+          "low_change_mean": 0.20795218149820963,
+          "low_change_std": 0.0009549541941689279,
+          "action_adv_mean": -4.0729840596516924e-06,
+          "action_adv_std": 8.131113988720521e-07,
+          "action_adv_high_mean": -7.013479868570964e-06,
+          "action_adv_high_std": 2.897355290094964e-06,
+          "action_div_mean": 1.3764929391589818e-05,
+          "action_div_std": 1.988368284624705e-06
+        }
+      },
+      "50": {
+        "train": {
+          "error_mean": 0.1880107323328654,
+          "error_std": 0.0003853896599210217,
+          "high_change_mean": 0.22772360344727835,
+          "high_change_std": 0.0002933612108259183,
+          "low_change_mean": 0.16255376239617667,
+          "low_change_std": 0.00045828467710398735,
+          "action_adv_mean": 3.081063429514567e-05,
+          "action_adv_std": 2.029927361189965e-06,
+          "action_adv_high_mean": 7.403890291849773e-05,
+          "action_adv_high_std": 4.256368012646327e-06,
+          "action_div_mean": 1.2652466858864998e-05,
+          "action_div_std": 3.4243884409540206e-06
+        },
+        "heldout": {
+          "error_mean": 0.20413962999979654,
+          "error_std": 0.00041956800592033653,
+          "high_change_mean": 0.23492290079593658,
+          "high_change_std": 0.00037203206531081026,
+          "low_change_mean": 0.1637469232082367,
+          "low_change_std": 0.0004955651778491655,
+          "action_adv_mean": -3.382563591003418e-06,
+          "action_adv_std": 2.3677690374873576e-06,
+          "action_adv_high_mean": -3.7997961044311523e-06,
+          "action_adv_high_std": 6.064620053187075e-06,
+          "action_div_mean": 1.2469731326050618e-05,
+          "action_div_std": 3.3687865482600312e-06
+        }
+      },
+      "100": {
+        "train": {
+          "error_mean": 0.17361037929852804,
+          "error_std": 0.0001047078413763226,
+          "high_change_mean": 0.2137791564067205,
+          "high_change_std": 2.6857843823277817e-05,
+          "low_change_mean": 0.1478611578543981,
+          "low_change_std": 0.0001546493481819587,
+          "action_adv_mean": 8.667012055714925e-05,
+          "action_adv_std": 5.7831652108512535e-06,
+          "action_adv_high_mean": 0.00021167099475860596,
+          "action_adv_high_std": 1.2128013505146474e-05,
+          "action_div_mean": 3.346520037773778e-05,
+          "action_div_std": 9.840492229063843e-06
+        },
+        "heldout": {
+          "error_mean": 0.1896363447109858,
+          "error_std": 0.00015166755103144367,
+          "high_change_mean": 0.22089663644631705,
+          "high_change_std": 0.00010843642085700066,
+          "low_change_mean": 0.14861767490704855,
+          "low_change_std": 0.00021286579416252184,
+          "action_adv_mean": -2.726912498474121e-06,
+          "action_adv_std": 4.863001812941483e-06,
+          "action_adv_high_mean": 3.372629483540853e-06,
+          "action_adv_high_std": 1.1430970304076926e-05,
+          "action_div_mean": 3.28316156953281e-05,
+          "action_div_std": 9.457908390259263e-06
+        }
+      },
+      "300": {
+        "train": {
+          "error_mean": 0.13228454689184824,
+          "error_std": 0.00019353366431668322,
+          "high_change_mean": 0.16934044162432352,
+          "high_change_std": 0.0004121268034562487,
+          "low_change_mean": 0.10853076229492824,
+          "low_change_std": 7.181520820647982e-05,
+          "action_adv_mean": 0.0008785724639892578,
+          "action_adv_std": 0.000141048766164258,
+          "action_adv_high_mean": 0.0021800994873046875,
+          "action_adv_high_std": 0.00035522116476794426,
+          "action_div_mean": 0.0004186363041620044,
+          "action_div_std": 6.419750337584491e-05
+        },
+        "heldout": {
+          "error_mean": 0.14868908127148947,
+          "error_std": 0.0001352659188789845,
+          "high_change_mean": 0.17879671851793924,
+          "high_change_std": 0.00012489656972752383,
+          "low_change_mean": 0.10918288677930832,
+          "low_change_std": 0.0001499809006418428,
+          "action_adv_mean": -8.29001267751058e-06,
+          "action_adv_std": 3.042522126925863e-06,
+          "action_adv_high_mean": 9.104609489440918e-05,
+          "action_adv_high_std": 4.697310385958019e-05,
+          "action_div_mean": 0.00041513675915113847,
+          "action_div_std": 6.956745974766514e-05
+        }
+      }
+    },
+    "Variant_C": {
+      "0": {
+        "train": {
+          "error_mean": 0.39638350407282513,
+          "error_std": 0.005838540039605848,
+          "high_change_mean": 0.428162803252538,
+          "high_change_std": 0.004717142715316886,
+          "low_change_mean": 0.3760121564070384,
+          "low_change_std": 0.006695315065909032,
+          "action_adv_mean": 1.3311703999837239e-06,
+          "action_adv_std": 2.836948729420083e-06,
+          "action_adv_high_mean": 7.261832555135091e-06,
+          "action_adv_high_std": 1.4575851123004258e-05,
+          "action_div_mean": 1.2507609676058386e-05,
+          "action_div_std": 1.40087384860953e-06
+        },
+        "heldout": {
+          "error_mean": 0.4078164796034495,
+          "error_std": 0.006505298792106423,
+          "high_change_mean": 0.429018755753835,
+          "high_change_std": 0.006355663798010972,
+          "low_change_mean": 0.37999554475148517,
+          "low_change_std": 0.006725717163203161,
+          "action_adv_mean": -2.870957056681315e-06,
+          "action_adv_std": 3.0938325977042087e-06,
+          "action_adv_high_mean": -7.092952728271484e-06,
+          "action_adv_high_std": 6.8013749031918825e-06,
+          "action_div_mean": 1.2393732664777951e-05,
+          "action_div_std": 1.417500353625225e-06
+        }
+      },
+      "10": {
+        "train": {
+          "error_mean": 0.2288871556520462,
+          "error_std": 0.0010140967934924297,
+          "high_change_mean": 0.263455867767334,
+          "high_change_std": 0.0007297963769624126,
+          "low_change_mean": 0.20672773321469626,
+          "low_change_std": 0.001237597439088792,
+          "action_adv_mean": 6.328026453653972e-06,
+          "action_adv_std": 1.4957843368848846e-06,
+          "action_adv_high_mean": 1.537799835205078e-05,
+          "action_adv_high_std": 4.706314208643715e-06,
+          "action_div_mean": 1.3711150078212512e-05,
+          "action_div_std": 1.7682968325252795e-06
+        },
+        "heldout": {
+          "error_mean": 0.24378246565659842,
+          "error_std": 0.0009524682036290187,
+          "high_change_mean": 0.2707206606864929,
+          "high_change_std": 0.0009841871214914812,
+          "low_change_mean": 0.20843510826428732,
+          "low_change_std": 0.0010584145171675205,
+          "action_adv_mean": -4.023313522338867e-06,
+          "action_adv_std": 6.744593246616736e-07,
+          "action_adv_high_mean": -6.645917892456055e-06,
+          "action_adv_high_std": 2.653690002680995e-06,
+          "action_div_mean": 1.3525282744975652e-05,
+          "action_div_std": 1.8264952850344907e-06
+        }
+      },
+      "50": {
+        "train": {
+          "error_mean": 0.1880671332279841,
+          "error_std": 0.00040030146807521524,
+          "high_change_mean": 0.2272966206073761,
+          "high_change_std": 0.00030396986964822487,
+          "low_change_mean": 0.16292001803716025,
+          "low_change_std": 0.00047830086996367404,
+          "action_adv_mean": 3.215173880259196e-05,
+          "action_adv_std": 2.1761251383165842e-06,
+          "action_adv_high_mean": 7.674594720204671e-05,
+          "action_adv_high_std": 4.561902880952111e-06,
+          "action_div_mean": 1.3085616314235855e-05,
+          "action_div_std": 3.5189687858869945e-06
+        },
+        "heldout": {
+          "error_mean": 0.20416882634162903,
+          "error_std": 0.00043556838830471824,
+          "high_change_mean": 0.23469805220762888,
+          "high_change_std": 0.0003860673733856776,
+          "low_change_mean": 0.16410946349302927,
+          "low_change_std": 0.0005149117134733008,
+          "action_adv_mean": -3.1838814417521157e-06,
+          "action_adv_std": 2.212954832344934e-06,
+          "action_adv_high_mean": -3.1093756357828775e-06,
+          "action_adv_high_std": 5.878217971782432e-06,
+          "action_div_mean": 1.2905368873593853e-05,
+          "action_div_std": 3.46425242174812e-06
+        }
+      },
+      "100": {
+        "train": {
+          "error_mean": 0.1735867609580358,
+          "error_std": 0.00011272550824982584,
+          "high_change_mean": 0.21314960718154907,
+          "high_change_std": 2.8196157653964904e-05,
+          "low_change_mean": 0.14822596311569214,
+          "low_change_std": 0.00016697234761212413,
+          "action_adv_mean": 9.433428446451823e-05,
+          "action_adv_std": 6.880414750798009e-06,
+          "action_adv_high_mean": 0.00022860368092854819,
+          "action_adv_high_std": 1.3910388057800114e-05,
+          "action_div_mean": 4.04184501545102e-05,
+          "action_div_std": 1.3329108421103501e-05
+        },
+        "heldout": {
+          "error_mean": 0.18962442378203073,
+          "error_std": 0.0001632116915377975,
+          "high_change_mean": 0.22056914369265238,
+          "high_change_std": 0.00012083430680010011,
+          "low_change_mean": 0.1490198274453481,
+          "low_change_std": 0.00022351648321662727,
+          "action_adv_mean": -2.0166238149007163e-06,
+          "action_adv_std": 5.424054514555115e-06,
+          "action_adv_high_mean": 5.657474199930827e-06,
+          "action_adv_high_std": 1.2934461607376377e-05,
+          "action_div_mean": 3.965587957816965e-05,
+          "action_div_std": 1.2819919889024944e-05
+        }
+      },
+      "300": {
+        "train": {
+          "error_mean": 0.13200625280539194,
+          "error_std": 0.00022690832517137838,
+          "high_change_mean": 0.16766193509101868,
+          "high_change_std": 0.0004685329783533499,
+          "low_change_mean": 0.1091500495870908,
+          "low_change_std": 8.213708955719459e-05,
+          "action_adv_mean": 0.0010001411040623982,
+          "action_adv_std": 0.00013690817037852643,
+          "action_adv_high_mean": 0.002460534373919169,
+          "action_adv_high_std": 0.0003371539718039146,
+          "action_div_mean": 0.0005872777877740708,
+          "action_div_std": 7.736075812109775e-05
+        },
+        "heldout": {
+          "error_mean": 0.14871186017990112,
+          "error_std": 0.00020458487636358864,
+          "high_change_mean": 0.1781779726346334,
+          "high_change_std": 0.00024331336170914519,
+          "low_change_mean": 0.11004745215177536,
+          "low_change_std": 0.00015380195298179562,
+          "action_adv_mean": 2.4894873301188152e-05,
+          "action_adv_std": 4.3668591800305886e-05,
+          "action_adv_high_mean": 0.00014886756738026938,
+          "action_adv_high_std": 2.9480009136203223e-05,
+          "action_div_mean": 0.0005763214031307427,
+          "action_div_std": 8.968768501402055e-05
+        }
+      }
+    }
+  }
+}
