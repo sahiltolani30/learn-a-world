@@ -59,6 +59,13 @@ class CheckpointStore:
             best_path = os.path.join(self.checkpoint_dir, "checkpoint_best.pt")
             shutil.copyfile(final_path, best_path)
 
+        # Force sync to persistent storage (critical for Google Drive FUSE mount)
+        try:
+            if hasattr(os, "sync"):
+                os.sync()
+        except Exception:
+            pass
+
         return final_path
 
     def load(self, path: Optional[str] = None) -> Dict[str, Any]:
