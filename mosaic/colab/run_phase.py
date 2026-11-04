@@ -116,6 +116,7 @@ def main() -> None:
         if args.device is not None:
             values["device"] = args.device
 
+        values.pop("output_dir", None)
         wm_config = WorldModelConfig(
             **values,
             output_dir=str(result_dir),
@@ -145,6 +146,7 @@ def main() -> None:
             value = getattr(args, key)
             if value is not None:
                 values[key] = value
+        values.pop("output_dir", None)
         config = BaselineConfig(
             **values,
             output_dir=str(result_dir),

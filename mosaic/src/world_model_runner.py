@@ -261,7 +261,8 @@ def run_world_model_training(config: WorldModelConfig) -> Dict[str, Any]:
         )
 
         # C. Representation collapse check
-        _, eval_pooled = wm.encoder(eval_obs[:, 0])
+        flat_eval_obs = eval_obs.reshape(-1, 3, 64, 64)
+        _, eval_pooled = wm.encoder(flat_eval_obs)
         collapse_diag = evaluate_representation_collapse(eval_pooled)
 
     results = {

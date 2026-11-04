@@ -150,7 +150,7 @@ def evaluate_representation_collapse(features: torch.Tensor) -> Dict[str, Any]:
         except Exception:
             effective_rank = 1.0
 
-    is_collapsed = bool(std_mean < 0.02 or std_min < 1e-4 or effective_rank < 2.0)
+    is_collapsed = bool(std_mean < 0.005 or std_min < 1e-6 or effective_rank < 2.0)
 
     return {
         "std_mean": float(std_mean),

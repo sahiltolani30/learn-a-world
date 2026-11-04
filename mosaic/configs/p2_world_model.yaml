@@ -18,4 +18,3 @@ free_bits: 0.1
 batch_size: 16
 seq_len: 8
 device: auto
-output_dir: runs/mosaic/p2_world_model
