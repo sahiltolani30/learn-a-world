@@ -1,0 +1,55 @@
+{
+  "test_suite": "AEON/jepa-crafter/tests/test_baseline_integrity.py",
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "warnings": 4,
+  "execution_duration_sec": 1.48,
+  "test_cases": [
+    {
+      "name": "test_training_and_evaluator_action_mapping_identical",
+      "status": "PASSED",
+      "verifies": "Action-conditioning evaluator uses exact run-specific opaque token mapping"
+    },
+    {
+      "name": "test_true_heldout_seeds_disjoint_from_replay",
+      "status": "PASSED",
+      "verifies": "Validation store seeds are disjoint from training replay with automated leak assertion"
+    },
+    {
+      "name": "test_novelty_insert_once_per_real_observation",
+      "status": "PASSED",
+      "verifies": "Real observations increment memory and normalizer exactly once"
+    },
+    {
+      "name": "test_imagined_candidates_do_not_mutate_novelty_memory",
+      "status": "PASSED",
+      "verifies": "Candidate evaluations leave latent memory and running normalizer frozen"
+    },
+    {
+      "name": "test_learning_progress_updates_from_real_residual",
+      "status": "PASSED",
+      "verifies": "Learning progress updates from measured residuals; score() is strictly read-only"
+    },
+    {
+      "name": "test_candidate_order_does_not_change_scores",
+      "status": "PASSED",
+      "verifies": "Candidate sequence scores are invariant to evaluation order within 1e-6"
+    },
+    {
+      "name": "test_normalizer_updates_only_after_candidate_ranking",
+      "status": "PASSED",
+      "verifies": "Normalizer count unchanged during candidate sequence ranking"
+    },
+    {
+      "name": "test_config_fields_are_consumed_or_rejected",
+      "status": "PASSED",
+      "verifies": "All declared config fields are consumed; unknown sections raise ValueError"
+    },
+    {
+      "name": "test_full_checkpoint_resume_restores_state",
+      "status": "PASSED",
+      "verifies": "Resume restores model, EMA, optimizer, replay, mapping, novelty, normalizers, and scheduler"
+    }
+  ]
+}

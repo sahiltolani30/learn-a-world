@@ -17,6 +17,7 @@ from src.env.opaque_actions import OpaqueActionMapping
 from src.data.replay_buffer import ReplayBuffer
 from src.data.sequence_sampler import SequenceSampler
 from src.data.checkpoint_store import CheckpointStore
+from src.data.heldout_store import HeldoutEpisodeStore
 from src.models.jepa_world_model import JepaWorldModel
 from src.learning.learner import JepaLearner
 from src.learning.optimizer import build_optimizer_and_scheduler
@@ -98,6 +99,16 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
         recent_fraction=config.replay.recent_sequence_fraction,
     )
 
+    # 4b. Independent held-out episode store (strictly disjoint seeds)
+    heldout_store = HeldoutEpisodeStore(
+        heldout_seed_start=config.collection.heldout_seed_start,
+        heldout_episode_count=config.collection.heldout_episode_count,
+        opaque_mapping=action_mapping,
+        context_length=config.replay.context_length,
+        prediction_horizon=config.replay.prediction_horizon,
+    )
+    heldout_store.verify_disjoint_from({config.collection.train_seed_start + i for i in range(num_envs * 100)})
+
     # 5. World Model and Learner
     model = JepaWorldModel(
         latent_dim=config.model.latent_dim,
@@ -165,7 +176,7 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
     # 7. Evaluators
     achievement_recorder = AchievementRecorder()
     heldout_evaluator = HeldoutPredictorEvaluator(model=model, horizons=config.model.prediction_horizons)
-    action_tester = ActionConditioningTester(model=model)
+    action_tester = ActionConditioningTester(model=model, opaque_mapping=action_mapping)
 
     # 8. Main execution loop
     if vec_adapter is not None:
@@ -352,7 +363,7 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
         if env_step % eval_interval == 0 and replay_buffer.size >= config.replay.min_sequences_before_training:
             print(f"[{env_step}/{target_env_steps}] Running validation gates...")
             with torch.no_grad():
-                val_batch = sampler.sample_batch(batch_size=min(32, replay_buffer.size // 10), device=device)
+                val_batch = heldout_store.sample_batch(batch_size=min(16, config.optimization.batch_size), device=device)
                 heldout_res = heldout_evaluator.evaluate_batch(val_batch)
                 latest_heldout_metrics = heldout_res
 
@@ -379,10 +390,15 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
                 "step": env_step,
                 "learner_update_count": learner.update_count,
                 "model_state_dict": model.state_dict(),
+                "ema_state_dict": model.target_encoder.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scaler_state_dict": learner.scaler.state_dict() if learner.scaler else {},
                 "action_mapping": action_mapping.to_dict(),
                 "replay_state": replay_buffer.get_state(),
+                "novelty_state": novelty_est.get_state(),
+                "disagreement_state": disagreement_est.get_state(),
+                "progress_state": progress_est.get_state(),
+                "scheduler_state": update_scheduler.get_state(),
                 "rng_states": get_rng_states(),
                 "validation_status": validation_status,
             }
@@ -391,9 +407,9 @@ def run_training(config: Config, max_steps: Optional[int] = None) -> Dict[str, A
 
     # 9. Final Benchmark Outputs & Artifact Generation
     print("Generating final research artifacts and reports...")
-    if not latest_heldout_metrics and len(sampler.get_valid_anchor_indices()) >= 4:
+    if not latest_heldout_metrics:
         with torch.no_grad():
-            val_batch = sampler.sample_batch(batch_size=min(16, len(sampler.get_valid_anchor_indices())), device=device)
+            val_batch = heldout_store.sample_batch(batch_size=min(16, config.optimization.batch_size), device=device)
             latest_heldout_metrics = heldout_evaluator.evaluate_batch(val_batch)
             z_diag, _ = model.online_encoder(val_batch["target_1"][:8])
             latest_diagnostics = compute_feature_diagnostics(z_diag)

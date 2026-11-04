@@ -1,0 +1,20 @@
+{
+  "phase_id": 2,
+  "phase_name": "Repair and verify baseline integration",
+  "gate_id": "P2_BASELINE_INTEGRITY_PASS",
+  "status": "PASS",
+  "timestamp": "2026-11-04T05:38:00Z",
+  "criteria": {
+    "action_mapping_matches_across_train_eval_resume": true,
+    "training_and_heldout_seeds_disjoint": true,
+    "automated_data_leak_assertion_enforced": true,
+    "candidate_ranking_order_invariance_tolerance_met": true,
+    "order_invariance_max_diff": 0.0,
+    "novelty_and_progress_mutations_attributed_to_real_data": true,
+    "checkpoint_roundtrip_all_components_verified": true
+  },
+  "unit_tests_passed": 9,
+  "unit_tests_failed": 0,
+  "total_project_tests_passed": 33,
+  "unlocked_phase": "phase-03-pipeline-pilot"
+}

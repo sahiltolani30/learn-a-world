@@ -136,6 +136,13 @@ class Config:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Config":
+        known_sections = {
+            "project", "environment", "collection", "replay", "model",
+            "optimization", "exploration", "planner", "population", "evaluation"
+        }
+        unknown = set(d.keys()) - known_sections
+        if unknown:
+            raise ValueError(f"Unknown top-level config sections: {unknown}")
         return cls(
             project=ProjectConfig(**d.get("project", {})),
             environment=EnvironmentConfig(**d.get("environment", {})),

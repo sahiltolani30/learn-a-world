@@ -1,19 +1,21 @@
 """Paired action-conditioning validation tests (Test C)."""
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import numpy as np
 import torch
 import torch.nn.functional as F
 
 from src.models.jepa_world_model import JepaWorldModel
 from src.env.crafter_adapter import CrafterAdapter
+from src.env.opaque_actions import OpaqueActionMapping
 from src.utils.safety_checks import assert_finite_tensor
 
 
 class ActionConditioningTester:
     """Evaluates whether the latent predictor responds specifically and accurately to action tokens."""
 
-    def __init__(self, model: JepaWorldModel):
+    def __init__(self, model: JepaWorldModel, opaque_mapping: Optional[OpaqueActionMapping] = None):
         self.model = model
+        self.opaque_mapping = opaque_mapping
 
     @torch.no_grad()
     def run_paired_action_test(
@@ -31,8 +33,8 @@ class ActionConditioningTester:
         action_prediction_divergence = []
 
         for seed in seeds:
-            # 1. Reset from fixed seed
-            adapter_root = CrafterAdapter(seed=seed)
+            # 1. Reset from fixed seed using exact run-specific action mapping
+            adapter_root = CrafterAdapter(seed=seed, opaque_mapping=self.opaque_mapping)
             root_obs = adapter_root.reset()
             adapter_root.close()
 
@@ -47,8 +49,8 @@ class ActionConditioningTester:
             predicted_latents_for_actions = []
 
             for act in test_actions:
-                # 2. Branch: execute action `act` in clean env instance with same seed
-                adapter_branch = CrafterAdapter(seed=seed)
+                # 2. Branch: execute action `act` in clean env instance with same seed and same mapping
+                adapter_branch = CrafterAdapter(seed=seed, opaque_mapping=self.opaque_mapping)
                 adapter_branch.reset()
                 next_obs, _, _, _ = adapter_branch.step(act)
                 adapter_branch.close()

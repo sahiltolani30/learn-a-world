@@ -1,9 +1,9 @@
 # Project AEON: Master Status Dashboard
 
 **Plan Version:** 2.0  
-**Current Phase:** Phase 2 — Repair and Verify Baseline Integration  
-**Active Gate:** `P1_TRACE_PASS` (Achieved) $\to$ `P2_BASELINE_INTEGRITY_PASS` (Unlocked)  
-**Last Verified Commit:** `8829fe08285513d803621dfd813739bf872b842d`  
+**Current Phase:** Phase 3 — Environment, Replay, Checkpoint Smoke and Short Pilot  
+**Active Gate:** `P2_BASELINE_INTEGRITY_PASS` (Achieved) $\to$ `P3_PIPELINE_PILOT_PASS` (Unlocked)  
+**Last Verified Commit:** `d3df26cb3b9f4a0a03bbfe597ecfa2bece85b3eb`  
 
 ---
 
@@ -13,8 +13,8 @@
 |:---:|:---|:---|:---:|:---:|
 | **0** | Repository & runtime audit | File audit CSV, preflight manifest, verified test baseline | `P0_AUDIT_PASS` | **PASSED** |
 | **1** | Observability foundation | Structured event tracer, checksum roundtrips, failure log | `P1_TRACE_PASS` | **PASSED** |
-| **2** | Repair baseline integration | Independent held-out store, order invariance | `P2_BASELINE_INTEGRITY_PASS` | **UNLOCKED** |
-| **3** | Environment & replay smoke/pilot | 500-step & 10k pilot data validation | `P3_PIPELINE_PILOT_PASS` | BLOCKED |
+| **2** | Repair baseline integration | Independent held-out store, order invariance | `P2_BASELINE_INTEGRITY_PASS` | **PASSED** |
+| **3** | Environment & replay smoke/pilot | 500-step & 10k pilot data validation | `P3_PIPELINE_PILOT_PASS` | **UNLOCKED** |
 | **4** | JEPA baseline implementation | Verified from-scratch JEPA training loop | `P4_JEPA_IMPLEMENTATION_PASS` | BLOCKED |
 | **5** | JEPA learning & action-conditioning | Multi-seed held-out cosine and action-use proofs | `P5_JEPA_LEARNING_PASS` | BLOCKED |
 | **6** | Single-role exploration | Latent coverage gain without multi-agent complexity | `P6_EXPLORATION_PASS` | BLOCKED |

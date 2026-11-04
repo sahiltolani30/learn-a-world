@@ -51,8 +51,8 @@ class CandidateScorer:
             seq_score = 0.0
             for k in range(H):
                 r_hat = rewards[i, k].item()
-                # Novelty of imagined latent
-                nov_hat = self.novelty.evaluate(pooled_latents[i, k], update_memory=False)
+                # Novelty of imagined latent (strictly frozen normalizer & no memory mutation)
+                nov_hat = self.novelty.evaluate(pooled_latents[i, k], update_memory=False, update_normalizer=False)
                 # Disagreement
                 dis_hat = disagreements[i, k].item()
 

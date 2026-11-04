@@ -5,6 +5,9 @@ import torch
 
 from src.models.jepa_world_model import JepaWorldModel
 from src.learning.learner import JepaLearner
+from src.learning.update_scheduler import UpdateScheduler
+from src.exploration.novelty import NoveltyEstimator
+from src.exploration.disagreement import DisagreementEstimator, LearningProgressEstimator
 from src.data.replay_buffer import ReplayBuffer
 from src.data.checkpoint_store import CheckpointStore
 from src.env.opaque_actions import OpaqueActionMapping
@@ -17,6 +20,10 @@ def restore_checkpoint(
     learner: JepaLearner,
     replay_buffer: ReplayBuffer,
     expected_mapping: Optional[OpaqueActionMapping] = None,
+    novelty_estimator: Optional[NoveltyEstimator] = None,
+    disagreement_estimator: Optional[DisagreementEstimator] = None,
+    progress_estimator: Optional[LearningProgressEstimator] = None,
+    update_scheduler: Optional[UpdateScheduler] = None,
 ) -> Dict[str, Any]:
     """Restore checkpoint and perform strict validation checks."""
     store = CheckpointStore(os.path.dirname(checkpoint_path))
@@ -28,8 +35,10 @@ def restore_checkpoint(
         if saved_perm != expected_mapping.permutation:
             raise ValueError(f"Action permutation mismatch upon resume! Saved {saved_perm} vs Expected {expected_mapping.permutation}")
 
-    # 2. Model weights
+    # 2. Model weights and EMA target encoder
     model.load_state_dict(ckpt["model_state_dict"])
+    if "ema_state_dict" in ckpt:
+        model.target_encoder.load_state_dict(ckpt["ema_state_dict"])
     
     # 3. Optimizer and scaler
     learner.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
@@ -41,7 +50,17 @@ def restore_checkpoint(
     if "replay_state" in ckpt:
         replay_buffer.set_state(ckpt["replay_state"])
 
-    # 5. Restore RNG states
+    # 5. Exploration & normalizer states
+    if "novelty_state" in ckpt and novelty_estimator is not None:
+        novelty_estimator.set_state(ckpt["novelty_state"])
+    if "disagreement_state" in ckpt and disagreement_estimator is not None:
+        disagreement_estimator.set_state(ckpt["disagreement_state"])
+    if "progress_state" in ckpt and progress_estimator is not None:
+        progress_estimator.set_state(ckpt["progress_state"])
+    if "scheduler_state" in ckpt and update_scheduler is not None:
+        update_scheduler.set_state(ckpt["scheduler_state"])
+
+    # 6. Restore RNG states
     if "rng_states" in ckpt:
         set_rng_states(ckpt["rng_states"])
 

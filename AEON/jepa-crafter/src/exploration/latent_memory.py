@@ -50,3 +50,24 @@ class LatentMemory:
     def reset_episode(self) -> None:
         """Optional: clear episode memory if configured as episodic-only."""
         pass
+
+    def get_state(self) -> dict:
+        return {
+            "capacity": self.capacity,
+            "latent_dim": self.latent_dim,
+            "k_neighbors": self.k_neighbors,
+            "memory": self.memory[:self.size].clone(),
+            "size": self.size,
+            "write_ptr": self.write_ptr,
+        }
+
+    def set_state(self, state: dict) -> None:
+        self.capacity = state["capacity"]
+        self.latent_dim = state["latent_dim"]
+        self.k_neighbors = state["k_neighbors"]
+        self.size = state["size"]
+        self.write_ptr = state["write_ptr"]
+        self.memory = torch.zeros(self.capacity, self.latent_dim)
+        if self.size > 0:
+            stored = state["memory"]
+            self.memory[:self.size] = stored
