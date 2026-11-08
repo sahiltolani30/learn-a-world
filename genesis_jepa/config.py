@@ -59,15 +59,9 @@ class GenesisConfig:
     progress_velocity_gain: float = 3.0  # Weight multiplier for approach progress Δcos
     unimix_floor: float = 0.10     # Categorical exploration floor for milestone discovery
     entropy_canary_floor: float = 1.50   # Nats
-    action5_dominance_cap: float = 0.60  # Canary tripwire ceiling
+    max_action_frequency_cap: float = 0.60  # Canary tripwire: prevents collapse to any single action
 
-    # 9. Homeostatic Survival & Circadian Perception
-    night_darkness_threshold: float = 0.40  # L_dark cutoff triggering Anti-Sleep Lock
-    danger_threshold: float = 0.05
-    bayes_risk_cutoff_max: float = 0.082    # τ* at full health
-    bayes_risk_cutoff_min: float = 0.012    # τ* at critical health (H ≤ 2)
-
-    # 10. Training Loop & Optimization
+    # 9. Training Loop & Optimization
     lr_world_model: float = 3e-4
     lr_critic: float = 3e-4
     lr_actor: float = 1e-4

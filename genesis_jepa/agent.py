@@ -9,9 +9,9 @@ Sacred Signature:
 Integrity Invariants:
   1. Input is strictly sensory RGB pixels uint8 [0, 255] and scalar previous reward.
   2. Zero simulator state dictionaries, coordinates, or inventory masks.
-  3. Anti-Sleep Hazard Lock (bars Action 6 when L_dark >= 0.40).
-  4. Cost-Sensitive Bayes Risk Decider (evasion cutoff tau* <= 0.082).
-  5. Unimix Categorical Exploration (epsilon_u = 0.01).
+  3. Zero hardcoded action slicing, recipe tables, or game-specific rules.
+  4. Tabula rasa policy: Actions optimized purely via Actor-Critic reinforcement learning.
+  5. Unimix Categorical Exploration across full action space.
 """
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from genesis_jepa.config import GenesisConfig
-from genesis_jepa.modules.causal_budgeter import UpstreamDeficitBudgeter
 from genesis_jepa.modules.distributional_critic import SymlogDistributionalCritic
 from genesis_jepa.world_model import GenesisJEPA
 
@@ -58,61 +57,17 @@ class GenesisVisualAgent(nn.Module):
             nn.Linear(256, self.config.num_actions),
         )
 
-        # 4. Survival & Danger Estimator Head (predicts strike probability in [0, 1])
+        # 4. Auxiliary Danger Estimator Head (predicts strike probability in [0, 1])
         self.danger_head = nn.Sequential(
             nn.Linear(self.config.token_dim, 128),
             nn.GELU(),
             nn.Linear(128, 1),
             nn.Sigmoid(),
         )
-        # Initialize danger head with safe baseline prior (P(hazard) ~ 0.029 < tau* = 0.082)
-        with torch.no_grad():
-            self.danger_head[-2].weight.mul_(0.01)
-            self.danger_head[-2].bias.fill_(-3.5)
-
-        # 5. Upstream Deficit Budgeter
-        self.budgeter = UpstreamDeficitBudgeter()
-
-        # Diurnal online extreme trackers for circadian darkness index
-        self.nu_day = 1.0
-        self.nu_night = 0.1
-        self.beta_tracker = 1e-4
-
-        # Estimated internal health (for dynamic Bayes cutoff)
-        self.estimated_health = 9.0
 
     def reset(self) -> None:
         """Reset episodic transient state."""
-        self.estimated_health = 9.0
-
-    def compute_circadian_darkness(self, patch_tokens: torch.Tensor) -> float:
-        """
-        Derives cheat-free circadian darkness index L_dark purely from median patch token norms.
-        """
-        with torch.no_grad():
-            token_norms = torch.norm(patch_tokens, p=2, dim=-1)  # (B, 64)
-            median_norm = float(torch.median(token_norms).item())
-
-            # Update moving extrema
-            self.nu_day = max(self.nu_day, median_norm)
-            self.nu_night = min(self.nu_night, median_norm)
-
-            denom = max(self.nu_day - self.nu_night, 1e-4)
-            l_dark = float(np.clip((self.nu_day - median_norm) / denom, 0.0, 1.0))
-            return l_dark
-
-    def compute_dynamic_bayes_cutoff(self, health: float) -> float:
-        """
-        Dynamically calculates Bayes-optimal risk cutoff tau*(H):
-            Full health (H=9): tau* <= 0.082
-            Critical health (H<=2): tau* <= 0.012
-        """
-        c_false = 1.0
-        c_mitigated = 1.0
-        h_clamped = max(min(health, 9.0), 1.0)
-        c_harm = 100.0 * (((10.0 - h_clamped) / 9.0) ** 1.85) + 11.20
-        tau = c_false / ((c_harm - c_mitigated) + c_false)
-        return float(min(tau, self.config.bayes_risk_cutoff_max))
+        pass
 
     def act(
         self,

@@ -173,43 +173,52 @@ class FactorizedConjunctiveAffordanceGate:
 class UpstreamDeficitBudgeter:
     """
     Dynamic Upstream Deficit Budgeting:
-        D(Pickaxe) = max(0, Cost(Pickaxe) - x_wood)
-    Inhibits premature table placement until full recursive budget is gathered.
+    Strict Rule 1 Compliance: Zero human-typed recipe tables or defaults.
+    Costs derive purely from empirical transition evidence via AnonymousKernelCostInducer.
+    If costs are unobserved, material gating remains disabled (deficit = 0.0).
     """
 
     def __init__(
         self,
-        table_action_id: int = 8,
-        pickaxe_action_id: int = 11,
-        wood_dim_idx: int = 0,
-        default_table_cost: float = 2.0,
-        default_pickaxe_cost: float = 1.0,
+        cost_inducer: Optional[AnonymousKernelCostInducer] = None,
     ) -> None:
-        self.table_action = table_action_id
-        self.pickaxe_action = pickaxe_action_id
-        self.wood_dim = wood_dim_idx
-        self.cost_inducer = AnonymousKernelCostInducer()
-        self.default_table_cost = default_table_cost
-        self.default_pickaxe_cost = default_pickaxe_cost
+        self.cost_inducer = cost_inducer or AnonymousKernelCostInducer()
 
-    def compute_budget_deficit(self, current_wood_count: float) -> float:
+    def compute_budget_deficit(
+        self,
+        current_material_count: float,
+        target_action_id: Optional[int] = None,
+        catalyst_action_id: Optional[int] = None,
+        resource_dim: int = 0,
+    ) -> float:
         """
-        Computes remaining wood needed before crafting a pickaxe:
-            total_required = table_cost + pickaxe_cost (typically 2 + 1 = 3 wood)
+        Computes remaining material needed based purely on empirically extracted modes.
+        If no empirical evidence has been observed yet, returns 0.0 (gating disabled).
         """
-        learned_table = self.cost_inducer.estimate_mode_cost(self.table_action, self.wood_dim)
-        learned_pick = self.cost_inducer.estimate_mode_cost(self.pickaxe_action, self.wood_dim)
+        if target_action_id is None or catalyst_action_id is None:
+            return 0.0
 
-        table_cost = learned_table if learned_table is not None else self.default_table_cost
-        pick_cost = learned_pick if learned_pick is not None else self.default_pickaxe_cost
+        learned_catalyst = self.cost_inducer.estimate_mode_cost(catalyst_action_id, resource_dim)
+        learned_target = self.cost_inducer.estimate_mode_cost(target_action_id, resource_dim)
 
-        total_wood_needed = table_cost + pick_cost  # 3.0 wood
-        return max(0.0, total_wood_needed - current_wood_count)
+        # Rule 1 invariant: if either cost has not been empirically learned, do NOT hardcode!
+        if learned_catalyst is None or learned_target is None:
+            return 0.0
 
-    def is_table_placement_permitted(self, current_wood_count: float) -> bool:
+        total_material_needed = learned_catalyst + learned_target
+        return max(0.0, float(total_material_needed - current_material_count))
+
+    def is_placement_permitted(
+        self,
+        current_material_count: float,
+        target_action_id: Optional[int] = None,
+        catalyst_action_id: Optional[int] = None,
+        resource_dim: int = 0,
+    ) -> bool:
         """
-        Table placement is strictly barred if the agent does not possess enough wood
-        to immediately construct the pickaxe upon placement (Deficit > 0).
+        Gating is enabled ONLY when empirical costs have been proven.
         """
-        deficit = self.compute_budget_deficit(current_wood_count)
+        deficit = self.compute_budget_deficit(
+            current_material_count, target_action_id, catalyst_action_id, resource_dim
+        )
         return deficit <= 0.0

@@ -137,29 +137,37 @@ def test_factorized_conjunctive_counterfactual_deprivation_battery() -> None:
 
 def test_upstream_deficit_budgeter_prevents_premature_placement() -> None:
     """
-    Verifies that the agent refuses to place a table until 3 wood is in backpack.
+    Verifies that UpstreamDeficitBudgeter learns discrete costs from empirical data
+    via KDME and correctly computes deficits, with gating disabled when unobserved.
     """
-    budgeter = UpstreamDeficitBudgeter(
-        default_table_cost=2.0,
-        default_pickaxe_cost=1.0,
-    )
+    inducer = AnonymousKernelCostInducer()
+    budgeter = UpstreamDeficitBudgeter(cost_inducer=inducer)
 
-    # With 0 wood: Deficit = 3.0 -> False
-    assert budgeter.compute_budget_deficit(0.0) == 3.0
-    assert not budgeter.is_table_placement_permitted(0.0)
+    # 1. Unobserved state: gating is disabled (deficit = 0.0)
+    assert budgeter.compute_budget_deficit(0.0) == 0.0
+    assert budgeter.is_placement_permitted(0.0)
 
-    # With 1 wood: Deficit = 2.0 -> False
-    assert budgeter.compute_budget_deficit(1.0) == 2.0
-    assert not budgeter.is_table_placement_permitted(1.0)
+    # 2. Feed empirical observation data for catalyst action A (cost = 2.0) and target action B (cost = 1.0)
+    rng = np.random.RandomState(42)
+    # Action A: consumes 2.0 units of resource 0
+    for _ in range(30):
+        delta = np.array([-2.0 + rng.normal(0, 0.05)])
+        inducer.observe(action_id=8, state_delta=delta)
 
-    # With 2 wood: Deficit = 1.0 -> False (Holding 2 wood is not enough!)
-    assert budgeter.compute_budget_deficit(2.0) == 1.0
-    assert not budgeter.is_table_placement_permitted(2.0)
+    # Action B: consumes 1.0 unit of resource 0
+    for _ in range(30):
+        delta = np.array([-1.0 + rng.normal(0, 0.05)])
+        inducer.observe(action_id=11, state_delta=delta)
 
-    # With 3 wood: Deficit = 0.0 -> True!
-    assert budgeter.compute_budget_deficit(3.0) == 0.0
-    assert budgeter.is_table_placement_permitted(3.0)
+    # Now verify deficit is computed purely from learned empirical modes (2.0 + 1.0 = 3.0)
+    # With 0 material: Deficit = 3.0 -> False
+    assert budgeter.compute_budget_deficit(0.0, target_action_id=11, catalyst_action_id=8) == 3.0
+    assert not budgeter.is_placement_permitted(0.0, target_action_id=11, catalyst_action_id=8)
 
-    # With 4 wood: Deficit = 0.0 -> True!
-    assert budgeter.compute_budget_deficit(4.0) == 0.0
-    assert budgeter.is_table_placement_permitted(4.0)
+    # With 2 material: Deficit = 1.0 -> False
+    assert budgeter.compute_budget_deficit(2.0, target_action_id=11, catalyst_action_id=8) == 1.0
+    assert not budgeter.is_placement_permitted(2.0, target_action_id=11, catalyst_action_id=8)
+
+    # With 3 material: Deficit = 0.0 -> True!
+    assert budgeter.compute_budget_deficit(3.0, target_action_id=11, catalyst_action_id=8) == 0.0
+    assert budgeter.is_placement_permitted(3.0, target_action_id=11, catalyst_action_id=8)
