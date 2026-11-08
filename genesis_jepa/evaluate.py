@@ -128,7 +128,11 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=500, help="Max steps per episode")
     parser.add_argument("--seed", type=int, default=42, help="Evaluation seed")
     parser.add_argument("--output-json", type=str, default=None, help="Output JSON path")
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        clean_unknown = [u for u in unknown if u.strip() not in ("n", "\\n", "")]
+        if clean_unknown:
+            print(f"[Warning] Ignoring unrecognized CLI arguments: {clean_unknown}")
 
     print(f"=== Evaluating Genesis Visual JEPA Agent on Crafter ({args.episodes} episodes) ===")
     results = evaluate_agent(

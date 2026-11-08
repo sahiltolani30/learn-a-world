@@ -347,7 +347,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42, help="Environment seed")
     parser.add_argument("--checkpoint", type=str, default="genesis_checkpoints/agent_latest.pt")
     parser.add_argument("--history-json", type=str, default=None, help="Output JSON path for training history")
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        clean_unknown = [u for u in unknown if u.strip() not in ("n", "\\n", "")]
+        if clean_unknown:
+            print(f"[Warning] Ignoring unrecognized CLI arguments: {clean_unknown}")
 
     history = run_self_play_training(
         num_episodes=args.episodes,
