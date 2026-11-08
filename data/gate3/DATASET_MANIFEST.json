@@ -1,0 +1,16 @@
+{
+  "train_dataset": {
+    "path": "data/gate3/train_replay_10k.npz",
+    "sha256": "6cbf85ff6c53c3a17c4cf33da46d31e4a6db355bc9c9291485ee7a4122ef6529",
+    "transitions": 10000,
+    "seeds": "3000..3029",
+    "env": "unmodified_crafter_v1.8.3"
+  },
+  "eval_dataset": {
+    "path": "data/gate3/eval_heldout_seeds.pt",
+    "sha256": "247640eb67131aa238fab839f0350ad3022893dd4d36bf89399ce276ad584cd9",
+    "seeds": "3030..3049",
+    "transitions_per_seed": 500,
+    "env": "unmodified_crafter_v1.8.3"
+  }
+}
