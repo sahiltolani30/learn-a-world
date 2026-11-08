@@ -135,42 +135,21 @@ class GenesisVisualAgent(nn.Module):
 
         self.eval()
         with torch.no_grad():
-            # 1. Visual Retina: Extract patch and slot tokens
+            # 1. Visual Retina: Extract patch and slot tokens from raw pixels
             patch_tokens, slot_tokens = self.world_model.encode(obs_t)
 
             # 2. Pooled object representation across slots
             pooled_slots = torch.mean(slot_tokens, dim=1)  # (1, 192)
 
-            # 3. Circadian Darkness Perception
-            l_dark = self.compute_circadian_darkness(patch_tokens)
+            # 3. Policy Actor: Directly predicts action logits from learned latent representation
+            action_logits = self.actor(pooled_slots).squeeze(0)  # (num_actions,)
 
-            # 4. Instantaneous Threat Risk Assessment
-            danger_risk = float(self.danger_head(pooled_slots).item())
-
-            # 5. Actor Policy Logits
-            action_logits = self.actor(pooled_slots).squeeze(0)  # (17,)
-
-            # 6. Anti-Sleep Hazard Lock: Action 6 (sleep) is banned in open / dangerous conditions
-            if l_dark >= self.config.night_darkness_threshold or danger_risk > self.config.danger_threshold:
-                action_logits[6] = -1e9  # Bar Action 6 strictly
-
-            # 7. Cost-Sensitive Bayes Risk Decision: Dodge if threat exceeds threshold
-            tau_star = self.compute_dynamic_bayes_cutoff(self.estimated_health)
-            if danger_risk > tau_star:
-                # Evasive Reflex: prioritize locomotion dodges (Actions 1..4)
-                evasive_logits = action_logits[1:5]
-                chosen_move = int(torch.argmax(evasive_logits).item()) + 1
-                return chosen_move
-
-            # 8. Unimix Categorical Exploration (epsilon floor)
+            # 4. Unimix Categorical Exploration (domain-agnostic tabula rasa sampling)
             probs = F.softmax(action_logits, dim=-1)
-            unimix_probs = (1.0 - self.config.unimix_floor) * probs + (self.config.unimix_floor / self.config.num_actions)
+            unimix_probs = (1.0 - self.config.unimix_floor) * probs + (
+                self.config.unimix_floor / self.config.num_actions
+            )
 
-            # Re-enforce safety lock: strictly banned actions (logit <= -1e8) must NEVER be sampled
-            banned_mask = (action_logits <= -1e8)
-            unimix_probs[banned_mask] = 0.0
-            unimix_probs = unimix_probs / unimix_probs.sum()
-
-            # Sample action
+            # Sample action purely from learned policy + exploration
             action = int(torch.multinomial(unimix_probs, num_samples=1).item())
             return action

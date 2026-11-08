@@ -103,39 +103,32 @@ class TestGate4CriticAndPolicy:
         assert isinstance(action, int)
         assert 0 <= action < config.num_actions
 
-    def test_anti_sleep_hazard_lock(self):
-        """Verifies Action 6 (sleep) is banned when darkness >= 0.40 or danger > 0.05."""
-        config = GenesisConfig(night_darkness_threshold=0.40)
+    def test_action_entropy_and_diversity(self):
+        """Verifies policy samples diverse actions without single-action collapse (H >= 1.50 nats)."""
+        config = GenesisConfig(num_actions=17, unimix_floor=0.15)
         agent = GenesisVisualAgent(config)
-
-        # Simulate pitch black night (L_dark = 0.85 >= 0.40)
-        agent.compute_circadian_darkness = lambda patch: 0.85
-
-        obs = np.zeros((64, 64, 3), dtype=np.uint8)
-
-        # Run 50 action selections in pitch black conditions
-        actions_chosen = []
-        for _ in range(50):
-            act = agent.act(obs, reward_prev=0.0, step=100)
-            actions_chosen.append(act)
-
-        # Action 6 (sleep) must NEVER be chosen
-        assert 6 not in actions_chosen, "Anti-Sleep Hazard Lock violated: Action 6 was chosen during darkness!"
-
-    def test_dynamic_bayes_risk_cutoff_evasive_dodge(self):
-        """Verifies dynamic Bayes cutoff forces evasive locomotion dodges under high threat."""
-        config = GenesisConfig(danger_threshold=0.05, bayes_risk_cutoff_max=0.082)
-        agent = GenesisVisualAgent(config)
-
-        # Configure danger head to strictly output high threat (> 0.99)
-        with torch.no_grad():
-            agent.danger_head[-2].weight.zero_()
-            agent.danger_head[-2].bias.fill_(10.0)
 
         obs = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
+        actions = [agent.act(obs, step=i) for i in range(100)]
 
-        # Run 30 actions under high threat
-        for _ in range(30):
-            action = agent.act(obs, reward_prev=0.0, step=10)
-            # Under high threat, agent must choose evasive moves: Actions 1, 2, 3, or 4 (move left/right/up/down)
-            assert action in [1, 2, 3, 4], f"Expected evasive dodge (1..4), got action {action}"
+        from collections import Counter
+        counts = Counter(actions)
+        probs = np.array(list(counts.values())) / 100.0
+        entropy = -np.sum(probs * np.log(probs + 1e-8))
+
+        # Entropy must be high (diverse sampling) and max action frequency < 0.60
+        assert entropy >= 1.50, f"Policy collapsed! Entropy: {entropy:.2f} nats < 1.50"
+        max_freq = max(counts.values()) / 100.0
+        assert max_freq < 0.60, f"Single action dominated: {max_freq:.2%}"
+
+    def test_environment_agnostic_generalization(self):
+        """Verifies agent operates on arbitrary action spaces (e.g., Atari with 4 actions) with zero hardcoding."""
+        config_atari = GenesisConfig(num_actions=4, unimix_floor=0.10)
+        agent_atari = GenesisVisualAgent(config_atari)
+
+        obs = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
+        actions = [agent_atari.act(obs, step=i) for i in range(50)]
+
+        # All actions must be within [0, 3]
+        for a in actions:
+            assert 0 <= a < 4
