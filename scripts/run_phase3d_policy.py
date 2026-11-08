@@ -44,12 +44,12 @@ def run_phase3d_policy_training(
     augmented_replay_path: str = "data/phase3/augmented_replay_84eps.npz",
     augmented_token_cache_path: str = "data/phase3/augmented_token_cache.pt",
     horizon: int = 4,
-    updates: int = 400,
+    updates: int = 300,
     batch_size: int = 8,
     actor_lr: float = 1e-4,
-    value_lr: float = 1e-3,
-    entropy_start: float = 0.03,
-    entropy_end: float = 0.01,
+    value_lr: float = 1e-4,
+    entropy_start: float = 0.05,
+    entropy_end: float = 0.02,
     reward_clip: float = 1.0,
     device_str: str = "auto",
     output_dir: str = "results/phase3",
@@ -287,12 +287,12 @@ if __name__ == "__main__":
     parser.add_argument("--augmented-replay", type=str, default="data/phase3/augmented_replay_84eps.npz")
     parser.add_argument("--augmented-token-cache", type=str, default="data/phase3/augmented_token_cache.pt")
     parser.add_argument("--horizon", type=int, default=4)
-    parser.add_argument("--updates", type=int, default=400)
+    parser.add_argument("--updates", type=int, default=300)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
-    parser.add_argument("--value-lr", type=float, default=1e-3)
-    parser.add_argument("--entropy-start", type=float, default=0.03)
-    parser.add_argument("--entropy-end", type=float, default=0.01)
+    parser.add_argument("--value-lr", type=float, default=1e-4)
+    parser.add_argument("--entropy-start", type=float, default=0.05)
+    parser.add_argument("--entropy-end", type=float, default=0.02)
     parser.add_argument("--reward-clip", type=float, default=1.0)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--output-dir", type=str, default="results/phase3")

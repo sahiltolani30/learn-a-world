@@ -420,11 +420,19 @@ def imagination_actor_critic_gae_step(
     adv_std = adv_stack.std().clamp_min(1e-6)
     adv_norm = (adv_stack - adv_mean) / adv_std
 
-    actor_loss = -(adv_norm.detach() * log_prob_stack).mean() - entropy_weight * entropy_stack.mean()
-    value_loss = F.smooth_l1_loss(val_stack, ret_stack.detach())
+    # 1. Target return clamping to prevent runaway value divergence (DreamerV3 bounded targets)
+    ret_clamped = torch.clamp(ret_stack.detach(), -10.0, 10.0)
+    value_loss = F.smooth_l1_loss(val_stack, ret_clamped)
+
+    # 2. Policy loss with entropy barrier to prevent catastrophic action collapse
+    mean_ent = entropy_stack.mean()
+    ent_barrier = torch.relu(1.2 - mean_ent).square() * 2.0
+    actor_loss = -(adv_norm.detach() * log_prob_stack).mean() - entropy_weight * mean_ent + ent_barrier
 
     actor_loss.backward()
     value_loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.heads.policy.parameters(), max_norm=1.0)
+    torch.nn.utils.clip_grad_norm_(model.heads.value.parameters(), max_norm=1.0)
     actor_optimizer.step()
     value_optimizer.step()
 
