@@ -287,10 +287,28 @@ def run_phase3b_integration(
     base_token_cache: Optional[List[torch.Tensor]] = None
     if base_cache_path.exists():
         print(f"  Found local base token cache: {base_cache_path}")
-        base_token_cache = torch.load(base_cache_path, weights_only=False)
+        try:
+            loaded = torch.load(base_cache_path, weights_only=False)
+            if isinstance(loaded, list) and len(loaded) == len(base_replay.records):
+                base_token_cache = loaded
+                print(f"  Successfully loaded valid base token cache ({len(base_token_cache)} episodes).")
+            else:
+                print("  Local base token cache is incomplete, will re-extract.")
+                base_cache_path.unlink(missing_ok=True)
+        except Exception as e:
+            print(f"  Local base token cache is corrupt or truncated ({e}), will remove and re-extract.")
+            base_cache_path.unlink(missing_ok=True)
     elif base_drive_cache and base_drive_cache.exists():
         print(f"  Found Google Drive base token cache: {base_drive_cache}")
-        base_token_cache = torch.load(base_drive_cache, weights_only=False)
+        try:
+            loaded = torch.load(base_drive_cache, weights_only=False)
+            if isinstance(loaded, list) and len(loaded) == len(base_replay.records):
+                base_token_cache = loaded
+                print(f"  Successfully loaded valid Drive base token cache ({len(base_token_cache)} episodes).")
+            else:
+                print("  Drive base token cache is incomplete, will re-extract.")
+        except Exception as e:
+            print(f"  Drive base token cache is corrupt or truncated ({e}), will re-extract.")
 
     if base_token_cache is None or len(base_token_cache) != len(base_replay.records):
         print("  Extracting frozen DINOv2 patch tokens for Canonical Baseline shard (54 episodes)...")
