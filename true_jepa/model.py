@@ -287,7 +287,17 @@ class TrueJEPA(nn.Module):
     def load_checkpoint(
         cls, path: str, device: Union[str, torch.device] = "cpu"
     ) -> Tuple["TrueJEPA", Dict[str, object]]:
-        payload = torch.load(path, map_location="cpu", weights_only=False)
+        import gzip
+        from pathlib import Path
+        p = Path(path)
+        if str(path).endswith(".gz"):
+            with gzip.open(path, "rb") as f:
+                payload = torch.load(f, map_location="cpu", weights_only=False)
+        elif not p.exists() and Path(str(path) + ".gz").exists():
+            with gzip.open(str(path) + ".gz", "rb") as f:
+                payload = torch.load(f, map_location="cpu", weights_only=False)
+        else:
+            payload = torch.load(path, map_location="cpu", weights_only=False)
         if payload.get("format") != cls.checkpoint_format:
             raise ValueError("checkpoint is not a true_jepa_v1 checkpoint")
         cfg = JEPAConfig(**payload["config"])

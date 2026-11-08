@@ -9,6 +9,7 @@ to the common 8x8x192 representation.
 from __future__ import annotations
 
 import hashlib
+import os
 from typing import TYPE_CHECKING, Optional, Tuple
 import torch
 from torch import Tensor, nn
@@ -64,7 +65,14 @@ class DINOv2VisualEncoder(nn.Module):
         if backbone is not None:
             self.backbone = backbone
         else:
-            self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True)
+            try:
+                self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True, skip_validation=True)
+            except Exception:
+                cache_dir = os.path.expanduser("~/.cache/torch/hub/facebookresearch_dinov2_main")
+                if os.path.exists(cache_dir):
+                    self.backbone = torch.hub.load(cache_dir, model_name, source="local", pretrained=True)
+                else:
+                    self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True)
 
         # Freeze backbone parameters permanently
         self.backbone.requires_grad_(False)

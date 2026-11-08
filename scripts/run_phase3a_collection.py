@@ -28,6 +28,52 @@ from true_jepa.model import TrueJEPA
 from true_jepa.replay import PixelEpisode, PixelReplay
 
 
+def resolve_checkpoint_path(given_path: str) -> Path:
+    """Robustly discovers checkpoint path across local repo and mounted Google Drive."""
+    p = Path(given_path)
+    if p.exists() and p.is_file():
+        return p
+    if Path(str(p) + ".gz").exists():
+        return Path(str(p) + ".gz")
+
+    candidate_search_paths = [
+        Path(given_path),
+        Path(str(given_path) + ".gz"),
+        Path("results/gate6/policy_h4.pt"),
+        Path("results/gate6/policy_h4.pt.gz"),
+        Path("/content/learn-a-world/results/gate6/policy_h4.pt"),
+        Path("/content/learn-a-world/results/gate6/policy_h4.pt.gz"),
+        Path("/content/drive/MyDrive/learn-a-world/orbit/checkpoints/policy_h4.pt"),
+        Path("/content/drive/MyDrive/learn-a-world/orbit/checkpoints/policy_h4.pt.gz"),
+        Path("/content/drive/MyDrive/learn-a-world/results/gate6/policy_h4.pt"),
+        Path("/content/drive/MyDrive/learn-a-world/results/gate6/policy_h4.pt.gz"),
+        Path("/content/drive/MyDrive/learn-a-world/checkpoints/policy_h4.pt"),
+        Path("/content/drive/My Drive/learn-a-world/orbit/checkpoints/policy_h4.pt"),
+        Path("/content/drive/My Drive/learn-a-world/orbit/checkpoints/policy_h4.pt.gz"),
+        Path("/content/drive/My Drive/learn-a-world/results/gate6/policy_h4.pt"),
+    ]
+
+    for candidate in candidate_search_paths:
+        if candidate.exists() and candidate.is_file():
+            print(f"[Drive Storage] Found checkpoint at: {candidate}")
+            return candidate
+
+    searched_str = "\n  - ".join(str(c) for c in candidate_search_paths)
+    raise FileNotFoundError(
+        f"Missing policy checkpoint '{given_path}'. Searched candidate locations:\n  - {searched_str}\n"
+        "Please upload 'policy_h4.pt' or 'policy_h4.pt.gz' to Google Drive (/content/drive/MyDrive/learn-a-world/orbit/checkpoints/) "
+        "or place it in results/gate6/."
+    )
+
+
+def resolve_drive_root() -> Optional[Path]:
+    """Detects active Google Drive mount points."""
+    for candidate in [Path("/content/drive/MyDrive/learn-a-world"), Path("/content/drive/My Drive/learn-a-world")]:
+        if candidate.parent.exists():
+            return candidate
+    return None
+
+
 def run_phase3a_collection(
     policy_ckpt: str = "results/gate6/policy_h4.pt",
     num_episodes: int = 30,
@@ -36,6 +82,7 @@ def run_phase3a_collection(
     temperature: float = 1.2,
     device_str: str = "auto",
     output_path: str = "data/phase3a_selfplay_30eps.npz",
+    drive_dir: Optional[str] = None,
 ) -> Dict[str, object]:
     """Runs Phase 3A rollout collection and full schema/disk verification."""
     print("=" * 80)
@@ -49,10 +96,8 @@ def run_phase3a_collection(
         device = torch.device(device_str)
     print(f"Active Device: {device}")
 
-    # 2. Load policy candidate
-    ckpt_path = Path(policy_ckpt)
-    if not ckpt_path.exists():
-        raise FileNotFoundError(f"Missing policy checkpoint: {ckpt_path}")
+    # 2. Robust checkpoint resolution
+    ckpt_path = resolve_checkpoint_path(policy_ckpt)
     print(f"Loading Gate 6 H=4 policy candidate from {ckpt_path}...")
     model, _ = TrueJEPA.load_checkpoint(str(ckpt_path), device=device)
     model.eval()
@@ -156,6 +201,16 @@ def run_phase3a_collection(
     file_size_mb = out_path.stat().st_size / (1024 * 1024)
     print(f"Saved Replay Shard: {out_path} ({file_size_mb:.2f} MB)")
 
+    # Automatic Google Drive synchronization
+    target_drive = Path(drive_dir) if drive_dir else resolve_drive_root()
+    if target_drive and target_drive.exists():
+        drive_data_dir = target_drive / "orbit" / "data"
+        drive_data_dir.mkdir(parents=True, exist_ok=True)
+        drive_npz_path = drive_data_dir / out_path.name
+        import shutil
+        shutil.copy2(str(out_path), str(drive_npz_path))
+        print(f"[Drive Storage] Synced replay shard to Google Drive: {drive_npz_path}")
+
     # 6. Disk Reload & Integrity Verification
     print("\n[VERIFICATION] Reloading replay shard from disk and verifying schemas...")
     reloaded = PixelReplay.load(str(out_path))
@@ -219,6 +274,12 @@ def run_phase3a_collection(
     with open(json_path, "w") as f:
         json.dump(report, f, indent=2)
 
+    if target_drive and target_drive.exists():
+        drive_json_path = target_drive / "orbit" / "data" / json_path.name
+        import shutil
+        shutil.copy2(str(json_path), str(drive_json_path))
+        print(f"[Drive Storage] Synced summary report to Google Drive: {drive_json_path}")
+
     print("\n" + "=" * 80)
     print("PHASE 3A VERIFICATION SUMMARY")
     print("=" * 80)
@@ -245,6 +306,7 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=1.2)
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--output", type=str, default="data/phase3a_selfplay_30eps.npz")
+    parser.add_argument("--drive-dir", type=str, default=None)
     args = parser.parse_args()
 
     run_phase3a_collection(
@@ -255,4 +317,5 @@ if __name__ == "__main__":
         temperature=args.temperature,
         device_str=args.device,
         output_path=args.output,
+        drive_dir=args.drive_dir,
     )
