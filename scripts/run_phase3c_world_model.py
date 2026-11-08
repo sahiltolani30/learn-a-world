@@ -399,7 +399,9 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--output-dir", type=str, default="results/phase3")
     parser.add_argument("--drive-dir", type=str, default=None)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"[Warning] Ignoring unrecognized arguments: {unknown}")
 
     run_phase3c_evaluation_and_promotion(
         base_ckpt_path=args.base_checkpoint,
