@@ -4,22 +4,24 @@
 Executes Step 2 of the Phase 3 master specification:
 - Loads the canonical baseline shard (data/gate3/train_replay_10k.npz, 54 episodes, 10,054 transitions).
 - Loads the Phase 3A self-play shard (data/phase3a_selfplay_30eps.npz, 30 episodes, 5,099 transitions).
-- Extracts frozen Meta AI DINOv2 ViT-S/14 patch tokens ([T+1, 256, 384]) for all episodes.
+- Extracts frozen Meta AI DINOv2 ViT-S/14 patch tokens ([T+1, 256, 384] in float16) for all episodes.
 - Assembles the combined augmented replay buffer (84 episodes, 15,153 transitions).
 - Verifies sequence contiguity, prefix burn-in reconstruction (T_prefix=4), and boundary masks.
 - Enforces strict seed disjointness against held-out evaluation seeds (3030..3049).
-- Serializes verified augmented replay and token cache to disk and Google Drive.
+- Serializes verified augmented replay and token cache with memory-safe streaming.
 """
 from __future__ import annotations
 
 import argparse
 import ast
+import gc
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Ensure repository root is on sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +40,11 @@ from true_jepa.replay import PixelEpisode, PixelReplay
 class CachedDINOv2Replay:
     """Replay sampler with pre-extracted frozen DINOv2 patch tokens."""
 
-    def __init__(self, raw_replay: PixelReplay, token_cache: List[np.ndarray]) -> None:
+    def __init__(
+        self,
+        raw_replay: PixelReplay,
+        token_cache: List[Union[torch.Tensor, np.ndarray]],
+    ) -> None:
         self.raw_replay = raw_replay
         self.token_cache = token_cache
         self._episodes = raw_replay._episodes
@@ -60,7 +66,8 @@ class CachedDINOv2Replay:
         if sequence_length < 1:
             raise ValueError("sequence_length must be positive")
 
-        token_shape = self.token_cache[0].shape[1:]
+        first_tok = self.token_cache[0]
+        token_shape = tuple(first_tok.shape[1:])
         obs = np.zeros((batch_size, sequence_length + 1) + token_shape, dtype=np.float32)
         actions = np.zeros((batch_size, sequence_length), dtype=np.int64)
         rewards = np.zeros((batch_size, sequence_length), dtype=np.float32)
@@ -81,9 +88,15 @@ class CachedDINOv2Replay:
             sampled_indices.append(ep_idx)
             starts.append(start)
 
-            obs[row, : use + 1] = ep_tokens[start : start + use + 1]
-            if use < sequence_length:
-                obs[row, use + 1 :] = ep_tokens[-1]
+            if isinstance(ep_tokens, torch.Tensor):
+                obs[row, : use + 1] = ep_tokens[start : start + use + 1].float().numpy()
+                if use < sequence_length:
+                    obs[row, use + 1 :] = ep_tokens[-1].float().numpy()
+            else:
+                obs[row, : use + 1] = ep_tokens[start : start + use + 1].astype(np.float32)
+                if use < sequence_length:
+                    obs[row, use + 1 :] = ep_tokens[-1].astype(np.float32)
+
             actions[row, :use] = episode.actions[start : start + use]
             rewards[row, :use] = episode.rewards[start : start + use]
             terminated[row, :use] = episode.terminated[start : start + use]
@@ -100,7 +113,10 @@ class CachedDINOv2Replay:
             if start > 0:
                 ep = self._episodes[ep_idx]
                 ep_tokens = self.token_cache[ep_idx]
-                prefix_obs[row, : start + 1] = ep_tokens[: start + 1]
+                if isinstance(ep_tokens, torch.Tensor):
+                    prefix_obs[row, : start + 1] = ep_tokens[: start + 1].float().numpy()
+                else:
+                    prefix_obs[row, : start + 1] = ep_tokens[: start + 1].astype(np.float32)
                 prefix_actions[row, :start] = ep.actions[:start]
                 prefix_rewards[row, :start] = ep.rewards[:start]
 
@@ -155,10 +171,10 @@ def extract_tokens_for_episodes(
     encoder: DINOv2VisualEncoder,
     device: torch.device,
     micro_batch: int = 64,
-) -> List[np.ndarray]:
-    """Extracts [T+1, 256, 384] frozen DINOv2 patch tokens for a list of episodes."""
+) -> List[torch.Tensor]:
+    """Extracts [T+1, 256, 384] frozen DINOv2 patch tokens as float16 tensors."""
     encoder.backbone.eval()
-    token_list: List[np.ndarray] = []
+    token_list: List[torch.Tensor] = []
     total_frames = sum(ep.obs.shape[0] for ep in episodes)
     processed_frames = 0
     t0 = time.perf_counter()
@@ -171,13 +187,14 @@ def extract_tokens_for_episodes(
                 batch_obs = raw_obs[b : b + micro_batch].to(device)
                 norm_obs = encoder.preprocess(batch_obs)
                 feats = encoder.backbone.forward_features(norm_obs)
-                tokens = feats["x_norm_patchtokens"].cpu().numpy()  # [B, 256, 384]
-                ep_tokens.append(tokens)
-            ep_tokens_arr = np.concatenate(ep_tokens, axis=0).astype(np.float32)  # [T+1, 256, 384]
-            assert ep_tokens_arr.shape == (ep.obs.shape[0], 256, 384), (
-                f"Unexpected token shape {ep_tokens_arr.shape} for obs shape {ep.obs.shape}"
+                # Keep as float16 on CPU to eliminate RAM spikes
+                tokens_fp16 = feats["x_norm_patchtokens"].to(torch.float16).cpu()
+                ep_tokens.append(tokens_fp16)
+            ep_tokens_tensor = torch.cat(ep_tokens, dim=0)  # [T+1, 256, 384] float16
+            assert ep_tokens_tensor.shape == (ep.obs.shape[0], 256, 384), (
+                f"Unexpected token shape {ep_tokens_tensor.shape} for obs shape {ep.obs.shape}"
             )
-            token_list.append(ep_tokens_arr)
+            token_list.append(ep_tokens_tensor)
             processed_frames += ep.obs.shape[0]
 
             if (ep_i + 1) % 10 == 0 or (ep_i + 1) == len(episodes):
@@ -212,7 +229,6 @@ def verify_heldout_seed_disjointness(
             eval_seeds.update([int(s) for s in eval_data["seeds"]])
 
     if not eval_seeds:
-        # Default canonical heldout seeds
         eval_seeds = set(range(3030, 3050))
 
     train_seeds = [int(ep.seed) for ep in training_episodes]
@@ -268,7 +284,7 @@ def run_phase3b_integration(
     base_cache_path = Path("data/gate3/dinov2_token_cache.pt")
     base_drive_cache = Path(drive_dir) / "orbit" / "data" / "dinov2_token_cache.pt" if drive_dir else None
     
-    base_token_cache: Optional[List[np.ndarray]] = None
+    base_token_cache: Optional[List[torch.Tensor]] = None
     if base_cache_path.exists():
         print(f"  Found local base token cache: {base_cache_path}")
         base_token_cache = torch.load(base_cache_path, weights_only=False)
@@ -279,17 +295,24 @@ def run_phase3b_integration(
     if base_token_cache is None or len(base_token_cache) != len(base_replay.records):
         print("  Extracting frozen DINOv2 patch tokens for Canonical Baseline shard (54 episodes)...")
         base_token_cache = extract_tokens_for_episodes(base_replay.records, encoder, device)
-        # Save base cache locally and to drive
+        # Fast memory-safe tensor saving (takes ~1-2 seconds)
         base_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        t_save0 = time.perf_counter()
         torch.save(base_token_cache, base_cache_path)
-        print(f"  Saved baseline token cache: {base_cache_path}")
+        base_size_mb = base_cache_path.stat().st_size / (1024 * 1024)
+        print(f"  Saved baseline token cache: {base_cache_path} ({base_size_mb:.1f} MB in {time.perf_counter() - t_save0:.2f}s)")
+        
         target_drive = Path(drive_dir) if drive_dir else resolve_drive_root()
         if target_drive and target_drive.exists():
             drive_dest = target_drive / "orbit" / "data" / "dinov2_token_cache.pt"
             drive_dest.parent.mkdir(parents=True, exist_ok=True)
-            import shutil
+            print(f"  [Drive Storage] Syncing baseline token cache ({base_size_mb:.1f} MB) to Drive...")
             shutil.copy2(str(base_cache_path), str(drive_dest))
-            print(f"  Synced baseline token cache to Google Drive: {drive_dest}")
+            print(f"  [Drive Storage] Baseline token cache synced: {drive_dest}")
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     print("\n[3/5] Extracting frozen DINOv2 patch tokens for Self-Play Online shard (30 episodes)...")
     selfplay_token_cache = extract_tokens_for_episodes(selfplay_replay.records, encoder, device)
@@ -317,8 +340,7 @@ def run_phase3b_integration(
         assert rec.obs.shape[0] == tok.shape[0], (
             f"Frame mismatch in episode {i}: {rec.obs.shape[0]} obs frames vs {tok.shape[0]} tokens"
         )
-        assert tok.shape[1:] == (256, 384), f"Invalid token shape in episode {i}: {tok.shape[1:]}"
-        assert tok.dtype == np.float32, f"Invalid token dtype in episode {i}: {tok.dtype}"
+        assert tuple(tok.shape[1:]) == (256, 384), f"Invalid token shape in episode {i}: {tok.shape[1:]}"
     print("  ✓ Check 5.1: Exact 1-to-1 frame synchronization verified across all 84 episodes.")
 
     # Check 5.2: Boundary Mask & Trajectory Contiguity with Prefix Burn-in
@@ -372,6 +394,10 @@ def run_phase3b_integration(
     torch.save(selfplay_token_cache, str(selfplay_cache_path))
     torch.save(combined_token_cache, str(combined_cache_path))
 
+    aug_size_mb = aug_replay_path.stat().st_size / (1024 * 1024)
+    selfplay_size_mb = selfplay_cache_path.stat().st_size / (1024 * 1024)
+    combined_size_mb = combined_cache_path.stat().st_size / (1024 * 1024)
+
     report = {
         "status": "PASS",
         "stage": "Phase 3B: Replay Integration & Sequence Verification",
@@ -383,9 +409,13 @@ def run_phase3b_integration(
         "total_augmented_transitions": total_transitions,
         "total_observation_frames": total_obs_frames,
         "token_dimensions": [256, 384],
+        "token_dtype": "float16",
         "augmented_replay_path": str(aug_replay_path),
+        "augmented_replay_size_mb": aug_size_mb,
         "selfplay_cache_path": str(selfplay_cache_path),
+        "selfplay_cache_size_mb": selfplay_size_mb,
         "augmented_cache_path": str(combined_cache_path),
+        "augmented_cache_size_mb": combined_size_mb,
         "checklist": {
             "canonical_baseline_loaded": True,
             "selfplay_shard_loaded": True,
@@ -405,11 +435,12 @@ def run_phase3b_integration(
     if target_drive and target_drive.exists():
         drive_data_dir = target_drive / "orbit" / "data"
         drive_data_dir.mkdir(parents=True, exist_ok=True)
-        import shutil
         for src_f in [aug_replay_path, selfplay_cache_path, combined_cache_path, report_path]:
             dest_f = drive_data_dir / src_f.name
+            size_mb = src_f.stat().st_size / (1024 * 1024)
+            print(f"[Drive Storage] Syncing {src_f.name} ({size_mb:.1f} MB) to Google Drive...")
             shutil.copy2(str(src_f), str(dest_f))
-            print(f"[Drive Storage] Synced {src_f.name} to Google Drive: {dest_f}")
+            print(f"[Drive Storage] Synced: {dest_f}")
 
     print("\n" + "=" * 80)
     print("PHASE 3B VERIFICATION SUMMARY")
@@ -418,10 +449,10 @@ def run_phase3b_integration(
     print(f"Augmented Episodes:          {total_episodes} (54 Baseline + 30 Self-Play)")
     print(f"Total Transitions:           {total_transitions}")
     print(f"Total Observation Frames:    {total_obs_frames}")
-    print(f"Token Cache Dimension:       [T+1, 256, 384] float32")
-    print(f"Augmented Replay Path:       {aug_replay_path}")
-    print(f"Selfplay Token Cache:        {selfplay_cache_path}")
-    print(f"Combined Token Cache:        {combined_cache_path}")
+    print(f"Token Cache Dimension:       [T+1, 256, 384] float16")
+    print(f"Augmented Replay Path:       {aug_replay_path} ({aug_size_mb:.1f} MB)")
+    print(f"Selfplay Token Cache:        {selfplay_cache_path} ({selfplay_size_mb:.1f} MB)")
+    print(f"Combined Token Cache:        {combined_cache_path} ({combined_size_mb:.1f} MB)")
     print(f"Report JSON:                 {report_path}")
     print("=" * 80)
 
