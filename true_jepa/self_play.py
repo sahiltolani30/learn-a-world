@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import random
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Protocol
 
@@ -11,7 +12,11 @@ import torch
 from true_jepa.agent import BatchedVisualJEPAAgent, VisualJEPAAgent
 from true_jepa.config import TrainConfig
 from true_jepa.model import TrueJEPA
-from true_jepa.objectives import imagination_policy_step, train_world_model_step
+from true_jepa.objectives import (
+    imagination_policy_step,
+    reconstruct_belief_prefix,
+    train_world_model_step,
+)
 from true_jepa.relations import AnonymousRelationMemory, TransitionEvidence
 from true_jepa.replay import PixelEpisode, PixelReplay
 from true_jepa.vector_env import PixelBatch
@@ -81,17 +86,24 @@ class SelfPlayCoordinator:
         self.update = 0
         self.env_frames = 0
         self.snapshots: List[Dict[str, torch.Tensor]] = []
-        trainable = [parameter for parameter in self.model.parameters() if parameter.requires_grad]
+        actor_params = list(self.model.heads.policy.parameters())
+        value_params = list(self.model.heads.value.parameters())
+        actor_set = set(actor_params)
+        value_set = set(value_params)
+        world_params = [
+            p for p in self.model.parameters()
+            if p.requires_grad and p not in actor_set and p not in value_set
+        ]
         self.world_optimizer = torch.optim.AdamW(
-            trainable,
+            world_params,
             lr=self.train_cfg.learning_rate,
             weight_decay=self.train_cfg.weight_decay,
         )
         self.actor_optimizer = torch.optim.AdamW(
-            self.model.heads.policy.parameters(), lr=self.train_cfg.policy_learning_rate
+            actor_params, lr=self.train_cfg.policy_learning_rate
         )
         self.value_optimizer = torch.optim.AdamW(
-            self.model.heads.value.parameters(), lr=self.train_cfg.policy_learning_rate
+            value_params, lr=self.train_cfg.policy_learning_rate
         )
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.train_cfg.amp and self.device.type == "cuda")
 
@@ -268,7 +280,7 @@ class SelfPlayCoordinator:
             raise RuntimeError("collect episodes before training")
         metrics: List[Dict[str, float]] = []
         for _ in range(int(updates)):
-            batch = self.replay.sample(
+            batch = self.replay.sample_with_prefix(
                 self.train_cfg.batch_size,
                 self.train_cfg.sequence_length,
                 self.rng,
@@ -286,7 +298,7 @@ class SelfPlayCoordinator:
                 start_obs = batch["obs"][:, 0].to(self.device)
                 with torch.no_grad():
                     start = self.model.encode(start_obs)
-                    hidden = self.model.initial_belief(start_obs.shape[0], self.device)
+                    hidden, _, _ = reconstruct_belief_prefix(self.model, batch, self.device)
                 policy_result = imagination_policy_step(
                     self.model,
                     start,
@@ -318,6 +330,12 @@ class SelfPlayCoordinator:
                 "update": self.update,
                 "env_frames": self.env_frames,
                 "relations": self.relations.state_dict(),
+                "random_state": random.getstate(),
+                "numpy_state": self.rng.bit_generator.state,
+                "torch_cpu_state": torch.get_rng_state(),
+                "torch_cuda_state": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+                "scaler": self.scaler.state_dict() if self.scaler is not None else None,
+                "snapshots": self.snapshots,
             },
             path,
         )
@@ -357,6 +375,20 @@ class SelfPlayCoordinator:
         runner.update = int(payload["update"])
         runner.env_frames = int(payload["env_frames"])
         runner.relations = AnonymousRelationMemory.from_state_dict(payload["relations"])
+
+        if "random_state" in payload:
+            random.setstate(payload["random_state"])
+        if "numpy_state" in payload:
+            runner.rng.bit_generator.state = payload["numpy_state"]
+        if "torch_cpu_state" in payload:
+            torch.set_rng_state(payload["torch_cpu_state"])
+        if "torch_cuda_state" in payload and torch.cuda.is_available() and payload["torch_cuda_state"] is not None:
+            torch.cuda.set_rng_state_all(payload["torch_cuda_state"])
+        if "scaler" in payload and payload["scaler"] is not None and runner.scaler is not None:
+            runner.scaler.load_state_dict(payload["scaler"])
+        if "snapshots" in payload:
+            runner.snapshots = payload["snapshots"]
+
         if replay_path is not None:
             runner.replay = PixelReplay.load(replay_path)
         return runner

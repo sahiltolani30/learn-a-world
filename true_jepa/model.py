@@ -14,6 +14,7 @@ import torch
 from torch import Tensor, nn
 
 from true_jepa.config import JEPAConfig
+from true_jepa.dinov2_encoder import DINOv2VisualEncoder
 
 
 @dataclass
@@ -86,8 +87,9 @@ class BeliefCore(nn.Module):
 class ActionConditionedPredictor(nn.Module):
     """Predict the next dense latent map from the current map, belief, and action."""
 
-    def __init__(self, cfg: JEPAConfig, num_actions: int) -> None:
+    def __init__(self, cfg: JEPAConfig, num_actions: int, residual: bool = False) -> None:
         super().__init__()
+        self.residual = bool(residual)
         self.action_embedding = nn.Embedding(num_actions, cfg.token_dim)
         self.belief_projection = nn.Linear(cfg.belief_dim, cfg.token_dim)
         layer = nn.TransformerEncoderLayer(
@@ -101,13 +103,22 @@ class ActionConditionedPredictor(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(layer, num_layers=cfg.predictor_layers)
         self.output_norm = nn.LayerNorm(cfg.token_dim)
+        if self.residual:
+            self.delta_proj = nn.Linear(cfg.token_dim, cfg.token_dim)
+            nn.init.zeros_(self.delta_proj.weight)
+            nn.init.zeros_(self.delta_proj.bias)
 
     def forward(self, frame: LatentFrame, action: Tensor, hidden: Tensor) -> LatentFrame:
         context = self.action_embedding(action.long()).unsqueeze(1)
         context = context + self.belief_projection(hidden).unsqueeze(1)
-        predicted = self.transformer(frame.tokens + context)
-        predicted = self.output_norm(predicted)
-        return LatentFrame(tokens=predicted, pooled=predicted.mean(dim=1))
+        transformed = self.transformer(frame.tokens + context)
+        transformed = self.output_norm(transformed)
+        if self.residual:
+            delta = self.delta_proj(transformed)
+            predicted_tokens = frame.tokens + delta
+        else:
+            predicted_tokens = transformed
+        return LatentFrame(tokens=predicted_tokens, pooled=predicted_tokens.mean(dim=1))
 
 
 class TransitionEnsemble(nn.Module):
@@ -160,26 +171,46 @@ class TrueJEPA(nn.Module):
 
     checkpoint_format = "true_jepa_v1"
 
-    def __init__(self, cfg: JEPAConfig, num_actions: int) -> None:
+    def __init__(
+        self,
+        cfg: JEPAConfig,
+        num_actions: int,
+        encoder_type: str = "scratch",
+    ) -> None:
         super().__init__()
         if num_actions < 2:
             raise ValueError("num_actions must be discovered from an environment")
         self.cfg = cfg
         self.num_actions = int(num_actions)
-        self.encoder = VisualEncoder(cfg)
-        self.target_encoder = copy.deepcopy(self.encoder)
+        self.encoder_type = str(encoder_type).lower()
+
+        if self.encoder_type == "scratch":
+            self.encoder = VisualEncoder(cfg)
+            self.target_encoder = copy.deepcopy(self.encoder)
+        elif self.encoder_type == "dinov2":
+            self.encoder = DINOv2VisualEncoder(cfg)
+            # Share frozen backbone to conserve memory, deepcopy the trainable adapter
+            self.target_encoder = DINOv2VisualEncoder(cfg, backbone=self.encoder.backbone)
+            self.target_encoder.adapter = copy.deepcopy(self.encoder.adapter)
+        else:
+            raise ValueError(f"Unknown encoder_type: {encoder_type}. Choose 'scratch' or 'dinov2'.")
+
         self.target_encoder.requires_grad_(False)
         self.target_encoder.eval()
         self.belief = BeliefCore(cfg, num_actions)
-        self.predictor = ActionConditionedPredictor(cfg, num_actions)
+        self.predictor = ActionConditionedPredictor(
+            cfg, num_actions, residual=getattr(cfg, "predictor_residual", False)
+        )
         self.ensemble = TransitionEnsemble(cfg, num_actions)
         self.heads = ScalarHeads(cfg, num_actions)
 
     def train(self, mode: bool = True) -> "TrueJEPA":
-        """Keep the EMA target in evaluation mode even when the online model trains."""
+        """Keep the EMA target and frozen backbone in evaluation mode even when the online model trains."""
 
         super().train(mode)
         self.target_encoder.eval()
+        if hasattr(self.encoder, "backbone"):
+            self.encoder.backbone.eval()
         return self
 
     def encode(self, obs_uint8: Tensor) -> LatentFrame:
@@ -229,7 +260,8 @@ class TrueJEPA(nn.Module):
             if online_params.keys() != target_params.keys():
                 raise RuntimeError("online and target encoder parameter schemas differ")
             for key, value in online_params.items():
-                target_params[key].mul_(decay).add_(value, alpha=1.0 - decay)
+                if value.requires_grad:
+                    target_params[key].mul_(decay).add_(value, alpha=1.0 - decay)
             online_buffers = dict(self.encoder.named_buffers())
             target_buffers = dict(self.target_encoder.named_buffers())
             for key, value in online_buffers.items():
@@ -243,6 +275,7 @@ class TrueJEPA(nn.Module):
             "update": int(update),
             "config": {key: value for key, value in self.cfg.__dict__.items()},
             "num_actions": self.num_actions,
+            "encoder_type": self.encoder_type,
             "online": self.state_dict(),
             "target_encoder": self.target_encoder.state_dict(),
         }
@@ -258,11 +291,15 @@ class TrueJEPA(nn.Module):
         if payload.get("format") != cls.checkpoint_format:
             raise ValueError("checkpoint is not a true_jepa_v1 checkpoint")
         cfg = JEPAConfig(**payload["config"])
-        model = cls(cfg, int(payload["num_actions"]))
+        encoder_type = payload.get("encoder_type", "scratch")
+        model = cls(cfg, int(payload["num_actions"]), encoder_type=encoder_type)
         model.load_state_dict(payload["online"])
         model.target_encoder.load_state_dict(payload["target_encoder"])
         model.target_encoder.requires_grad_(False)
         model.target_encoder.eval()
+        if hasattr(model.encoder, "backbone"):
+            model.encoder.backbone.eval()
+            model.target_encoder.backbone.eval()
         model.to(device)
         meta = {
             "update": int(payload["update"]),

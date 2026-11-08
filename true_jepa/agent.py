@@ -13,10 +13,17 @@ from true_jepa.model import TrueJEPA
 class VisualJEPAAgent:
     """Pixel-only recurrent agent with the repository-required act signature."""
 
-    def __init__(self, model: TrueJEPA, device: str = "cpu", stochastic: bool = True) -> None:
+    def __init__(
+        self,
+        model: TrueJEPA,
+        device: str = "cpu",
+        stochastic: bool = True,
+        temperature: float = 1.0,
+    ) -> None:
         self.model = model.to(device).eval()
         self.device = torch.device(device)
         self.stochastic = bool(stochastic)
+        self.temperature = float(temperature)
         self.hidden: Optional[Tensor] = None
         self.previous_action: Optional[int] = None
 
@@ -25,11 +32,17 @@ class VisualJEPAAgent:
         self.previous_action = None
 
     @torch.no_grad()
-    def act(self, obs_uint8: np.ndarray, reward_prev: float, step: int) -> int:
-        """Select an action from pixels, previous reward, and public step index only."""
+    def act(
+        self,
+        obs_uint8: np.ndarray,
+        reward_prev: float = 0.0,
+        step: Optional[int] = None,
+    ) -> int:
+        """Select an action from pixels and previous reward.
 
-        if int(step) == 0 or self.hidden is None:
-            self.reset()
+        The step parameter is preserved as optional metadata for legacy callers,
+        but reset is strictly managed via explicit agent.reset() (R16 finding).
+        """
         obs = torch.from_numpy(np.ascontiguousarray(obs_uint8)).unsqueeze(0).to(self.device)
         frame = self.model.encode(obs)
         if self.hidden is None:
@@ -40,7 +53,8 @@ class VisualJEPAAgent:
             self.hidden = self.model.belief_step(frame, previous, reward, self.hidden)
         logits = self.model.policy_logits(frame, self.hidden)
         if self.stochastic:
-            action = torch.distributions.Categorical(logits=logits).sample()
+            temp = max(self.temperature, 1e-4)
+            action = torch.distributions.Categorical(logits=logits / temp).sample()
         else:
             action = torch.argmax(logits, dim=-1)
         self.previous_action = int(action.item())

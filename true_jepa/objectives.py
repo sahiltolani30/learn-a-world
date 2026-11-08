@@ -32,6 +32,111 @@ def covariance_penalty(values: Tensor) -> Tensor:
     return off_diagonal.square().mean()
 
 
+@torch.no_grad()
+def compute_spatial_change_weights(
+    current_tokens: Tensor,
+    target_tokens: Tensor,
+    cap: float = 5.0,
+    bonus: float = 2.0,
+) -> Tuple[Tensor, float]:
+    """Compute normalized and capped spatial change weights [B, K] from detached target transitions.
+
+    Weights tokens by empirical target displacement ||z*(t+1) - z(t)||_2 so dynamic regions
+    contribute higher loss gradients while static background is downweighted.
+
+    Args:
+        current_tokens: [B, K, D] current representation tokens
+        target_tokens: [B, K, D] target representation tokens
+        cap: Maximum relative displacement multiplier to prevent gradient explosion
+        bonus: Multiplier on displacement ratio
+
+    Returns:
+        weights: [B, K] non-negative spatial weights normalized to mean 1.0 across tokens per sequence item.
+        meaningful_fraction: float fraction of tokens receiving substantial change weight (>= 1.5).
+    """
+    diff = target_tokens.detach() - current_tokens.detach()
+    d = torch.norm(diff, p=2, dim=-1)  # [B, K]
+    mean_d = d.mean(dim=-1, keepdim=True)  # [B, 1]
+
+    # Relative displacement ratio per token
+    ratio = d / (mean_d + 1e-6)
+    ratio_capped = torch.clamp(ratio, 0.0, float(cap))
+
+    # Weight bonus proportional to displacement
+    raw_weights = 1.0 + float(bonus) * ratio_capped
+
+    # Normalize across the K spatial tokens so average weight per transition is exactly 1.0
+    weights = raw_weights / raw_weights.mean(dim=-1, keepdim=True).clamp_min(1e-6)
+
+    # Diagnostic: fraction of tokens receiving meaningful weight (>= 1.5)
+    meaningful_fraction = float((weights >= 1.5).float().mean().item())
+    return weights.detach(), meaningful_fraction
+
+
+@torch.no_grad()
+def reconstruct_belief_prefix(
+    model: TrueJEPA,
+    batch: Dict[str, Tensor],
+    device: torch.device,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    """Reconstruct recurrent belief state at window start using current model weights (R05).
+
+    Unrolls the belief core over the sampled prefix [0..start] in no_grad under
+    current parameters, ensuring the training window starts with an exact,
+    history-consistent hidden state rather than a false reset (zero belief).
+
+    Returns:
+        hidden: [B, belief_dim] detached belief at window start
+        previous_action: [B] previous action before window start
+        previous_reward: [B] previous reward before window start
+    """
+    prefix_lengths = batch.get("prefix_lengths")
+    obs = batch["obs"]
+    batch_size = obs.shape[0]
+
+    if prefix_lengths is None:
+        return (
+            model.initial_belief(batch_size, device),
+            torch.zeros(batch_size, dtype=torch.long, device=device),
+            torch.zeros(batch_size, dtype=torch.float32, device=device),
+        )
+
+    prefix_lengths = prefix_lengths.to(device)
+    max_prefix = int(prefix_lengths.max().item())
+    if max_prefix == 0:
+        return (
+            model.initial_belief(batch_size, device),
+            torch.zeros(batch_size, dtype=torch.long, device=device),
+            torch.zeros(batch_size, dtype=torch.float32, device=device),
+        )
+
+    prefix_obs = batch["prefix_obs"].to(device)
+    prefix_actions = batch["prefix_actions"].to(device)
+    prefix_rewards = batch["prefix_rewards"].to(device)
+
+    hidden = model.initial_belief(batch_size, device)
+    previous_action = torch.zeros(batch_size, dtype=torch.long, device=device)
+    previous_reward = torch.zeros(batch_size, dtype=torch.float32, device=device)
+
+    for step in range(1, max_prefix + 1):
+        mask = step <= prefix_lengths
+        if not mask.any():
+            break
+        frame = model.encode(prefix_obs[:, step])
+        prev_a = prefix_actions[:, step - 1]
+        prev_r = prefix_rewards[:, step - 1]
+        new_hidden = model.belief_step(frame, prev_a, prev_r, hidden)
+        hidden = torch.where(mask.unsqueeze(-1), new_hidden, hidden)
+
+    for b in range(batch_size):
+        p_len = int(prefix_lengths[b].item())
+        if p_len > 0:
+            previous_action[b] = prefix_actions[b, p_len - 1]
+            previous_reward[b] = prefix_rewards[b, p_len - 1]
+
+    return hidden.detach(), previous_action.detach(), previous_reward.detach()
+
+
 def train_world_model_step(
     model: TrueJEPA,
     batch: Dict[str, Tensor],
@@ -52,17 +157,21 @@ def train_world_model_step(
     amp_enabled = bool(cfg.amp and device.type == "cuda")
     autocast = torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp_enabled)
 
+    # Reconstruct belief at window start from prefix (R05)
+    hidden_init, prev_act_init, prev_rew_init = reconstruct_belief_prefix(model, batch, device)
+
     optimizer.zero_grad(set_to_none=True)
     with autocast:
         current = model.encode(obs[:, 0])
-        hidden = model.initial_belief(batch_size, device)
-        previous_action = torch.zeros(batch_size, dtype=torch.long, device=device)
-        previous_reward = torch.zeros(batch_size, dtype=torch.float32, device=device)
+        hidden = hidden_init
+        previous_action = prev_act_init
+        previous_reward = prev_rew_init
         jepa_terms = []
         reward_terms = []
         continue_terms = []
         ensemble_terms = []
         predicted_pooled = []
+        meaningful_fractions = []
 
         for time in range(sequence_length):
             if time > 0:
@@ -72,15 +181,24 @@ def train_world_model_step(
             predicted = model.predict(current, action, hidden)
             target = model.target_encode(obs[:, time + 1])
             step_mask = valid[:, time]
+
+            # JEPA token prediction loss with optional spatial change weighting
+            token_diff_sq = (predicted.tokens - target.tokens.detach()).square().mean(dim=-1)  # [B, K]
+            if getattr(cfg, "change_weighted_loss", False):
+                change_w, frac = compute_spatial_change_weights(
+                    current.tokens,
+                    target.tokens,
+                    cap=getattr(cfg, "change_weight_cap", 5.0),
+                    bonus=getattr(cfg, "change_weight_bonus", 2.0),
+                )
+                meaningful_fractions.append(frac)
+                token_term = (change_w * token_diff_sq).mean(dim=-1)
+            else:
+                token_term = token_diff_sq.mean(dim=-1)
+
+            pooled_term = (predicted.pooled - target.pooled.detach()).square().mean(dim=-1)
             jepa_terms.append(
-                _masked_mean(
-                    (predicted.tokens - target.tokens.detach()).square().mean(dim=(1, 2)),
-                    step_mask,
-                )
-                + _masked_mean(
-                    (predicted.pooled - target.pooled.detach()).square().mean(dim=-1),
-                    step_mask,
-                )
+                _masked_mean(token_term, step_mask) + _masked_mean(pooled_term, step_mask)
             )
             reward_terms.append(_masked_mean(F.smooth_l1_loss(reward_prediction, rewards[:, time], reduction="none"), step_mask))
             continue_terms.append(
@@ -97,7 +215,18 @@ def train_world_model_step(
                 _masked_mean((ensemble - ensemble_target).square().mean(dim=-1).mean(dim=0), step_mask)
             )
             predicted_pooled.append(predicted.pooled)
-            current = predicted
+
+            rollout_mode = getattr(cfg, "rollout_mode", "autoregressive")
+            if rollout_mode == "one_step":
+                current = model.encode(obs[:, time + 1])
+            elif rollout_mode == "mixed":
+                if torch.rand(1).item() < getattr(cfg, "mixed_rollout_prob", 0.5):
+                    current = predicted
+                else:
+                    current = model.encode(obs[:, time + 1])
+            else:
+                current = predicted
+
             previous_action = action
             previous_reward = rewards[:, time]
 
@@ -126,7 +255,7 @@ def train_world_model_step(
         torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
         optimizer.step()
     model.update_target(update)
-    return {
+    metrics = {
         "loss": float(total.detach().float().cpu()),
         "jepa": float(jepa.detach().float().cpu()),
         "reward": float(reward_loss.detach().float().cpu()),
@@ -134,6 +263,9 @@ def train_world_model_step(
         "ensemble": float(ensemble_loss.detach().float().cpu()),
         "latent_std": float(pooled.detach().float().std().cpu()),
     }
+    if meaningful_fractions:
+        metrics["meaningful_token_fraction"] = float(sum(meaningful_fractions) / len(meaningful_fractions))
+    return metrics
 
 
 def imagination_policy_step(
@@ -192,3 +324,116 @@ def imagination_policy_step(
     actor_optimizer.step()
     value_optimizer.step()
     return {"actor": float(actor_loss.detach()), "value": float(value_loss.detach())}
+
+
+def imagination_actor_critic_gae_step(
+    model: TrueJEPA,
+    start: LatentFrame,
+    hidden: Tensor,
+    actor_optimizer: torch.optim.Optimizer,
+    value_optimizer: torch.optim.Optimizer,
+    horizon: int = 4,
+    gamma: float = 0.99,
+    gae_lambda: float = 0.95,
+    entropy_weight: float = 0.01,
+    reward_clip: float = 1.0,
+    uncertainty_penalty: float = 0.0,
+) -> Dict[str, float]:
+    """Train actor and value heads via latent imagination with GAE and lambda-returns.
+
+    World model parameters are strictly frozen/detached. The actor learns from GAE advantages,
+    and the value head regresses toward lambda-return targets.
+    Continuation logits scale the discount factor dynamically to account for predicted death.
+    """
+    actor_optimizer.zero_grad(set_to_none=True)
+    value_optimizer.zero_grad(set_to_none=True)
+
+    frame = LatentFrame(start.tokens.detach(), start.pooled.detach())
+    belief = hidden.detach()
+
+    log_probs = []
+    entropies = []
+    rewards = []
+    gammas = []
+    values = []
+
+    for _ in range(horizon):
+        state = model.state(frame, belief)
+        logits = model.policy_logits(frame, belief)
+        distribution = torch.distributions.Categorical(logits=logits)
+        action = distribution.sample()
+
+        log_probs.append(distribution.log_prob(action))
+        entropies.append(distribution.entropy())
+        values.append(model.heads.value(state).squeeze(-1))
+
+        with torch.no_grad():
+            reward, cont_logit = model.transition_heads(frame, belief, action)
+            # Clip reward to prevent runaway exploitation
+            if reward_clip > 0:
+                reward = torch.clamp(reward, -reward_clip, reward_clip)
+
+            # Optional uncertainty penalty via ensemble disagreement
+            if uncertainty_penalty > 0 and hasattr(model, "ensemble"):
+                ens = model.ensemble(frame, action, belief)
+                disagreement = ens.std(dim=0).mean(dim=-1)
+                reward = reward - uncertainty_penalty * disagreement
+
+            # Continuation discount
+            cont_prob = torch.sigmoid(cont_logit)
+            step_gamma = gamma * cont_prob
+
+            next_frame = model.predict(frame, action, belief)
+            next_belief = model.belief_step(next_frame, action, reward, belief)
+
+        rewards.append(reward)
+        gammas.append(step_gamma)
+        frame = LatentFrame(next_frame.tokens.detach(), next_frame.pooled.detach())
+        belief = next_belief.detach()
+
+    # Bootstrap final value V(s_H)
+    with torch.no_grad():
+        final_state = model.state(frame, belief)
+        final_value = model.heads.value(final_state).squeeze(-1)
+
+    values.append(final_value)
+
+    # Compute GAE advantages and lambda-returns
+    advantages = [torch.zeros_like(values[0]) for _ in range(horizon)]
+    returns = [torch.zeros_like(values[0]) for _ in range(horizon)]
+    running_gae = torch.zeros_like(values[0])
+
+    for t in reversed(range(horizon)):
+        delta = rewards[t] + gammas[t] * values[t + 1].detach() - values[t].detach()
+        running_gae = delta + gammas[t] * gae_lambda * running_gae
+        advantages[t] = running_gae
+        returns[t] = running_gae + values[t].detach()
+
+    adv_stack = torch.stack(advantages)
+    ret_stack = torch.stack(returns)
+    val_stack = torch.stack(values[:-1])
+    log_prob_stack = torch.stack(log_probs)
+    entropy_stack = torch.stack(entropies)
+
+    # Normalize advantages per batch/horizon for stable gradients
+    adv_mean = adv_stack.mean()
+    adv_std = adv_stack.std().clamp_min(1e-6)
+    adv_norm = (adv_stack - adv_mean) / adv_std
+
+    actor_loss = -(adv_norm.detach() * log_prob_stack).mean() - entropy_weight * entropy_stack.mean()
+    value_loss = F.smooth_l1_loss(val_stack, ret_stack.detach())
+
+    actor_loss.backward()
+    value_loss.backward()
+    actor_optimizer.step()
+    value_optimizer.step()
+
+    return {
+        "actor_loss": float(actor_loss.detach().item()),
+        "value_loss": float(value_loss.detach().item()),
+        "mean_advantage": float(adv_mean.item()),
+        "mean_imagined_reward": float(torch.stack(rewards).mean().item()),
+        "mean_imagined_value": float(val_stack.mean().item()),
+        "mean_entropy": float(entropy_stack.mean().item()),
+        "mean_continuation": float(torch.stack(gammas).mean().item() / gamma),
+    }

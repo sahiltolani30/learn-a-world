@@ -53,12 +53,17 @@ class PixelReplay:
         self._frames = 0
 
     def add(self, episode: PixelEpisode) -> None:
+        episode_frames = int(episode.obs.shape[0])
+        if self.capacity_frames is not None and episode_frames > self.capacity_frames:
+            raise ValueError(
+                f"episode length ({episode_frames}) exceeds replay capacity ({self.capacity_frames})"
+            )
         self._episodes.append(episode)
-        self._frames += int(episode.obs.shape[0])
+        self._frames += episode_frames
         while (
             self.capacity_frames is not None
             and self._frames > self.capacity_frames
-            and len(self._episodes) > 1
+            and self._episodes
         ):
             old = self._episodes.pop(0)
             self._frames -= int(old.obs.shape[0])
@@ -112,12 +117,81 @@ class PixelReplay:
             "valid": torch.from_numpy(valid),
         }
 
+    def sample_with_prefix(
+        self, batch_size: int, sequence_length: int, rng: np.random.Generator
+    ) -> Dict[str, torch.Tensor]:
+        """Sample sequence windows along with full episode prefixes from step 0 (R05 finding).
+
+        This enables exact hidden belief reconstruction using current model weights,
+        eliminating the mid-episode false reset trap.
+        """
+        if not self._episodes:
+            raise RuntimeError("cannot sample an empty replay")
+        if sequence_length < 1:
+            raise ValueError("sequence_length must be positive")
+
+        example = self._episodes[0].obs
+        obs = np.zeros((batch_size, sequence_length + 1) + example.shape[1:], dtype=np.uint8)
+        actions = np.zeros((batch_size, sequence_length), dtype=np.int64)
+        rewards = np.zeros((batch_size, sequence_length), dtype=np.float32)
+        terminated = np.zeros((batch_size, sequence_length), dtype=bool)
+        truncated = np.zeros((batch_size, sequence_length), dtype=bool)
+        valid = np.zeros((batch_size, sequence_length), dtype=bool)
+
+        sampled_episodes = []
+        starts = []
+
+        for row in range(batch_size):
+            episode = self._episodes[int(rng.integers(0, len(self._episodes)))]
+            length = int(episode.actions.shape[0])
+            use = min(length, sequence_length)
+            start = 0 if length <= sequence_length else int(rng.integers(0, length - sequence_length + 1))
+            sampled_episodes.append(episode)
+            starts.append(start)
+
+            obs[row, : use + 1] = episode.obs[start : start + use + 1]
+            if use < sequence_length:
+                obs[row, use + 1 :] = episode.obs[-1]
+            actions[row, :use] = episode.actions[start : start + use]
+            rewards[row, :use] = episode.rewards[start : start + use]
+            terminated[row, :use] = episode.terminated[start : start + use]
+            truncated[row, :use] = episode.truncated[start : start + use]
+            valid[row, :use] = True
+
+        max_prefix = max(starts)
+        prefix_obs = np.zeros((batch_size, max_prefix + 1) + example.shape[1:], dtype=np.uint8)
+        prefix_actions = np.zeros((batch_size, max_prefix), dtype=np.int64)
+        prefix_rewards = np.zeros((batch_size, max_prefix), dtype=np.float32)
+
+        for row, (ep, start) in enumerate(zip(sampled_episodes, starts)):
+            if start > 0:
+                prefix_obs[row, : start + 1] = ep.obs[: start + 1]
+                prefix_actions[row, :start] = ep.actions[:start]
+                prefix_rewards[row, :start] = ep.rewards[:start]
+
+        return {
+            "obs": torch.from_numpy(obs),
+            "actions": torch.from_numpy(actions),
+            "rewards": torch.from_numpy(rewards),
+            "terminated": torch.from_numpy(terminated),
+            "truncated": torch.from_numpy(truncated),
+            "valid": torch.from_numpy(valid),
+            "prefix_obs": torch.from_numpy(prefix_obs),
+            "prefix_actions": torch.from_numpy(prefix_actions),
+            "prefix_rewards": torch.from_numpy(prefix_rewards),
+            "prefix_lengths": torch.tensor(starts, dtype=torch.long),
+        }
+
     def save(self, path: str) -> None:
         if not self._episodes:
             raise RuntimeError("refusing to save empty replay")
         obs_lengths = np.asarray([episode.obs.shape[0] for episode in self._episodes], dtype=np.int64)
         action_lengths = obs_lengths - 1
-        meta = json.dumps({"format": "true_jepa_replay_v1", "episodes": len(self._episodes)})
+        meta = json.dumps({
+            "format": "true_jepa_replay_v1",
+            "episodes": len(self._episodes),
+            "capacity_frames": self.capacity_frames,
+        })
         np.savez_compressed(
             path,
             obs=np.concatenate([episode.obs for episode in self._episodes]),
@@ -138,7 +212,8 @@ class PixelReplay:
             meta = json.loads(str(data["meta"]))
             if meta.get("format") != "true_jepa_replay_v1":
                 raise ValueError("unexpected replay format")
-            replay = cls()
+            capacity_frames = meta.get("capacity_frames")
+            replay = cls(capacity_frames=capacity_frames)
             obs_offset = 0
             action_offset = 0
             for index, (obs_length, action_length) in enumerate(

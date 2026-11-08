@@ -82,7 +82,7 @@ def compute_crafter_score(achievement_records: List[Dict[str, int]]) -> Dict[str
 
 def evaluate_crafter_agent(
     env: Any,
-    action_fn: Callable[[np.ndarray, Dict[str, Any]], int],
+    action_fn: Any,
     num_episodes: int = 20,
     max_steps: int = 1000,
     seed_offset: int = 4000,
@@ -90,6 +90,7 @@ def evaluate_crafter_agent(
     """
     Evaluates an agent on held-out procedural Crafter seeds.
     Tracks survival length, total reward, and achievement unlocks.
+    Enforces strict policy boundary: policy NEVER receives info or simulator internals (R02).
     """
     achievement_records: List[Dict[str, int]] = []
     survival_lengths: List[int] = []
@@ -99,12 +100,25 @@ def evaluate_crafter_agent(
         obs, info = env.reset(seed=seed_offset + ep)
         ep_reward = 0.0
         steps = 0
+        reward_prev = 0.0
+
+        if hasattr(action_fn, "reset"):
+            action_fn.reset()
 
         for step in range(max_steps):
             steps += 1
-            action = action_fn(obs, info)
+            if hasattr(action_fn, "act"):
+                action = int(action_fn.act(obs, reward_prev))
+            else:
+                # Callback function: pass (obs, reward_prev) or (obs) only; NEVER info
+                try:
+                    action = int(action_fn(obs, reward_prev))
+                except TypeError:
+                    action = int(action_fn(obs))
+
             obs, reward, terminated, truncated, info = env.step(action)
             ep_reward += float(reward)
+            reward_prev = float(reward)
 
             if terminated or truncated:
                 break

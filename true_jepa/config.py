@@ -25,6 +25,7 @@ class JEPAConfig:
     ema_decay_end: float = 0.999
     ema_ramp_updates: int = 20_000
     rollout_horizon: int = 8
+    predictor_residual: bool = False
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,11 @@ class TrainConfig:
     actor_entropy_weight: float = 0.01
     gamma: float = 0.997
     amp: bool = True
+    change_weighted_loss: bool = False
+    change_weight_cap: float = 5.0
+    change_weight_bonus: float = 2.0
+    rollout_mode: str = "autoregressive"
+    mixed_rollout_prob: float = 0.5
 
 
 def as_dict(cfg: object) -> Dict[str, object]:

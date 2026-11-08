@@ -1,0 +1,1354 @@
+{
+  "evaluation_seeds": [
+    5000,
+    5001,
+    5002,
+    5003,
+    5004,
+    5005,
+    5006,
+    5007,
+    5008,
+    5009,
+    5010,
+    5011,
+    5012,
+    5013,
+    5014,
+    5015,
+    5016,
+    5017,
+    5018,
+    5019,
+    5020,
+    5021,
+    5022,
+    5023,
+    5024,
+    5025,
+    5026,
+    5027,
+    5028,
+    5029
+  ],
+  "selfplay_collection_stats": {
+    "num_episodes": 25,
+    "total_frames": 4378,
+    "mean_steps": 175.12,
+    "mean_return": 1.3960000000000006,
+    "collection_sec": 55.70569433295168,
+    "collection_fps": 78.59160634158499,
+    "action_distribution": [
+      0.006662072134160349,
+      0.012175511141741327,
+      0.016540317022742935,
+      0.011026878015161957,
+      0.004364805881001608,
+      0.4566965311279577,
+      0.0013783597518952446,
+      0.009418791637950839,
+      0.012175511141741327,
+      0.018378130025269928,
+      0.07213416034918448,
+      0.0029864461291063634,
+      0.03744543992648748,
+      0.006432345508844475,
+      0.3000229726625316,
+      0.008499885136687342,
+      0.023661842407535032
+    ]
+  },
+  "world_model_telemetry": {
+    "updates": 300,
+    "runtime_sec": 331.42778404196724,
+    "training_curve": [
+      {
+        "step": 50,
+        "loss": 0.6449413299560547,
+        "jepa": 0.22263193130493164,
+        "reward": 0.0016907567624002695,
+        "continuation": 5.0421520427335054e-05,
+        "meaningful_token_fraction": 0.011962890625,
+        "elapsed_sec": 39.405141916824505,
+        "fps": 1.2688699384851572
+      },
+      {
+        "step": 100,
+        "loss": 0.8554322719573975,
+        "jepa": 0.2840178310871124,
+        "reward": 0.0011402553645893931,
+        "continuation": 8.524322038283572e-05,
+        "meaningful_token_fraction": 0.01806640625,
+        "elapsed_sec": 83.43038312485442,
+        "fps": 1.1986041086536663
+      },
+      {
+        "step": 150,
+        "loss": 0.8085215091705322,
+        "jepa": 0.17767898738384247,
+        "reward": 0.0009718214860185981,
+        "continuation": 0.0001672317594056949,
+        "meaningful_token_fraction": 0.029052734375,
+        "elapsed_sec": 129.47184258396737,
+        "fps": 1.158553064560886
+      },
+      {
+        "step": 200,
+        "loss": 0.5710781216621399,
+        "jepa": 0.2862180173397064,
+        "reward": 0.01441134698688984,
+        "continuation": 0.0007297823904082179,
+        "meaningful_token_fraction": 0.016845703125,
+        "elapsed_sec": 179.49758712481707,
+        "fps": 1.1142211057184082
+      },
+      {
+        "step": 250,
+        "loss": 0.6760995388031006,
+        "jepa": 0.33569759130477905,
+        "reward": 0.01332730520516634,
+        "continuation": 0.0004350971430540085,
+        "meaningful_token_fraction": 0.013427734375,
+        "elapsed_sec": 243.1932854168117,
+        "fps": 1.0279889083759948
+      },
+      {
+        "step": 300,
+        "loss": 0.9607384204864502,
+        "jepa": 0.5836244225502014,
+        "reward": 0.012867922894656658,
+        "continuation": 0.0014165499014779925,
+        "meaningful_token_fraction": 0.01513671875,
+        "elapsed_sec": 331.42653249995783,
+        "fps": 0.9051779823935435
+      }
+    ],
+    "checkpoint_path": "results/phase3/world_model_phase3.pt"
+  },
+  "world_model_comparison": {
+    "selected_model": "phase3_updated",
+    "previous_gate4": {
+      "one_step_model_error": 0.0003714815746861859,
+      "one_step_persistence_error": 0.00039104453854088203,
+      "one_step_relative_error": 0.9499725429545901,
+      "one_step_shuffled_error": 0.0004581467332027387,
+      "shuffled_action_sensitive": true,
+      "shuffled_action_sensitivity_gap": 8.666515851655279e-05,
+      "static_tokens": {
+        "mse_model": 7.879367913119495e-07,
+        "mse_persist": 4.983532598998863e-07,
+        "relative_error": 1.581080841068918
+      },
+      "changed_tokens": {
+        "mse_model": 0.0003714978685093229,
+        "mse_persist": 0.00039106531407742293,
+        "relative_error": 0.9499637404195195
+      },
+      "average_fraction_changed_tokens": 0.99975,
+      "teacher_forced_errors_by_horizon": {
+        "1": 0.00039877030219940933,
+        "2": 0.00031356321575003675,
+        "4": 0.0003306195260665845,
+        "8": 0.0003221062671946129
+      },
+      "free_running_errors_by_horizon": {
+        "1": 0.00039877030219940933,
+        "2": 0.0005341474960732739,
+        "4": 0.0007667946199944708,
+        "8": 0.0010260241509240586
+      }
+    },
+    "updated_phase3": {
+      "one_step_model_error": 0.0002927738319403943,
+      "one_step_persistence_error": 0.00034247135564510246,
+      "one_step_relative_error": 0.8548856046337233,
+      "one_step_shuffled_error": 0.00039862331931908557,
+      "shuffled_action_sensitive": true,
+      "shuffled_action_sensitivity_gap": 0.00010584948737869126,
+      "static_tokens": {
+        "mse_model": 5.323930981739977e-05,
+        "mse_persist": 2.167573404040013e-05,
+        "relative_error": 2.4561710213905625
+      },
+      "changed_tokens": {
+        "mse_model": 0.00041532742121161876,
+        "mse_persist": 0.0005012822245991502,
+        "relative_error": 0.8285301190237394
+      },
+      "average_fraction_changed_tokens": 0.470015625,
+      "teacher_forced_errors_by_horizon": {
+        "1": 0.00031230041523485854,
+        "2": 0.00023514959215390263,
+        "4": 0.00022578860372050259,
+        "8": 0.00025108566933340626
+      },
+      "free_running_errors_by_horizon": {
+        "1": 0.00031230041523485854,
+        "2": 0.00044874986204376907,
+        "4": 0.0006717652143561282,
+        "8": 0.0009517880821658764
+      }
+    }
+  },
+  "policy_training_telemetry": {
+    "horizon": 4,
+    "updates": 300,
+    "runtime_sec": 577.2400077499915,
+    "training_curve": [
+      {
+        "step": 50,
+        "actor_loss": -0.1816970705986023,
+        "value_loss": 3.940394878387451,
+        "mean_imagined_reward": -0.008216818794608116,
+        "mean_imagined_value": 41.36549758911133,
+        "mean_entropy": 2.5788094997406006,
+        "mean_continuation": 0.999868879414568,
+        "elapsed_sec": 62.18158754194155,
+        "fps": 0.8040965497427183
+      },
+      {
+        "step": 100,
+        "actor_loss": -0.02075982093811035,
+        "value_loss": 12.564140319824219,
+        "mean_imagined_reward": -0.005244180094450712,
+        "mean_imagined_value": 149.4757537841797,
+        "mean_entropy": 1.216957688331604,
+        "mean_continuation": 0.9992415254766291,
+        "elapsed_sec": 133.7145066668745,
+        "fps": 0.7478620120787036
+      },
+      {
+        "step": 150,
+        "actor_loss": 0.26553598046302795,
+        "value_loss": 36.52482986450195,
+        "mean_imagined_reward": 0.004657965153455734,
+        "mean_imagined_value": 251.566650390625,
+        "mean_entropy": 0.8701564073562622,
+        "mean_continuation": 0.9963401640304411,
+        "elapsed_sec": 210.8897615838796,
+        "fps": 0.7112720829756298
+      },
+      {
+        "step": 200,
+        "actor_loss": 0.614926278591156,
+        "value_loss": 120.153076171875,
+        "mean_imagined_reward": 0.0012655877508223057,
+        "mean_imagined_value": -838.285888671875,
+        "mean_entropy": 1.123477816581726,
+        "mean_continuation": 0.998488881371238,
+        "elapsed_sec": 313.6940775839612,
+        "fps": 0.6375638378013987
+      },
+      {
+        "step": 250,
+        "actor_loss": 0.10416063666343689,
+        "value_loss": 169.97003173828125,
+        "mean_imagined_reward": -0.008596616797149181,
+        "mean_imagined_value": -1781.04541015625,
+        "mean_entropy": 2.5745043754577637,
+        "mean_continuation": 0.9998950091275302,
+        "elapsed_sec": 452.43506549997255,
+        "fps": 0.5525654819078456
+      },
+      {
+        "step": 300,
+        "actor_loss": -0.03376343846321106,
+        "value_loss": 113.6400146484375,
+        "mean_imagined_reward": -0.01542365737259388,
+        "mean_imagined_value": -1207.0279541015625,
+        "mean_entropy": 2.7605326175689697,
+        "mean_continuation": 0.9998427497016059,
+        "elapsed_sec": 577.2369729168713,
+        "fps": 0.519717228929484
+      }
+    ],
+    "checkpoint_path": "results/phase3/policy_phase3.pt"
+  },
+  "random_baseline": {
+    "num_episodes": 30,
+    "mean_return": 1.3333333333333333,
+    "median_return": 1.1,
+    "std_return": 1.1160446028522135,
+    "min_return": -0.9000000000000001,
+    "max_return": 3.0999999999999996,
+    "mean_length": 161.9,
+    "median_length": 164.0,
+    "crafter_score": 8.397177126048682,
+    "achievement_rates": {
+      "collect_coal": 0.0,
+      "collect_diamond": 0.0,
+      "collect_drink": 0.1,
+      "collect_iron": 0.0,
+      "collect_sapling": 0.5666666666666667,
+      "collect_stone": 0.0,
+      "collect_wood": 0.2,
+      "defeat_skeleton": 0.0,
+      "defeat_zombie": 0.0,
+      "eat_cow": 0.0,
+      "eat_plant": 0.0,
+      "make_iron_pickaxe": 0.0,
+      "make_iron_sword": 0.0,
+      "make_stone_pickaxe": 0.0,
+      "make_stone_sword": 0.0,
+      "make_wood_pickaxe": 0.0,
+      "make_wood_sword": 0.0,
+      "place_furnace": 0.0,
+      "place_plant": 0.5,
+      "place_stone": 0.0,
+      "place_table": 0.0,
+      "wake_up": 0.9
+    },
+    "action_distribution": [
+      0.055589870290302656,
+      0.05764875437512868,
+      0.0592958616429895,
+      0.05764875437512868,
+      0.05167799052913321,
+      0.05764875437512868,
+      0.061354745727815525,
+      0.05806053119209389,
+      0.06176652254478073,
+      0.06320774140415894,
+      0.06300185299567634,
+      0.06053119209388511,
+      0.0510603253036854,
+      0.0595017500514721,
+      0.05991352686843731,
+      0.06156063413629813,
+      0.06053119209388511
+    ],
+    "action_entropy": 2.8315350150492757,
+    "termination_causes": {
+      "health_exhaustion": 30,
+      "max_steps_reached": 0
+    },
+    "per_seed_results": [
+      {
+        "seed": 5000,
+        "return": 1.1,
+        "length": 163,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5001,
+        "return": 2.0999999999999996,
+        "length": 165,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5002,
+        "return": 1.1,
+        "length": 131,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5003,
+        "return": 3.0999999999999996,
+        "length": 165,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink",
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5004,
+        "return": 1.1000000000000003,
+        "length": 187,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_wood",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5005,
+        "return": -0.9000000000000001,
+        "length": 71,
+        "cause": "health_exhaustion",
+        "achievements": []
+      },
+      {
+        "seed": 5006,
+        "return": 0.09999999999999992,
+        "length": 120,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling"
+        ]
+      },
+      {
+        "seed": 5007,
+        "return": 0.0999999999999999,
+        "length": 181,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5008,
+        "return": 2.099999999999999,
+        "length": 190,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5009,
+        "return": 2.1,
+        "length": 154,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5010,
+        "return": 1.0999999999999996,
+        "length": 81,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5011,
+        "return": 2.099999999999999,
+        "length": 188,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink",
+          "collect_wood",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5012,
+        "return": 0.10000000000000003,
+        "length": 144,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5013,
+        "return": 2.1,
+        "length": 177,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5014,
+        "return": 3.0999999999999996,
+        "length": 127,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "collect_wood",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5015,
+        "return": 2.099999999999999,
+        "length": 231,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5016,
+        "return": 2.099999999999999,
+        "length": 152,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5017,
+        "return": 0.10000000000000009,
+        "length": 158,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5018,
+        "return": 0.09999999999999998,
+        "length": 179,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5019,
+        "return": 2.099999999999999,
+        "length": 156,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5020,
+        "return": 0.10000000000000006,
+        "length": 157,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5021,
+        "return": 2.0999999999999996,
+        "length": 201,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5022,
+        "return": 3.099999999999999,
+        "length": 141,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "collect_wood",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5023,
+        "return": 0.10000000000000006,
+        "length": 167,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5024,
+        "return": 3.099999999999999,
+        "length": 203,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "collect_wood",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5025,
+        "return": 0.1,
+        "length": 197,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5026,
+        "return": 0.10000000000000009,
+        "length": 155,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5027,
+        "return": 1.1,
+        "length": 166,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_wood",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5028,
+        "return": 1.1,
+        "length": 157,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5029,
+        "return": 2.0999999999999996,
+        "length": 193,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      }
+    ]
+  },
+  "gate6_champion_h4": {
+    "num_episodes": 30,
+    "mean_return": 1.3333333333333335,
+    "median_return": 1.1000000000000003,
+    "std_return": 0.6155395104206459,
+    "min_return": 0.09999999999999992,
+    "max_return": 3.099999999999999,
+    "mean_length": 155.4,
+    "median_length": 163.0,
+    "crafter_score": 7.731820347073981,
+    "achievement_rates": {
+      "collect_coal": 0.0,
+      "collect_diamond": 0.0,
+      "collect_drink": 0.0,
+      "collect_iron": 0.0,
+      "collect_sapling": 1.0,
+      "collect_stone": 0.0,
+      "collect_wood": 0.03333333333333333,
+      "defeat_skeleton": 0.0,
+      "defeat_zombie": 0.1,
+      "eat_cow": 0.13333333333333333,
+      "eat_plant": 0.0,
+      "make_iron_pickaxe": 0.0,
+      "make_iron_sword": 0.0,
+      "make_stone_pickaxe": 0.0,
+      "make_stone_sword": 0.0,
+      "make_wood_pickaxe": 0.0,
+      "make_wood_sword": 0.0,
+      "place_furnace": 0.0,
+      "place_plant": 0.9333333333333333,
+      "place_stone": 0.0,
+      "place_table": 0.0,
+      "wake_up": 0.03333333333333333
+    },
+    "action_distribution": [
+      0.001716001716001716,
+      0.0045045045045045045,
+      0.011368511368511369,
+      0.005148005148005148,
+      0.001716001716001716,
+      0.5298155298155298,
+      0.001287001287001287,
+      0.006006006006006006,
+      0.009438009438009438,
+      0.011583011583011582,
+      0.05019305019305019,
+      0.0015015015015015015,
+      0.02230802230802231,
+      0.002145002145002145,
+      0.32196482196482196,
+      0.0032175032175032173,
+      0.016087516087516088
+    ],
+    "action_entropy": 1.3034361026994044,
+    "termination_causes": {
+      "health_exhaustion": 30,
+      "max_steps_reached": 0
+    },
+    "per_seed_results": [
+      {
+        "seed": 5000,
+        "return": 1.1000000000000003,
+        "length": 164,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5001,
+        "return": 1.1,
+        "length": 40,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5002,
+        "return": 1.1000000000000003,
+        "length": 147,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5003,
+        "return": 1.1000000000000003,
+        "length": 152,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5004,
+        "return": 1.1000000000000003,
+        "length": 145,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5005,
+        "return": 1.1000000000000003,
+        "length": 146,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5006,
+        "return": 0.09999999999999992,
+        "length": 97,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling"
+        ]
+      },
+      {
+        "seed": 5007,
+        "return": 2.099999999999999,
+        "length": 196,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "eat_cow",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5008,
+        "return": 1.1000000000000003,
+        "length": 162,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5009,
+        "return": 1.1000000000000003,
+        "length": 165,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5010,
+        "return": 1.1000000000000003,
+        "length": 74,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5011,
+        "return": 1.1000000000000003,
+        "length": 143,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5012,
+        "return": 1.1,
+        "length": 151,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5013,
+        "return": 1.1000000000000003,
+        "length": 90,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5014,
+        "return": 0.09999999999999998,
+        "length": 39,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling"
+        ]
+      },
+      {
+        "seed": 5015,
+        "return": 1.0999999999999996,
+        "length": 234,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5016,
+        "return": 3.099999999999999,
+        "length": 197,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "defeat_zombie",
+          "eat_cow",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5017,
+        "return": 2.0999999999999996,
+        "length": 202,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "defeat_zombie",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5018,
+        "return": 1.1000000000000003,
+        "length": 183,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5019,
+        "return": 1.1,
+        "length": 209,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5020,
+        "return": 1.1,
+        "length": 32,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5021,
+        "return": 1.1000000000000003,
+        "length": 187,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5022,
+        "return": 2.099999999999999,
+        "length": 122,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "eat_cow",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5023,
+        "return": 1.1000000000000003,
+        "length": 169,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5024,
+        "return": 2.099999999999999,
+        "length": 269,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "collect_wood",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5025,
+        "return": 1.1000000000000003,
+        "length": 174,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5026,
+        "return": 2.099999999999999,
+        "length": 203,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5027,
+        "return": 2.099999999999999,
+        "length": 242,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "eat_cow",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5028,
+        "return": 2.1000000000000005,
+        "length": 196,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "defeat_zombie",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5029,
+        "return": 1.1000000000000003,
+        "length": 132,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      }
+    ]
+  },
+  "phase3_policy": {
+    "num_episodes": 30,
+    "mean_return": 0.8,
+    "median_return": 0.10000000000000009,
+    "std_return": 1.0049875621120887,
+    "min_return": -0.9000000000000001,
+    "max_return": 3.0999999999999996,
+    "mean_length": 148.83333333333334,
+    "median_length": 156.5,
+    "crafter_score": 6.436348676016301,
+    "achievement_rates": {
+      "collect_coal": 0.0,
+      "collect_diamond": 0.0,
+      "collect_drink": 0.1,
+      "collect_iron": 0.0,
+      "collect_sapling": 0.3,
+      "collect_stone": 0.0,
+      "collect_wood": 0.1,
+      "defeat_skeleton": 0.0,
+      "defeat_zombie": 0.0,
+      "eat_cow": 0.0,
+      "eat_plant": 0.0,
+      "make_iron_pickaxe": 0.0,
+      "make_iron_sword": 0.0,
+      "make_stone_pickaxe": 0.0,
+      "make_stone_sword": 0.0,
+      "make_wood_pickaxe": 0.0,
+      "make_wood_sword": 0.0,
+      "place_furnace": 0.0,
+      "place_plant": 0.3,
+      "place_stone": 0.0,
+      "place_table": 0.03333333333333333,
+      "wake_up": 0.8666666666666667
+    },
+    "action_distribution": [
+      0.07278835386338185,
+      0.039417693169092945,
+      0.04232922732362822,
+      0.06270996640537514,
+      0.05128779395296752,
+      0.028891377379619262,
+      0.08331466965285554,
+      0.07099664053751399,
+      0.035162374020156775,
+      0.09697648376259799,
+      0.056886898096304594,
+      0.03314669652855543,
+      0.0593505039193729,
+      0.08868980963045912,
+      0.03628219484882419,
+      0.06405375139977604,
+      0.07771556550951848
+    ],
+    "action_entropy": 2.772638849504509,
+    "termination_causes": {
+      "health_exhaustion": 30,
+      "max_steps_reached": 0
+    },
+    "per_seed_results": [
+      {
+        "seed": 5000,
+        "return": 0.09999999999999998,
+        "length": 155,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5001,
+        "return": 0.10000000000000009,
+        "length": 185,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5002,
+        "return": 0.10000000000000003,
+        "length": 97,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5003,
+        "return": 2.099999999999999,
+        "length": 202,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_wood",
+          "place_table",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5004,
+        "return": 0.10000000000000006,
+        "length": 158,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5005,
+        "return": 1.1000000000000005,
+        "length": 102,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant"
+        ]
+      },
+      {
+        "seed": 5006,
+        "return": 2.0999999999999996,
+        "length": 162,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5007,
+        "return": 0.10000000000000003,
+        "length": 180,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5008,
+        "return": 1.1000000000000003,
+        "length": 183,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5009,
+        "return": 0.10000000000000009,
+        "length": 176,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5010,
+        "return": 2.0999999999999996,
+        "length": 146,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5011,
+        "return": 0.10000000000000009,
+        "length": 70,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_wood"
+        ]
+      },
+      {
+        "seed": 5012,
+        "return": 0.10000000000000009,
+        "length": 169,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5013,
+        "return": 0.09999999999999992,
+        "length": 149,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5014,
+        "return": -0.9000000000000001,
+        "length": 34,
+        "cause": "health_exhaustion",
+        "achievements": []
+      },
+      {
+        "seed": 5015,
+        "return": 2.099999999999999,
+        "length": 167,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5016,
+        "return": 0.09999999999999998,
+        "length": 167,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5017,
+        "return": 3.0999999999999996,
+        "length": 162,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "collect_wood",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5018,
+        "return": 0.10000000000000006,
+        "length": 152,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5019,
+        "return": 0.10000000000000009,
+        "length": 159,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5020,
+        "return": 2.0999999999999996,
+        "length": 139,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5021,
+        "return": 0.09999999999999998,
+        "length": 151,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5022,
+        "return": 0.10000000000000006,
+        "length": 208,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5023,
+        "return": 1.1,
+        "length": 210,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5024,
+        "return": 0.10000000000000003,
+        "length": 51,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_drink"
+        ]
+      },
+      {
+        "seed": 5025,
+        "return": 0.09999999999999992,
+        "length": 151,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5026,
+        "return": 0.10000000000000006,
+        "length": 159,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5027,
+        "return": 2.0999999999999996,
+        "length": 142,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5028,
+        "return": 2.099999999999999,
+        "length": 133,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      },
+      {
+        "seed": 5029,
+        "return": 2.0999999999999996,
+        "length": 146,
+        "cause": "health_exhaustion",
+        "achievements": [
+          "collect_sapling",
+          "place_plant",
+          "wake_up"
+        ]
+      }
+    ]
+  }
+}
