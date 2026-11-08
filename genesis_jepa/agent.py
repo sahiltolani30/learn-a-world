@@ -65,6 +65,10 @@ class GenesisVisualAgent(nn.Module):
             nn.Linear(128, 1),
             nn.Sigmoid(),
         )
+        # Initialize danger head with safe baseline prior (P(hazard) ~ 0.029 < tau* = 0.082)
+        with torch.no_grad():
+            self.danger_head[-2].weight.mul_(0.01)
+            self.danger_head[-2].bias.fill_(-3.5)
 
         # 5. Upstream Deficit Budgeter
         self.budgeter = UpstreamDeficitBudgeter()
@@ -158,9 +162,14 @@ class GenesisVisualAgent(nn.Module):
                 chosen_move = int(torch.argmax(evasive_logits).item()) + 1
                 return chosen_move
 
-            # 8. Unimix Categorical Exploration (epsilon = 0.01)
+            # 8. Unimix Categorical Exploration (epsilon floor)
             probs = F.softmax(action_logits, dim=-1)
             unimix_probs = (1.0 - self.config.unimix_floor) * probs + (self.config.unimix_floor / self.config.num_actions)
+
+            # Re-enforce safety lock: strictly banned actions (logit <= -1e8) must NEVER be sampled
+            banned_mask = (action_logits <= -1e8)
+            unimix_probs[banned_mask] = 0.0
+            unimix_probs = unimix_probs / unimix_probs.sum()
 
             # Sample action
             action = int(torch.multinomial(unimix_probs, num_samples=1).item())

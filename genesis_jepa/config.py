@@ -57,7 +57,7 @@ class GenesisConfig:
     awr_clip_min: float = -2.0
     awr_clip_max: float = 2.0
     progress_velocity_gain: float = 3.0  # Weight multiplier for approach progress Δcos
-    unimix_floor: float = 0.01     # td-mpc2 / dreamer categorical exploration floor
+    unimix_floor: float = 0.10     # Categorical exploration floor for milestone discovery
     entropy_canary_floor: float = 1.50   # Nats
     action5_dominance_cap: float = 0.60  # Canary tripwire ceiling
 

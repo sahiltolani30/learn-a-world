@@ -78,6 +78,11 @@ class GenesisTrainer:
             lr=self.config.lr_actor,
             weight_decay=self.config.weight_decay,
         )
+        self.danger_optimizer = torch.optim.AdamW(
+            self.agent.danger_head.parameters(),
+            lr=1e-4,
+            weight_decay=self.config.weight_decay,
+        )
 
         # 4. Lifelong Memory & Record Tracker
         self.best_reward: float = -float("inf")
@@ -155,6 +160,19 @@ class GenesisTrainer:
         loss_actor.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.actor.parameters(), 1.0)
         self.actor_optimizer.step()
+
+        # -------------------------------------------------------------
+        # Survival Danger Head Step (Hazard on damage: reward < 0.0)
+        # -------------------------------------------------------------
+        self.agent.danger_head.train()
+        danger_labels = (reward < 0.0).float().unsqueeze(-1)
+        danger_preds = self.agent.danger_head(curr_pooled.detach())
+        loss_danger = F.binary_cross_entropy(danger_preds, danger_labels)
+
+        self.danger_optimizer.zero_grad()
+        loss_danger.backward()
+        torch.nn.utils.clip_grad_norm_(self.agent.danger_head.parameters(), 1.0)
+        self.danger_optimizer.step()
 
         self.training_steps += 1
 

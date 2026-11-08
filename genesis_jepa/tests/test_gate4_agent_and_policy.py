@@ -108,11 +108,10 @@ class TestGate4CriticAndPolicy:
         config = GenesisConfig(night_darkness_threshold=0.40)
         agent = GenesisVisualAgent(config)
 
-        obs = np.zeros((64, 64, 3), dtype=np.uint8)
+        # Simulate pitch black night (L_dark = 0.85 >= 0.40)
+        agent.compute_circadian_darkness = lambda patch: 0.85
 
-        # Force darkness index high
-        agent.nu_day = 1.0
-        agent.nu_night = 0.0
+        obs = np.zeros((64, 64, 3), dtype=np.uint8)
 
         # Run 50 action selections in pitch black conditions
         actions_chosen = []
