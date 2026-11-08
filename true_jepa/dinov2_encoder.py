@@ -65,14 +65,29 @@ class DINOv2VisualEncoder(nn.Module):
         if backbone is not None:
             self.backbone = backbone
         else:
-            try:
-                self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True, skip_validation=True)
-            except Exception:
-                cache_dir = os.path.expanduser("~/.cache/torch/hub/facebookresearch_dinov2_main")
-                if os.path.exists(cache_dir):
-                    self.backbone = torch.hub.load(cache_dir, model_name, source="local", pretrained=True)
-                else:
-                    self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True)
+            cache_dirs = [
+                os.path.expanduser("~/.cache/torch/hub/facebookresearch_dinov2_main"),
+                "/root/.cache/torch/hub/facebookresearch_dinov2_main",
+                "/content/.cache/torch/hub/facebookresearch_dinov2_main",
+            ]
+            local_cache = next((d for d in cache_dirs if os.path.exists(d)), None)
+
+            if local_cache is None:
+                target_cache = cache_dirs[0]
+                import subprocess
+                print(f"[DINOv2] Pre-cloning dinov2 to {target_cache} to bypass GitHub 504 Gateway Timeouts...")
+                os.makedirs(os.path.dirname(target_cache), exist_ok=True)
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", "https://github.com/facebookresearch/dinov2.git", target_cache],
+                    check=False,
+                )
+                if os.path.exists(target_cache):
+                    local_cache = target_cache
+
+            if local_cache is not None and os.path.exists(local_cache):
+                self.backbone = torch.hub.load(local_cache, model_name, source="local", pretrained=True)
+            else:
+                self.backbone = torch.hub.load(hub_repo, model_name, pretrained=True)
 
         # Freeze backbone parameters permanently
         self.backbone.requires_grad_(False)
