@@ -155,6 +155,10 @@ def resolve_file(path_str: str, drive_dir: Optional[str] = None) -> Path:
         candidates = [
             drive_root / "orbit" / "data" / p.name,
             drive_root / "orbit" / "data" / (p.name + ".gz"),
+            drive_root / "orbit" / "checkpoints" / p.name,
+            drive_root / "orbit" / "checkpoints" / (p.name + ".gz"),
+            drive_root / "orbit" / "results" / p.name,
+            drive_root / "orbit" / "results" / (p.name + ".gz"),
             drive_root / "data" / p.name,
             drive_root / p.name,
         ]
