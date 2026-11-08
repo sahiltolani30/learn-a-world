@@ -160,8 +160,10 @@ def run_phase3a_collection(
             obs_list.append(next_obs_uint8)
             actions_list.append(action_int)
             rewards_list.append(reward_float)
-            terminated_list.append(bool(done and step_count < max_steps - 1))
-            truncated_list.append(bool(step_count >= max_steps - 1))
+            is_term = bool(done)
+            is_trunc = bool(not done and (step_count + 1 >= max_steps))
+            terminated_list.append(is_term)
+            truncated_list.append(is_trunc)
 
             obs = next_obs_uint8
             reward_prev = reward_float
@@ -180,16 +182,18 @@ def run_phase3a_collection(
         total_frames += len(actions_list)
         total_reward += ep_reward
 
+        is_ep_terminated = bool(done)
+        is_ep_truncated = bool(not done and step_count >= max_steps)
         per_episode_stats.append({
             "episode": ep_idx + 1,
             "seed": seed,
             "steps": step_count,
             "return": ep_reward,
-            "terminated": bool(done and step_count < max_steps),
-            "truncated": bool(step_count >= max_steps),
+            "terminated": is_ep_terminated,
+            "truncated": is_ep_truncated,
         })
 
-        print(f"  Episode {ep_idx + 1:2d}/{num_episodes:2d} | Seed: {seed} | Steps: {step_count:3d} | Return: {ep_reward:+.1f} | Terminated: {done and step_count < max_steps}")
+        print(f"  Episode {ep_idx + 1:2d}/{num_episodes:2d} | Seed: {seed} | Steps: {step_count:3d} | Return: {ep_reward:+.1f} | Terminated: {is_ep_terminated}")
 
     elapsed_time = time.perf_counter() - start_time
     fps = total_frames / max(elapsed_time, 1e-4)
@@ -201,7 +205,7 @@ def run_phase3a_collection(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     replay = PixelReplay(capacity_frames=500_000)
     for ep in episodes:
-        replay.add_episode(ep)
+        replay.add(ep)
     replay.save(str(out_path))
     file_size_mb = out_path.stat().st_size / (1024 * 1024)
     print(f"Saved Replay Shard: {out_path} ({file_size_mb:.2f} MB)")
@@ -219,8 +223,11 @@ def run_phase3a_collection(
     # 6. Disk Reload & Integrity Verification
     print("\n[VERIFICATION] Reloading replay shard from disk and verifying schemas...")
     reloaded = PixelReplay.load(str(out_path))
+    total_actions = sum(len(rec.actions) for rec in reloaded.records)
+    total_obs = sum(len(rec.obs) for rec in reloaded.records)
     assert len(reloaded.records) == num_episodes, f"Expected {num_episodes} records, got {len(reloaded.records)}"
-    assert len(reloaded) == total_frames, f"Expected {total_frames} total frames, got {len(reloaded)}"
+    assert len(reloaded) == total_obs, f"Expected {total_obs} total obs frames, got {len(reloaded)}"
+    assert total_actions == total_frames, f"Expected {total_frames} total action steps, got {total_actions}"
 
     # Validate transition schemas across all reloaded episodes
     for ep_i, rec in enumerate(reloaded.records):
