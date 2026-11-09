@@ -1,0 +1,485 @@
+{
+  "timestamp": "2026-11-09T21:07:04Z",
+  "milestone": "Gate 7B: Actor-Critic Research & Algorithm Selection",
+  "promotion_status": "CANDIDATE_NOT_PROMOTED",
+  "selected_architecture": "gate7_champion",
+  "verdict": "Gate 7 AWR RETAINED as production champion (Score: 11.07%, Return: +2.21). No alternative candidate demonstrated statistically superior gameplay.",
+  "provenance": {
+    "world_model_path": "results/phase3/world_model_phase3.pt",
+    "gate7_champion_path": "results/gate7/policy_gate7.pt",
+    "gate7_champion_sha256": "08615c72e2c2ec0c5e52e32e2b88cfeac2a51557b10dcdcd27daf0d57b9a44d8",
+    "replay_dataset_path": "data/gate7/augmented_replay_local.npz",
+    "candidate_checkpoints": {
+      "candidate_b_iql": "results/gate7b/policy_candidate_b_iql.pt",
+      "candidate_c_cql": "results/gate7b/policy_candidate_c_cql.pt",
+      "candidate_d_crr": "results/gate7b/policy_candidate_d_crr.pt"
+    }
+  },
+  "critic_calibration": {
+    "scalar_value_critic": {
+      "value_mae": 0.7039382585672807,
+      "value_rmse": 0.8703338267944078,
+      "value_bias": -0.2185599216466985,
+      "value_correlation": 0.3125149685026978,
+      "mean_real_return": 0.24766899145114663,
+      "mean_pred_value": 0.029109069804448134,
+      "min_pred_value": -0.28503504395484924,
+      "max_pred_value": 0.32965031266212463,
+      "num_eval_states": 3308,
+      "calibration_groups": [
+        {
+          "return_range": [
+            -0.8901980008932422,
+            -0.5749359846124328
+          ],
+          "count": 662,
+          "mean_real_return": -0.6895296924867207,
+          "mean_pred_value": -0.014176664398448524,
+          "group_mae": 0.6753530280882722
+        },
+        {
+          "return_range": [
+            -0.5749359846124328,
+            -0.3033884555866524
+          ],
+          "count": 661,
+          "mean_real_return": -0.45646303713850633,
+          "mean_pred_value": 0.01899656141669956,
+          "group_mae": 0.47545959855520586
+        },
+        {
+          "return_range": [
+            -0.3033884555866524,
+            0.49618858734473476
+          ],
+          "count": 662,
+          "mean_real_return": 0.14426443102489822,
+          "mean_pred_value": 0.015934717644489962,
+          "group_mae": 0.2535661787194285
+        },
+        {
+          "return_range": [
+            0.49618858734473476,
+            0.9725444025571883
+          ],
+          "count": 661,
+          "mean_real_return": 0.6889488047527937,
+          "mean_pred_value": 0.052662765077468844,
+          "group_mae": 0.6362860396753249
+        },
+        {
+          "return_range": [
+            0.9725444025571883,
+            3.874130871144862
+          ],
+          "count": 662,
+          "mean_real_return": 1.550727393376247,
+          "mean_pred_value": 0.07214827318971251,
+          "group_mae": 1.4785791201865348
+        }
+      ]
+    },
+    "twin_q_expectile_critic": {
+      "value_mae": 0.7301771917961051,
+      "value_rmse": 0.8794805921716172,
+      "value_correlation": 0.06275012106178182,
+      "value_bias": -0.1583481194729931
+    },
+    "distributional_quantile_critic": {
+      "value_mae": 0.7201639736842091,
+      "value_rmse": 0.8784713148888201,
+      "value_correlation": 0.1382706301819801,
+      "value_bias": -0.1864111381435712
+    }
+  },
+  "statistical_comparisons_vs_gate7": {
+    "candidate_b_iql": {
+      "mean_diff": -0.1466666666666666,
+      "std_diff": 1.343113555507689,
+      "t_stat": -0.5981075943877215,
+      "ci95_low": -0.6272936798731183,
+      "ci95_high": 0.3339603465397852,
+      "prob_better": 0.36666666666666664
+    },
+    "candidate_c_cql": {
+      "mean_diff": -0.58,
+      "std_diff": 1.5916592946811283,
+      "t_stat": -1.9958987731519506,
+      "ci95_low": -1.1495679637122826,
+      "ci95_high": -0.010432036287717161,
+      "prob_better": 0.36666666666666664
+    },
+    "candidate_d_crr": {
+      "mean_diff": -0.37999999999999995,
+      "std_diff": 1.4435110453096758,
+      "t_stat": -1.4418633825369316,
+      "ci95_low": -0.8965537935289947,
+      "ci95_high": 0.13655379352899472,
+      "prob_better": 0.3
+    },
+    "actor_residual_mlp": {
+      "mean_diff": -0.043333333333333404,
+      "std_diff": 1.43495364176791,
+      "t_stat": -0.1654035605590392,
+      "ci95_low": -0.5568248993327082,
+      "ci95_high": 0.47015823266604134,
+      "prob_better": 0.43333333333333335
+    }
+  },
+  "benchmark_results": {
+    "random_baseline": {
+      "num_episodes": 30,
+      "mean_return": 1.8333333333333333,
+      "median_return": 2.0999999999999996,
+      "std_return": 1.2631530214330944,
+      "min_return": -0.8999999999999999,
+      "max_return": 4.1,
+      "mean_length": 165.9,
+      "median_length": 162.5,
+      "crafter_score": 9.966242217192134,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.1,
+        "collect_iron": 0.0,
+        "collect_sapling": 0.7,
+        "collect_stone": 0.0,
+        "collect_wood": 0.23333333333333334,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.0,
+        "eat_cow": 0.0,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.0,
+        "place_furnace": 0.0,
+        "place_plant": 0.7,
+        "place_stone": 0.0,
+        "place_table": 0.06666666666666667,
+        "wake_up": 0.9333333333333333
+      },
+      "action_distribution": [
+        0.05605786618444846,
+        0.06047819971870605,
+        0.06369298774362066,
+        0.05625879043600562,
+        0.05947357846092023,
+        0.06329113924050633,
+        0.054249547920433995,
+        0.06630500301386377,
+        0.05806710870002009,
+        0.05786618444846293,
+        0.05445047217199116,
+        0.05063291139240506,
+        0.0644966847498493,
+        0.056660638939119955,
+        0.06067912397026321,
+        0.05726341169379144,
+        0.060076351215591725
+      ],
+      "action_entropy": 2.83091607837887,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    },
+    "gate7_champion": {
+      "num_episodes": 30,
+      "mean_return": 2.213333333333333,
+      "median_return": 2.0999999999999996,
+      "std_return": 1.088954646540535,
+      "min_return": -0.8999999999999999,
+      "max_return": 5.099999999999999,
+      "mean_length": 164.26666666666668,
+      "median_length": 166.0,
+      "crafter_score": 11.07346607717532,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.06666666666666667,
+        "collect_iron": 0.0,
+        "collect_sapling": 0.9666666666666667,
+        "collect_stone": 0.0,
+        "collect_wood": 0.2,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.03333333333333333,
+        "eat_cow": 0.1,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.0,
+        "place_furnace": 0.0,
+        "place_plant": 0.9666666666666667,
+        "place_stone": 0.0,
+        "place_table": 0.03333333333333333,
+        "wake_up": 0.7333333333333333
+      },
+      "action_distribution": [
+        0.030844155844155844,
+        0.03449675324675325,
+        0.037337662337662336,
+        0.036728896103896104,
+        0.03956980519480519,
+        0.2593344155844156,
+        0.025771103896103896,
+        0.0349025974025974,
+        0.03551136363636364,
+        0.040787337662337664,
+        0.08340097402597403,
+        0.03165584415584415,
+        0.045657467532467536,
+        0.03165584415584415,
+        0.15564123376623376,
+        0.036525974025974024,
+        0.04017857142857143
+      ],
+      "action_entropy": 2.5120583877930507,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    },
+    "candidate_b_iql": {
+      "num_episodes": 30,
+      "mean_return": 2.066666666666667,
+      "median_return": 2.099999999999999,
+      "std_return": 0.9480975102218593,
+      "min_return": 0.10000000000000003,
+      "max_return": 5.1,
+      "mean_length": 157.56666666666666,
+      "median_length": 163.0,
+      "crafter_score": 10.570864662474788,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.0,
+        "collect_iron": 0.0,
+        "collect_sapling": 1.0,
+        "collect_stone": 0.0,
+        "collect_wood": 0.13333333333333333,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.03333333333333333,
+        "eat_cow": 0.1,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.03333333333333333,
+        "place_furnace": 0.0,
+        "place_plant": 0.9666666666666667,
+        "place_stone": 0.0,
+        "place_table": 0.06666666666666667,
+        "wake_up": 0.6333333333333333
+      },
+      "action_distribution": [
+        0.03109794795853607,
+        0.03617516395176645,
+        0.03427120795430506,
+        0.03405965728792046,
+        0.03321345462238206,
+        0.30040194626613076,
+        0.024962978633382694,
+        0.027078485297228685,
+        0.03300190395599746,
+        0.03596361328538185,
+        0.09012058387983922,
+        0.031732599957689865,
+        0.04125237994499683,
+        0.024751427966998096,
+        0.15993230378675694,
+        0.027713137296382483,
+        0.03427120795430506
+      ],
+      "action_entropy": 2.412687452492643,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    },
+    "candidate_c_cql": {
+      "num_episodes": 30,
+      "mean_return": 1.6333333333333333,
+      "median_return": 2.099999999999999,
+      "std_return": 1.231079020841292,
+      "min_return": -0.9000000000000001,
+      "max_return": 4.099999999999999,
+      "mean_length": 163.16666666666666,
+      "median_length": 163.0,
+      "crafter_score": 9.41306468463241,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.06666666666666667,
+        "collect_iron": 0.0,
+        "collect_sapling": 0.7,
+        "collect_stone": 0.0,
+        "collect_wood": 0.26666666666666666,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.0,
+        "eat_cow": 0.0,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.0,
+        "place_furnace": 0.0,
+        "place_plant": 0.6333333333333333,
+        "place_stone": 0.0,
+        "place_table": 0.03333333333333333,
+        "wake_up": 0.8666666666666667
+      },
+      "action_distribution": [
+        0.05209397344228805,
+        0.059039836567926454,
+        0.051889683350357506,
+        0.049642492339121554,
+        0.05515832482124617,
+        0.08702757916241062,
+        0.046782431052093974,
+        0.0567926455566905,
+        0.05863125638406537,
+        0.06108273748723187,
+        0.07742594484167518,
+        0.04943820224719101,
+        0.06312563840653729,
+        0.059244126659857,
+        0.0686414708886619,
+        0.04719101123595506,
+        0.0567926455566905
+      ],
+      "action_entropy": 2.8185578984114974,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    },
+    "candidate_d_crr": {
+      "num_episodes": 30,
+      "mean_return": 1.8333333333333333,
+      "median_return": 2.099999999999999,
+      "std_return": 0.8919392106839765,
+      "min_return": -0.9,
+      "max_return": 3.099999999999999,
+      "mean_length": 156.5,
+      "median_length": 156.0,
+      "crafter_score": 9.651726182974517,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.1,
+        "collect_iron": 0.0,
+        "collect_sapling": 0.9666666666666667,
+        "collect_stone": 0.0,
+        "collect_wood": 0.06666666666666667,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.03333333333333333,
+        "eat_cow": 0.03333333333333333,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.0,
+        "place_furnace": 0.0,
+        "place_plant": 0.9666666666666667,
+        "place_stone": 0.0,
+        "place_table": 0.0,
+        "wake_up": 0.5666666666666667
+      },
+      "action_distribution": [
+        0.04089456869009585,
+        0.021299254526091587,
+        0.01853035143769968,
+        0.044089456869009586,
+        0.047284345047923323,
+        0.2881789137380192,
+        0.02002129925452609,
+        0.017891373801916934,
+        0.04004259850905218,
+        0.02428115015974441,
+        0.2108626198083067,
+        0.038764643237486685,
+        0.04621938232161874,
+        0.0308839190628328,
+        0.05835995740149095,
+        0.02321618743343983,
+        0.029179978700745474
+      ],
+      "action_entropy": 2.3565018024454907,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    },
+    "actor_residual_mlp": {
+      "num_episodes": 30,
+      "mean_return": 2.17,
+      "median_return": 2.0999999999999996,
+      "std_return": 0.9284934033152845,
+      "min_return": 0.10000000000000003,
+      "max_return": 4.1,
+      "mean_length": 176.5,
+      "median_length": 181.5,
+      "crafter_score": 11.039190598618088,
+      "achievement_rates": {
+        "collect_coal": 0.0,
+        "collect_diamond": 0.0,
+        "collect_drink": 0.06666666666666667,
+        "collect_iron": 0.0,
+        "collect_sapling": 0.9333333333333333,
+        "collect_stone": 0.0,
+        "collect_wood": 0.23333333333333334,
+        "defeat_skeleton": 0.0,
+        "defeat_zombie": 0.1,
+        "eat_cow": 0.03333333333333333,
+        "eat_plant": 0.0,
+        "make_iron_pickaxe": 0.0,
+        "make_iron_sword": 0.0,
+        "make_stone_pickaxe": 0.0,
+        "make_stone_sword": 0.0,
+        "make_wood_pickaxe": 0.0,
+        "make_wood_sword": 0.0,
+        "place_furnace": 0.0,
+        "place_plant": 0.9333333333333333,
+        "place_stone": 0.0,
+        "place_table": 0.03333333333333333,
+        "wake_up": 0.7333333333333333
+      },
+      "action_distribution": [
+        0.040226628895184136,
+        0.037960339943342775,
+        0.03833805476864967,
+        0.038526912181303115,
+        0.04060434372049103,
+        0.21850802644003778,
+        0.027195467422096317,
+        0.041359773371104816,
+        0.039660056657223795,
+        0.040226628895184136,
+        0.07554296506137866,
+        0.036260623229461754,
+        0.05174693106704438,
+        0.03777148253068933,
+        0.15033050047214352,
+        0.03890462700661001,
+        0.04683663833805477
+      ],
+      "action_entropy": 2.6003332559739554,
+      "termination_causes": {
+        "health_exhaustion": 30,
+        "max_steps_reached": 0
+      }
+    }
+  }
+}
