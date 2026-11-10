@@ -132,3 +132,15 @@ class TestGate4CriticAndPolicy:
         # All actions must be within [0, 3]
         for a in actions:
             assert 0 <= a < 4
+
+    def test_all_planning_modes_execution(self):
+        """Verifies that all 4 planning modes (reflex, lookahead_1step, hybrid_mppi, multistep_rollout) execute cleanly."""
+        modes = ["reflex", "lookahead_1step", "hybrid_mppi", "multistep_rollout"]
+        obs = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
+
+        for mode in modes:
+            config = GenesisConfig(planning_mode=mode, plan_horizon=2, plan_num_candidates=8)
+            agent = GenesisVisualAgent(config)
+            action = agent.act(obs, reward_prev=0.0, step=1)
+            assert isinstance(action, int)
+            assert 0 <= action < config.num_actions

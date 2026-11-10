@@ -69,3 +69,9 @@ class GenesisConfig:
     gamma: float = 0.99
     weight_decay: float = 1e-4
     checkpoint_dir: str = "genesis_checkpoints"
+
+    # 10. Latent Planning & Mental Simulation (Model-Predictive Control)
+    planning_mode: str = "hybrid_mppi"  # "reflex", "lookahead_1step", "hybrid_mppi", "multistep_rollout"
+    plan_horizon: int = 3               # Multi-step mental simulation horizon H
+    plan_temperature: float = 1.0       # Temperature for rollout Q-value softmax
+    plan_num_candidates: int = 16       # Number of trajectory branches in multi-step rollout
