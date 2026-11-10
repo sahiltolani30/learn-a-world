@@ -31,6 +31,7 @@ from genesis_jepa.config import GenesisConfig
 
 def evaluate_agent(
     agent: Optional[GenesisVisualAgent] = None,
+    checkpoint_path: Optional[str] = None,
     config: Optional[GenesisConfig] = None,
     num_episodes: int = 5,
     max_steps_per_episode: int = 500,
@@ -48,6 +49,14 @@ def evaluate_agent(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if agent is None:
         agent = GenesisVisualAgent(config).to(device)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            if verbose:
+                print(f"Loading weights from checkpoint: {checkpoint_path}")
+            ckpt = torch.load(checkpoint_path, map_location=device)
+            agent.load_state_dict(ckpt["agent_state"])
+        elif checkpoint_path:
+            if verbose:
+                print(f"[Warning] Checkpoint not found at: {checkpoint_path}. Using initialized agent.")
     else:
         agent = agent.to(device)
 
@@ -127,6 +136,7 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=5, help="Number of episodes to evaluate")
     parser.add_argument("--max-steps", type=int, default=500, help="Max steps per episode")
     parser.add_argument("--seed", type=int, default=42, help="Evaluation seed")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to trained checkpoint (.pt)")
     parser.add_argument("--output-json", type=str, default=None, help="Output JSON path")
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -136,6 +146,7 @@ def main() -> None:
 
     print(f"=== Evaluating Genesis Visual JEPA Agent on Crafter ({args.episodes} episodes) ===")
     results = evaluate_agent(
+        checkpoint_path=args.checkpoint,
         num_episodes=args.episodes,
         max_steps_per_episode=args.max_steps,
         seed=args.seed,
