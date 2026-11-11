@@ -1,0 +1,2238 @@
+{
+  "random_baseline": [
+    {
+      "seed": 5000,
+      "return": 2.0999999999999996,
+      "length": 151,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 0.09999999999999981,
+      "length": 155,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 2.0999999999999996,
+      "length": 142,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 0.09999999999999998,
+      "length": 141,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 0.10000000000000009,
+      "length": 159,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 0.09999999999999992,
+      "length": 138,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 2.0999999999999996,
+      "length": 196,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 2.099999999999999,
+      "length": 162,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": 2.099999999999999,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5009,
+      "return": 2.0999999999999996,
+      "length": 153,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 2.0999999999999996,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 1.1,
+      "length": 157,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 1.1,
+      "length": 147,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 0.09999999999999992,
+      "length": 188,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 0.10000000000000009,
+      "length": 109,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 4.1,
+      "length": 267,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 0.10000000000000009,
+      "length": 150,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 2.099999999999999,
+      "length": 145,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 0.10000000000000003,
+      "length": 164,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.0999999999999996,
+      "length": 152,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 0.09999999999999987,
+      "length": 161,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 1.1,
+      "length": 141,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 2.099999999999999,
+      "length": 184,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 1.1,
+      "length": 219,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 2.099999999999999,
+      "length": 158,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 2.1,
+      "length": 153,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 2.1,
+      "length": 194,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "collect_sapling",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 4.1,
+      "length": 199,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 1.1,
+      "length": 150,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 3.099999999999999,
+      "length": 184,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    }
+  ],
+  "gate7_champion": [
+    {
+      "seed": 5000,
+      "return": 2.099999999999999,
+      "length": 158,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 3.0999999999999996,
+      "length": 154,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 3.099999999999999,
+      "length": 153,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 2.099999999999999,
+      "length": 208,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 2.0999999999999996,
+      "length": 172,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 2.099999999999999,
+      "length": 186,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 2.099999999999999,
+      "length": 198,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 3.099999999999999,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": 1.1000000000000003,
+      "length": 194,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5009,
+      "return": 4.099999999999999,
+      "length": 147,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 2.0999999999999996,
+      "length": 153,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 2.099999999999999,
+      "length": 220,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 4.1,
+      "length": 218,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": -0.9000000000000001,
+      "length": 97,
+      "cause": "health_exhaustion",
+      "achievements": []
+    },
+    {
+      "seed": 5014,
+      "return": 3.099999999999999,
+      "length": 172,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 0.10000000000000009,
+      "length": 43,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 3.099999999999999,
+      "length": 159,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 2.0999999999999996,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 2.1000000000000005,
+      "length": 175,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.099999999999999,
+      "length": 210,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 1.1,
+      "length": 136,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 2.0999999999999996,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 2.1,
+      "length": 165,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 4.1,
+      "length": 186,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 2.0999999999999996,
+      "length": 60,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 2.0999999999999996,
+      "length": 184,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 2.0999999999999996,
+      "length": 161,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 3.0999999999999996,
+      "length": 182,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 3.099999999999999,
+      "length": 152,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 3.0999999999999996,
+      "length": 159,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    }
+  ],
+  "gate8_h1": [
+    {
+      "seed": 5000,
+      "return": 3.099999999999999,
+      "length": 167,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 2.1,
+      "length": 140,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 2.1,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 1.1000000000000003,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 2.0999999999999996,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 1.1000000000000003,
+      "length": 121,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 2.0999999999999996,
+      "length": 178,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 3.099999999999999,
+      "length": 185,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": 2.1,
+      "length": 254,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5009,
+      "return": 2.099999999999999,
+      "length": 298,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 1.1000000000000003,
+      "length": 80,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 2.1,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 5.1,
+      "length": 245,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_sword",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 1.1,
+      "length": 79,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 3.099999999999999,
+      "length": 94,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 2.0999999999999996,
+      "length": 170,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 2.1,
+      "length": 176,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 1.1,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 2.1,
+      "length": 179,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.099999999999999,
+      "length": 159,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 1.1000000000000003,
+      "length": 117,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 2.0999999999999996,
+      "length": 155,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 2.099999999999999,
+      "length": 196,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 2.099999999999999,
+      "length": 224,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 1.1000000000000003,
+      "length": 160,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 2.0999999999999996,
+      "length": 131,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 1.1000000000000003,
+      "length": 120,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 0.10000000000000006,
+      "length": 137,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 3.099999999999999,
+      "length": 240,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 2.0999999999999996,
+      "length": 144,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    }
+  ],
+  "gate8_h2": [
+    {
+      "seed": 5000,
+      "return": 0.10000000000000006,
+      "length": 178,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 2.0999999999999996,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 2.0999999999999996,
+      "length": 143,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 1.1,
+      "length": 148,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 0.10000000000000009,
+      "length": 208,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 2.099999999999999,
+      "length": 136,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 1.1000000000000003,
+      "length": 161,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 2.099999999999999,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": -0.8999999999999999,
+      "length": 41,
+      "cause": "health_exhaustion",
+      "achievements": []
+    },
+    {
+      "seed": 5009,
+      "return": 2.0999999999999996,
+      "length": 164,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 2.099999999999999,
+      "length": 106,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 0.10000000000000009,
+      "length": 158,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 2.0999999999999996,
+      "length": 139,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 0.09999999999999998,
+      "length": 50,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 1.1000000000000003,
+      "length": 86,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 2.099999999999999,
+      "length": 251,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 0.09999999999999998,
+      "length": 202,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 2.0999999999999996,
+      "length": 158,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 0.09999999999999998,
+      "length": 143,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.0999999999999996,
+      "length": 198,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 0.09999999999999992,
+      "length": 148,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 0.10000000000000003,
+      "length": 178,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 0.10000000000000009,
+      "length": 115,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 0.09999999999999998,
+      "length": 159,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 0.09999999999999998,
+      "length": 160,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 0.10000000000000003,
+      "length": 133,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 2.099999999999999,
+      "length": 114,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 2.0999999999999996,
+      "length": 140,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 0.10000000000000009,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 2.099999999999999,
+      "length": 186,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    }
+  ],
+  "gate8_h4": [
+    {
+      "seed": 5000,
+      "return": 0.09999999999999998,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": -0.8999999999999999,
+      "length": 38,
+      "cause": "health_exhaustion",
+      "achievements": []
+    },
+    {
+      "seed": 5002,
+      "return": 2.0999999999999996,
+      "length": 158,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 0.1,
+      "length": 203,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 2.0999999999999996,
+      "length": 137,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 2.1000000000000005,
+      "length": 125,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 0.10000000000000006,
+      "length": 171,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 5.1,
+      "length": 207,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "make_wood_pickaxe",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": -0.8999999999999999,
+      "length": 46,
+      "cause": "health_exhaustion",
+      "achievements": []
+    },
+    {
+      "seed": 5009,
+      "return": 0.10000000000000009,
+      "length": 169,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 0.09999999999999995,
+      "length": 102,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 0.1,
+      "length": 140,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 0.10000000000000009,
+      "length": 167,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 1.1000000000000005,
+      "length": 142,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 1.1,
+      "length": 54,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "eat_cow",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 3.099999999999999,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 0.1,
+      "length": 138,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 2.099999999999999,
+      "length": 206,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 1.1,
+      "length": 242,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.099999999999999,
+      "length": 208,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": -0.9000000000000001,
+      "length": 57,
+      "cause": "health_exhaustion",
+      "achievements": []
+    },
+    {
+      "seed": 5021,
+      "return": 2.099999999999999,
+      "length": 165,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 3.099999999999999,
+      "length": 207,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 1.1000000000000003,
+      "length": 201,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 2.0999999999999996,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 2.1000000000000005,
+      "length": 173,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 3.0999999999999996,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "collect_sapling",
+        "collect_wood",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 3.099999999999999,
+      "length": 163,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 3.099999999999999,
+      "length": 188,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 2.099999999999999,
+      "length": 175,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    }
+  ],
+  "ablation_persistence": [
+    {
+      "seed": 5000,
+      "return": 3.099999999999999,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 1.1000000000000003,
+      "length": 157,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 2.099999999999999,
+      "length": 157,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 2.099999999999999,
+      "length": 174,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 0.10000000000000003,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 2.0999999999999996,
+      "length": 139,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 2.099999999999999,
+      "length": 107,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 3.0999999999999996,
+      "length": 197,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": 1.1000000000000003,
+      "length": 162,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5009,
+      "return": 4.1,
+      "length": 145,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "place_table",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 1.1000000000000003,
+      "length": 61,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 3.0999999999999996,
+      "length": 194,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_drink",
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 3.099999999999999,
+      "length": 151,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 0.10000000000000006,
+      "length": 68,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 1.1000000000000005,
+      "length": 111,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 1.1,
+      "length": 173,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 2.099999999999999,
+      "length": 138,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 1.1,
+      "length": 182,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 1.1,
+      "length": 170,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 2.1,
+      "length": 177,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 1.1000000000000003,
+      "length": 112,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 2.0999999999999996,
+      "length": 164,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 2.0999999999999996,
+      "length": 161,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 2.099999999999999,
+      "length": 217,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 1.1000000000000003,
+      "length": 199,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 3.099999999999999,
+      "length": 198,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 3.099999999999999,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 3.0999999999999996,
+      "length": 191,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 1.1000000000000003,
+      "length": 165,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 1.1000000000000003,
+      "length": 185,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    }
+  ],
+  "ablation_shuffled": [
+    {
+      "seed": 5000,
+      "return": 2.099999999999999,
+      "length": 183,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5001,
+      "return": 1.1,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5002,
+      "return": 1.1000000000000003,
+      "length": 192,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5003,
+      "return": 3.0999999999999996,
+      "length": 222,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5004,
+      "return": 2.099999999999999,
+      "length": 230,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5005,
+      "return": 1.1,
+      "length": 52,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5006,
+      "return": 3.099999999999999,
+      "length": 211,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "defeat_zombie",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5007,
+      "return": 3.0999999999999996,
+      "length": 201,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5008,
+      "return": 1.1000000000000003,
+      "length": 178,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5009,
+      "return": 3.0999999999999996,
+      "length": 146,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5010,
+      "return": 1.1000000000000003,
+      "length": 80,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5011,
+      "return": 1.1000000000000003,
+      "length": 154,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5012,
+      "return": 1.1,
+      "length": 155,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5013,
+      "return": 3.099999999999999,
+      "length": 95,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "collect_wood",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5014,
+      "return": 0.10000000000000003,
+      "length": 94,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5015,
+      "return": 1.1,
+      "length": 148,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5016,
+      "return": 3.099999999999999,
+      "length": 155,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "eat_cow",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5017,
+      "return": 2.0999999999999996,
+      "length": 135,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5018,
+      "return": 1.1,
+      "length": 156,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5019,
+      "return": 1.1000000000000003,
+      "length": 171,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5020,
+      "return": 1.1,
+      "length": 139,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5021,
+      "return": 2.0999999999999996,
+      "length": 186,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5022,
+      "return": 2.0999999999999996,
+      "length": 172,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5023,
+      "return": 2.099999999999999,
+      "length": 223,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5024,
+      "return": 1.1000000000000003,
+      "length": 166,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5025,
+      "return": 2.0999999999999996,
+      "length": 135,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5026,
+      "return": 1.1,
+      "length": 135,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5027,
+      "return": 2.099999999999999,
+      "length": 180,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant",
+        "wake_up"
+      ]
+    },
+    {
+      "seed": 5028,
+      "return": 1.1000000000000003,
+      "length": 168,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    },
+    {
+      "seed": 5029,
+      "return": 1.1000000000000003,
+      "length": 127,
+      "cause": "health_exhaustion",
+      "achievements": [
+        "collect_sapling",
+        "place_plant"
+      ]
+    }
+  ]
+}
